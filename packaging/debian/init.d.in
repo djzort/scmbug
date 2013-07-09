@@ -1,0 +1,35 @@
+#!/bin/sh
+#
+# start/stop @DEVEL_PRODUCT_NAME_LOWER@-server.
+
+PID_FILE=`cat @sysconfdir@/@DEVEL_PRODUCT_NAME_LOWER@/daemon.conf | grep -i daemon_pidfile | sed -e 's/.*=> "//g' | sed -e 's/".*//'`
+
+if ! [ -x @sbindir@/@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl ]; then
+    echo "Daemon file is missing"
+    exit 0
+fi
+
+case "$1" in
+    start)
+	echo -n "Starting SCM to bug-tracking integration daemon:"
+	echo -n " @DEVEL_PRODUCT_NAME_LOWER@_daemon" ; start-stop-daemon --start --name @DEVEL_PRODUCT_NAME_LOWER@_daemon --quiet --pidfile ${PID_FILE} --exec @sbindir@/@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl @sysconfdir@/@DEVEL_PRODUCT_NAME_LOWER@/daemon.conf
+	echo "."
+	;;
+    stop)
+	echo -n "Stopping SCM to bug-tracking integration daemon:"
+	echo -n " @DEVEL_PRODUCT_NAME_LOWER@_daemon" ; start-stop-daemon --stop --name @DEVEL_PRODUCT_NAME_LOWER@_daemon --quiet --pidfile ${PID_FILE} --signal 1 && rm ${PID_FILE}
+	echo "."
+	;;
+    restart|force-reload)
+	$0 stop
+	$0 start
+	echo "."
+	;;
+    *)
+	echo "Usage: @sysconfdir@/init.d/@DEVEL_PRODUCT_NAME_LOWER@-server {start|stop|restart|force-reload}"
+	exit 1
+	;;
+esac
+
+exit 0
+

@@ -1,0 +1,91 @@
+<chapter id="about">
+  <title>About</title>
+
+ <section id="copyright">
+    <title>Copyright Information</title>
+
+    <para>
+      This document is copyright (C) 2004 by the various
+      &devel-product-name; contributors who wrote it. It is licensed
+      under the GNU Free Documentation License.
+    </para>
+
+    <blockquote>
+      <para>
+        Permission is granted to copy, distribute and/or modify this
+        document under the terms of the GNU Free Documentation
+        License, Version 1.1 or any later version published by the
+        Free Software Foundation; with no Invariant Sections, no
+        Front-Cover Texts, and with no Back-Cover Texts. A copy of the
+        license is included in <xref linkend="gfdl">.
+      </para>
+    </blockquote>
+
+    <para>
+      &devel-product-name; is free software, licensed under the GNU
+      General Public License.
+    </para>
+
+    
+    <blockquote>
+      <para>
+	This program is free software; you can redistribute it and/or
+	modify it under the terms of the GNU General Public License as
+	published by the Free Software Foundation; either version 2 of
+	the License, or (at your option) any later version.
+      </para>
+
+      <para>
+	This program is distributed in the hope that it will be
+	useful, but WITHOUT ANY WARRANTY; without even the implied
+	warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+	PURPOSE.  See the GNU General Public License for more details.
+      </para>
+
+      <para>
+	You should have received a copy of the GNU General Public
+	License along with this program; if not, write to the Free
+	Software Foundation, Inc., 59 Temple Place - Suite 330,
+	Boston, MA 02111-1307, USA.
+      </para>
+    </blockquote>
+
+  </section>
+
+  <section id="disclaimer">
+    <title>Disclaimer</title>
+
+    <para>
+      No liability for the contents of this document can be accepted.
+      Follow the instructions herein at your own risk.
+    </para>
+
+  </section>
+
+  <section id="acknowledgements">
+    <title>Acknowledgments</title>
+
+    <para>
+      The excellent
+      <ulink url="http://www.bugzilla.org/docs/tip/html">
+	<citetitle>Bugzilla Guide</citetitle></ulink> served as an
+      example in preparation of this document. Content and structural
+      document elements were reused from this guide. The <ulink
+      url="http://www.tldp.org/LDP/LDP-Author-Guide/html/index.html">
+      <citetitle>LDP Author Guide</citetitle></ulink> also served as a
+      good example.
+    </para>
+
+    <para>
+      Development of this system benefited from invaluable insight on
+      SCM and bug-tracking issues, along with feedback, from John
+      C. Quillan, Mark S. Reibert, Dave Swegen, the Bugzilla
+      developers, and the Subversion developers.
+    </para>
+
+  </section>
+
+  <!-- conventions used in this document -->
+  &conventions;
+
+</chapter>

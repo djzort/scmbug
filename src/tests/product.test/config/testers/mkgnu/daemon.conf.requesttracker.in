@@ -1,0 +1,166 @@
+#
+# This is a template configuration file for the @DEVEL_PRODUCT_NAME_LOWER@-server daemon
+#
+$daemon_configuration = {
+
+    # Describes how logging will be reported, using Log::Log4perl
+    logging => '
+log4perl.category.Daemon           = WARN, Logfile
+
+# Log all daemon activity to a file
+log4perl.appender.Logfile          = Log::Log4perl::Appender::File
+log4perl.appender.Logfile.filename = @localstatedir@/log/@DEVEL_PRODUCT_NAME_LOWER@/activity.log
+log4perl.appender.Logfile.layout   = Log::Log4perl::Layout::PatternLayout
+log4perl.appender.Logfile.layout.ConversionPattern = %d @DEVEL_PRODUCT_NAME@ %p> %F{1}:%L:%M - %m
+',
+
+    # Port the daemon will start on
+    daemon_port => 3872,
+
+
+    # Pid file the daemon will use
+    daemon_pidfile => "@DEVEL_CONFIG_PID_FILE@",
+
+    #
+    # Execution mode of the daemon. There are 3 options:
+    #
+    # - 'threaded'. Multiple threads are created to handle incoming
+    # connections. This was observed to work well under Windows but
+    # cause a 3-fold slowdown under UNIX.
+    #
+    # - 'forked'. Multiple processes are created to handle incoming
+    # connections. This was observed to work well under UNIX
+    # and most Windows systems.
+    #
+    # - 'auto'. Automatically chooses between a 'threaded' or 'forked'
+    # mode.
+    daemon_mode => "auto",
+
+    # Configuration information of the bug tracking
+    # system
+    bugtracker => {
+	# The possible options are:
+	# - 'Bugzilla'
+	# - 'Mantis'
+	# - 'RequestTracker'
+	# - 'TestDirector'
+	type => 'RequestTracker',
+	# This MUST be in the format x.y.z, where x,y,z
+	# are integers
+	version => '3.4.5',
+	database_location => '127.0.0.1',
+	database_port => '3306',
+	# Valid values are the ones accepted by the Perl DBI.
+	#
+	# For Bugzilla and RequestTracker, this value is ignored
+	#
+	# For Mantis, *some* valid values (there are others) are:
+	# - 'mysql'
+	# - 'Pg'
+	database_vendor => 'mysql',
+	# For RequestTracker these values are ignored
+	database_name => 'bugs',
+	database_username => 'bugs',
+	database_password => 'bugs',
+	
+	# Used only for Bugzilla.
+	#
+	# Flags whether the live bugtracker instance is installed
+	# locally on the same machine the daemon is running
+	installed_locally => 1,
+
+	# Used for Bugzilla and RequestTracker.
+	#
+	# Path to the directory of the bugtracker sources providing an
+	# API that the daemon can use
+	installation_directory => '/usr/share/request-tracker3.4/lib',
+
+	# Prefix used to display a bug
+	bug_url_prefix => 'http://127.0.0.1/rt/Ticket/Display.html?id=' },
+
+
+    # Translation list of SCM usernames to bug-tracking
+    # usernames. Mappings based on mapping_ldap are applied
+    # first. Mappings based on mapping_regexes are applied second and
+    # can override a mapping based on mapping_ldap. Mappings based on
+    # mapping_values are applied last and can override all other
+    # mappings.
+    userlist => {
+
+	# Apply a case sensitive username verification
+	case_sensitive_username_verification => 1,
+
+	mappings => {
+
+	    # Enable SCM username translation. This flag must be turned on
+	    # for any of the mappings that follow to apply.
+	    enabled => 0,
+
+	    # This is a mapping based on
+	    # LDAP. ldap_scm_username_attribute defines the LDAP
+	    # attribute that will be used to match the SCM
+	    # username. The SCM username will be mapped into the
+	    # bug-tracking username defined by
+	    # ldap_bugtracking_username_attribute.
+	    mapping_ldap => {
+		enabled => 0,
+		ldap_server => '127.0.0.1',
+		ldap_port => '389',
+		# A binddn (e.g. cn=default) that has access to read
+		# all attributes
+		ldap_binddn => 'replace_with_binddn',
+		# The password of the binddn that has access to read
+		# all attributes
+		ldap_binddn_password => 'replace_with_binddn_password',
+		# The BaseDN in which to search for the
+		# ldap_scm_username_attribute
+		# (e.g. "ou=People,o=Company")
+		ldap_basedn => 'replace_with_basedn',
+		# The name of the attribute containing the user's SCM
+		# username
+		ldap_scm_username_attribute => 'uid',
+		# The name of the attribute containing the user's
+		# bug-tracking username
+		ldap_bugtracking_username_attribute => 'mail',
+		# LDAP filter to AND with the
+		# ldap_scm_username_attribute for filtering the list
+		# of valid SCM users.
+		ldap_filter => ''
+		},
+
+	    # This is a mapping based on regular expressions. The
+	    # first expression defines how the SCM username will be
+	    # matched. The second defines how it will be transformed,
+	    # and uses the unnamed variable $1 that was described by
+	    # the first expression. The mapping is checked for a match
+	    # as:
+	    # m/$first_regex/
+	    # and is applied as: s/$first_regex/$second_regex/
+	    mapping_regexes => {
+		enabled => 0,
+		values => {
+		    # This is an example of mapping a Windows Domain
+		    # user from 'DOMAIN\user' to
+		    # 'user@EMAIL_DOMAIN.com'
+		    '^DOMAIN\\\\(\w+)$' => '$1\@EMAIL_DOMAIN.com',
+		    # This is an example of mapping a UNIX user from
+		    # 'example_user' to
+		    # 'example_user@exampledomain.com'
+		    '^(\w+)$' => '$1\@exampledomain.com'
+		    }
+	    },
+
+	    # This is a one-to-one mapping of SCM usernames to
+	    # bugtracking usernames. Mappings in this list override
+	    # mappings from mapping_regexes.
+	    mapping_values => {
+		enabled => 0,
+		values => {
+		    'mkgnu' => 'mkgnu@mkgnu.net',
+                    'Kristis Makris <mkgnu@mkgnu.net>' => 'mkgnu@mkgnu.net'
+		    }
+	    }
+	}
+    }
+
+};

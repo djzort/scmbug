@@ -1,0 +1,47 @@
+2011-02-06 Sunday 16:19  mkgnu
+
+	* configure.in (1.338), packaging/debian/changelog (1.143) (utags:
+	  SCMBUG_RELEASE_0-26-22): bug 1517: Increased version number for
+	  upcoming release SCMBUG_RELEASE_0-26-22
+
+2011-02-06 Sunday 16:16  mkgnu
+
+	* src/lib/product/Daemon/Process.pm.in (1.25,
+	  SCMBUG_RELEASE_0-26-22): bug 1516: %mail should be set to a
+	  reference, not to a hash, because it is treated as a hash
+	  reference. This corrects the problem observed by Raghavendra
+	  Achar, and has been tested to work.
+
+2011-02-05 Saturday 22:13  mkgnu
+
+	* src/lib/product/Daemon/Integration.pm.in (1.42), doc/AUTHORS
+	  (1.36) (utags: SCMBUG_RELEASE_0-26-22): bug 1187: Applied a patch
+	  by Hans-Emil Skogh that keeps the handling of tag deletions
+	  consistent with the handling of tag additions when
+	  valid_product_name is disabled. Extended the patch to also log
+	  that valid_product_name is enabled on the corresponding code
+	  path.
+
+2010-11-08 Monday 19:51  mkgnu
+
+	* src/lib/product/Daemon/Trapper.pm.in (1.6,
+	  SCMBUG_RELEASE_0-26-22): bug	1496: Correct the call to binmode()
+	  to accept all arguments, and also account for the $self class
+	  instance.
+
+2010-11-08 Monday 17:01  mkgnu
+
+	* src/lib/product/Daemon/Trapper.pm.in (1.5): bug 1496: As
+	  suggested by Thorsten Schöning <tschoening@am-soft.de>, implement
+	  the BINMODE function as implemented in Tie::StdHandle to avoid
+	  encoding errors in the logging.
+
+2010-11-07 Sunday 23:02  mkgnu
+
+	* src/lib/product/Daemon/Trapper.pm.in (1.4): bug 1496: Applied a
+	  patch by Yavor Nikolov <nikolov.javor@gmail.com> that corrects
+	  the Trapper.pm module from exiting with an error when Util.pm in
+	  Bugzilla 4rc1 issues a:
+
+	  binmode STDERR, ":encoding($encoding)";
+

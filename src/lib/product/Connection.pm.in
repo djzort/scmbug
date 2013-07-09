@@ -1,0 +1,381 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+package @DEVEL_PRODUCT_NAME@::Connection;
+
+use strict;
+use IO::Socket;
+use Data::Dumper;
+use @DEVEL_PRODUCT_NAME@::Activity;
+use @DEVEL_PRODUCT_NAME@::Error;
+use @DEVEL_PRODUCT_NAME@::Common;
+
+my $connection_configuration;
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+    return bless $self, $type;
+}
+
+
+
+sub port {
+    my $self = shift;
+    my $port = shift;
+
+    $connection_configuration->{ port } = $port;
+}
+
+
+
+sub location {
+    my $self = shift;
+    my $location = shift;
+
+    $connection_configuration->{ location } = $location;
+}
+
+
+
+sub process_activity {
+    my $self = shift;
+    my ( $activity, $policies, $print_request_output ) = ( @_ );
+    my $request = "";
+
+    # Prepare the request to the daemon
+    $logger->warn( "Processing activity\n" );
+
+    # Check if the activity is ok
+    $activity->check();
+
+    # Requested activity
+    $request .= $activity->name() . "\n";
+
+    # Username submitting the request
+    $request .= $activity->user() . "\n";
+
+    # Product name
+    $request .= $activity->product_name() . "\n";
+
+    if ( $activity->name() eq $ACTIVITY_OK ) {
+    } elsif ( $activity->name() eq $ACTIVITY_COMMIT ) {
+	$request .= process_policies_common( $policies );
+	$request .= process_activities_common( $activity );
+	$request .= process_activity_commit( $activity );
+    } elsif ( $activity->{ name } eq $ACTIVITY_VERIFY ) {
+	$request .= process_policies_common( $policies );
+	$request .= process_activities_common( $activity );
+	$request .= process_activity_verify( $activity );
+    } elsif ( $activity->{ name } eq $ACTIVITY_TAG ) {
+	$request .= process_policies_common( $policies );
+	$request .= process_activities_common( $activity );
+	$request .= process_activity_tag( $activity );
+    } elsif ( $activity->{ name } eq $ACTIVITY_GET_VDD ) {
+	$request .= process_activity_get_vdd( $activity );
+    } elsif ( $activity->{ name } eq $ACTIVITY_GET_BUGS ) {
+	$request .= process_activity_get_bugs( $activity );
+    }
+
+    # Log message
+    $request .= $activity->log_message() . "\n";
+
+    # End of request token
+    $request .= $PRODUCT_END_TOKEN . "\n";
+
+    return $self->submit_request( $request, $print_request_output );
+}
+
+
+
+sub process_activity_commit
+{
+    my $activity = shift;
+
+    my $request = "";
+
+    # Repository
+    $request .= $activity->repository() . "\n";
+
+    $request .= process_activity_common_verify_commit( $activity );
+
+    return $request;
+}
+
+
+
+sub process_activity_verify
+{
+    my $activity = shift;
+
+    return process_activity_common_verify_commit( $activity );
+}
+
+
+
+sub process_activity_tag
+{
+    my $activity = shift;
+    my $request = "";
+
+    # Repository
+    $request .= $activity->repository() . "\n";
+
+    # Send the tagging operation type
+    $request .= $activity->{ type }->{ tag }->{ operation };
+    $request .= "\n";
+
+    # Send the tag name
+    $request .= $activity->{ type }->{ tag }->{ name };
+    $request .= "\n";
+
+    # Comma separated list of ids
+    $request .= join( ",", @{ $activity->ids() } ) . "\n";
+
+    # Send the list of filename, file revision pairs
+    foreach my $file ( sort keys %{ $activity->{ files } } ) {
+	# Filename
+	$request .= $file;
+	$request .= "\n";
+	# File revision
+	$request .= $activity->{ files }->{ $file };
+	$request .= "\n";
+    }
+
+    # Send the end of affected files token
+    $request .= $PRODUCT_AFFECTED_FILES_END_TOKEN . "\n";;
+
+    return $request;
+}
+
+
+
+sub process_activity_get_vdd
+{
+    my $activity = shift;
+    my $request = "";
+
+    $request .= $activity->{ from_version } . "\n"; 
+    $request .= $activity->{ to_version } . "\n"; 
+    $request .= $activity->{ from_label_date } . "\n"; 
+    $request .= $activity->{ to_label_date } . "\n"; 
+
+    # Send the end of vdd query token
+    $request .= $PRODUCT_VDD_QUERY_END_TOKEN . "\n";;
+
+    return $request;
+}
+
+sub process_activity_get_bugs
+{
+    my $activity = shift;
+    my $request = "";
+
+    $request .= $activity->{ bugs } . "\n";
+    $request .= $activity->{ must_retrieve }->{ summary } . "\n";
+    $request .= $activity->{ must_retrieve }->{ status } . "\n";
+    $request .= $activity->{ must_retrieve }->{ owners } . "\n";
+    $request .= $activity->{ must_retrieve }->{ severity } . "\n";
+    $request .= $activity->{ must_retrieve }->{ priority } . "\n";
+    $request .= $activity->{ must_retrieve }->{ resolution } . "\n";
+    $request .= $activity->{ must_retrieve }->{ comments_data } . "\n";
+
+    # Send the end of get bugs query token
+    $request .= $PRODUCT_GET_BUGS_QUERY_END_TOKEN . "\n";;
+
+    return $request;
+
+}
+
+
+sub process_activity_common_verify_commit
+{
+    my $activity = shift;
+    my $request = "";
+
+    # Comma separated list of ids
+    $request .= join( ",", @{ $activity->ids() } ) . "\n";
+
+    # For each file, report the old version, new version, and filename
+    foreach my $file ( sort keys %{ $activity->{ files } } ) {
+	$request .= $activity->{ files }->{ $file }->{ old_version };
+	$request .= "\n";
+	$request .= $activity->{ files }->{ $file }->{ new_version };
+	$request .= "\n";
+	$request .= $file;
+	$request .= "\n";
+    }
+    
+    # Send the end of affected files token
+    $request .= $PRODUCT_AFFECTED_FILES_END_TOKEN . "\n";
+
+    return $request;
+}
+
+
+
+sub process_policies_common
+{
+    my ($policies) = ( @_ );
+    my $request = "";
+
+    # Policy presence_of_bug_ids
+    $request .= $policies->{ presence_of_bug_ids }->{ value } . "\n";
+
+    # Policy valid_bug_owner
+    $request .= $policies->{ valid_bug_owner }->{ enabled } . "\n";
+
+    # Policy open_bug_state
+    $request .= $policies->{ open_bug_state }->{ enabled } . "\n";
+
+    # Policy product_name
+    $request .= $policies->{ valid_product_name }->{ enabled } . "\n";
+
+    # Policy resolution_template
+    $request .= $policies->{ resolution_template }->{ enabled } . "\n";
+    $request .= $policies->{ resolution_template }->{ resolution_status_case_sensitive_verification } . "\n";
+    $request .= $policies->{ resolution_template }->{ resolution_valid_product_name } . "\n";
+    $request .= $policies->{ resolution_template }->{ resolution_valid_bug_owner } . "\n";
+
+    # Policy mail_on_success
+    $request .= $policies->{ mail_notification }->{ mail_on_success } . "\n";
+    $request .= $policies->{ mail_notification }->{ mail_on_failure } . "\n";
+    $request .= $policies->{ mail_notification }->{ mail_on_label } . "\n";
+    $request .= $policies->{ mail_notification }->{ mail_settings }->{ To } . "\n";
+    $request .= $policies->{ mail_notification }->{ mail_settings }->{ From } . "\n";
+    $request .= $policies->{ mail_notification }->{ mail_settings }->{ Smtp } . "\n";
+    $request .= $policies->{ mail_notification }->{ mail_recipients }->{ mail_also_appears_from_scm_user } . "\n";
+    $request .= $policies->{ mail_notification }->{ mail_recipients }->{ mail_scm_user } . "\n";
+    $request .= $policies->{ mail_notification }->{ mail_recipients }->{ mail_bug_owner } . "\n";
+    $request .= $policies->{ mail_notification }->{ mail_recipients }->{ mail_bug_reporter } . "\n";
+    $request .= $policies->{ mail_notification }->{ mail_recipients }->{ mail_bug_monitors } . "\n";
+    $request .= $policies->{ mail_notification }->{ mail_recipients }->{ mail_product_owners } . "\n";
+
+    return $request;
+}
+
+
+
+sub process_activities_common
+{
+    my ( $activity ) = ( @_ );
+    my $request = "";
+
+    $request .= $activity->branch_name() . "\n";
+
+    # For each resolution id, send the requested status and the resolution
+    foreach my $resolution_id ( sort keys %{ $activity->resolution_ids() } ) {
+	$request .= $resolution_id;
+	$request .= "\n";
+	$request .= $activity->resolution_id( $resolution_id )->{ status };
+	$request .= "\n";
+	$request .= $activity->resolution_id( $resolution_id )->{ resolution };
+	$request .= "\n";
+	$request .= $activity->resolution_id( $resolution_id )->{ resolution_data };
+	$request .= "\n";
+    }
+
+    # Send the end of resolutions token
+    $request .= $PRODUCT_RESOLUTIONS_END_TOKEN . "\n";
+
+    return $request;
+}
+
+
+
+sub submit_request {
+    my ( $self, $request, $print_the_request_output ) = ( @_ );
+    my ( $location, $port );
+
+    $logger->info("Preparing to submit request\n");
+
+    $location = $connection_configuration->{ location };
+    $port = $connection_configuration->{ port };
+
+    if ( !defined ( $location) ) {
+	log_fatal_error( $GLUE_ERROR_NO_CONNECTION_LOCATION, "No connection location supplied\n" );
+    }
+    if ( !defined ( $port) ) {
+        log_fatal_error( $GLUE_ERROR_NO_CONNECTION_PORT, "No connection port number supplied\n" );
+    }
+
+    my $socket = IO::Socket::INET->new( Proto => "tcp",
+					PeerAddr => $location,
+					PeerPort => $port,
+					Timeout => 3 );
+    if ( !defined ( $socket ) ) {
+	log_fatal_error( $GLUE_ERROR_UNABLE_TO_CONNECT_TO_DAEMON, "Unable to connect to integration daemon at '$location', port '$port'. Is the daemon running ?\n" );
+    }
+    $socket->autoflush(1);
+
+    $logger->info("Connecting to the daemon at $location:$port\n");
+    # Read the banner from the daemon
+    my $line;
+    $line = <$socket>;
+
+    # Verify that a matching glue and daemon are used
+    my ( $daemon_name, $daemon_version, $protocol_number ) = split( " ", $line );
+    if ( $protocol_number ne $PRODUCT_PROTOCOL_NUMBER ) {
+	log_fatal_error( $GLUE_ERROR_INVALID_PROTOCOL_NUMBER, "Connection version $PRODUCT_VERSION uses communication protocol $PRODUCT_PROTOCOL_NUMBER, which is incompatible with daemon version $daemon_version using communication protocol $protocol_number. Please upgrade accordingly.\n" );
+    }
+
+    # Submit the request
+    $logger->warn( "Submitting request\n" );
+    print $socket $request . "\n";
+
+    # Retrieve the request response
+    my $response = "";
+    $response = <$socket>;
+
+    if ( $print_the_request_output == 0 ) {
+	close ( $socket );
+        return;
+    }
+
+    # If no response was received, format the notice correctly.
+    if ( !defined( $response ) ) {
+        $logger->warn( "Request submission was not replied to\n" );
+    } else {
+        $logger->warn( "Request submission was $response" );
+    }
+
+
+    # Retrieve any additional information returned
+    my $ret_message = "";
+    while ( $line = <$socket> ) {
+	$ret_message .= $line;
+    }
+
+    if ( !defined( $response ) ) {
+	# No response was received. The daemon-spawned connection
+	# handler exited abnormally
+	log_fatal_error( $GLUE_ERROR_DAEMON_DIED, "The daemon-spawned connection handler exited abnormally. Please check the daemon error logs.\n" );
+    } elsif ( $response !~ m/$DAEMON_REQUEST_RESULT_ACCEPTED/ ) {
+	# The request was denied, need to exit with a non-zero
+	# value. Inform why the request was denied
+        log_fatal_error ( $GLUE_ERROR_ACTIVITY_FAILED, $ret_message );
+    } else {
+	# The request was accepted
+	close ($socket);
+	
+	return $ret_message;
+    }
+}
+
+
+
+1;

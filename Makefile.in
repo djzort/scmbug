@@ -1,0 +1,489 @@
+user = $(USER)
+# The primary group the user is in
+group = `groups | @AWK@ '{ print $$1 }'`
+
+# install commands
+install_file   := install -p    -o $(user) -g $(group) -m 644
+install_program:= install -p    -o $(user) -g $(group) -m 755
+install_secret := install -p    -o $(user) -g $(group) -m 440
+make_directory := install -p -d -o $(user) -g $(group) -m 755
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+bindir = @bindir@
+sbindir = @sbindir@
+localstatedir = @localstatedir@
+sysconfdir = @sysconfdir@
+datadir = @datadir@
+datarootdir = @datarootdir@
+mandir = @mandir@
+
+devel_config_doc=@DEVEL_CONFIG_DOC@
+
+all: doc
+
+doc:
+ifeq ($(devel_config_doc),yes)
+	# Documentation will be built
+	$(MAKE) -C @devel_alldoc_dir@/manual
+	$(MAKE) -C @devel_alldoc_dir@/manpages
+else
+	# No documentation will be built
+endif
+src:
+
+test:
+	$(MAKE) -C @devel_allsrc_dir@
+
+log:
+	( [ "$(FROM_REL)" != "" ] && [ "$(TO_REL)" != "" ] ) || (echo "Must specify FROM_REL and TO_REL on the make command-line"; exit -1)
+	cvs2cl -r -b -t -w --gmt --delta $(FROM_REL):$(TO_REL) && mv ChangeLog ChangeLog.$(FROM_REL)_to_$(TO_REL)
+	cvs2cl -r -b -t -w --gmt && mv ChangeLog ChangeLog.@DEVEL_PRODUCT_RELEASE_TAG@
+
+clean: 
+	-rm @devel_allsrc_dir@/glue/etc/product/glue.conf.template
+	-rm @devel_allsrc_dir@/glue/etc/product/log_template
+	-rm @devel_allsrc_dir@/glue/bin/activity.pl
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/checkoutlist
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/commitinfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/loginfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/rcsinfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/taginfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/verifymsg{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest/checkoutlist
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest/commitinfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest/loginfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest/rcsinfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest/taginfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest/verifymsg{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/checkoutlist
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/commitinfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/loginfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/rcsinfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/taginfo{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/verifymsg{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_svn/latest/pre-commit{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_svn/latest/post-commit{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_git/latest/commit-msg{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/scm_git/latest/post-commit{,.bat}
+	-rm @devel_allsrc_dir@/glue/templates/stylesheets/vdd.sgml.header
+	-rm @devel_allsrc_dir@/daemon/daemon.pl
+	-rm @devel_allsrc_dir@/daemon/etc/daemon.conf.template
+	-rm @devel_allsrc_dir@/daemon/etc/TestDirector.conf.template
+	-rm @devel_allsrc_dir@/daemon/etc/WebReports.conf.template
+	-rm @devel_allsrc_dir@/other/etc/product/apache.conf.template
+	-rm @devel_allsrc_dir@/scripts/install_glue.pl
+	-rm @devel_allsrc_dir@/scripts/rc{,.bat}
+	-rm @devel_allsrc_dir@/scripts/vdd_generator.pl
+	-rm @devel_allsrc_dir@/scripts/merge.pl
+	-rm @devel_allsrc_dir@/scripts/ActivityUtilities_test.pl
+	-rm @devel_allsrc_dir@/lib/product/Activity.pm
+	-rm @devel_allsrc_dir@/lib/product/ActivityUtilities.pm
+	-rm @devel_allsrc_dir@/lib/product/Bug.pm
+	-rm @devel_allsrc_dir@/lib/product/BugComment.pm
+	-rm @devel_allsrc_dir@/lib/product/Common.pm
+	-rm @devel_allsrc_dir@/lib/product/Connection.pm
+	-rm @devel_allsrc_dir@/lib/product/Error.pm
+	-rm @devel_allsrc_dir@/lib/product/VDD.pm
+	-rm @devel_allsrc_dir@/lib/product/MergeList.pm
+	-rm @devel_allsrc_dir@/lib/product/Daemon/Bugtracker.pm
+	-rm @devel_allsrc_dir@/lib/product/Daemon/Bugzilla.pm
+	-rm @devel_allsrc_dir@/lib/product/Daemon/Daemon.pm
+	-rm @devel_allsrc_dir@/lib/product/Daemon/Integration.pm
+	-rm @devel_allsrc_dir@/lib/product/Daemon/Mantis.pm
+	-rm @devel_allsrc_dir@/lib/product/Daemon/Process.pm
+	-rm @devel_allsrc_dir@/lib/product/Daemon/Request.pm
+	-rm @devel_allsrc_dir@/lib/product/Daemon/RequestTracker.pm
+	-rm @devel_allsrc_dir@/lib/product/Daemon/TestDirector.pm
+	-rm @devel_allsrc_dir@/lib/product/Daemon/TestDirectorUtils.pm
+	-rm @devel_allsrc_dir@/lib/product/Daemon/TestDirectorInterface.pl
+	-rm @devel_allsrc_dir@/lib/product/Daemon/Trapper.pm
+	-rm @devel_allsrc_dir@/lib/product/Glue/CVS.pm
+	-rm @devel_allsrc_dir@/lib/product/Glue/CVSConsolidatedActivities.pm
+	-rm @devel_allsrc_dir@/lib/product/Glue/Git.pm
+	-rm @devel_allsrc_dir@/lib/product/Glue/Glue.pm
+	-rm @devel_allsrc_dir@/lib/product/Glue/SCM.pm
+	-rm @devel_allsrc_dir@/lib/product/Glue/Subversion.pm
+	-rm @devel_allsrc_dir@/lib/product/Tools/Glue_Installer.pm
+	-rm @devel_allsrc_dir@/lib/product/Tools/SCM_Description.pm
+	-rm @devel_allsrc_dir@/lib/product/Tools/SCM_Functions.pm
+	-rm @devel_allsrc_dir@/lib/product/Tools/VDD_Generator.pm
+	-rm @devel_allsrc_dir@/lib/product/Tools/Merge.pm
+	-rm @devel_allsrc_dir@/WebReports/cgi-bin/affected_files.pl
+	-rm @devel_allsrc_dir@/WebReports/cgi-bin/bug_report.pl
+	-rm @devel_allsrc_dir@/WebReports/cgi-bin/bug_report_input_form.pl
+	-rm @devel_allsrc_dir@/WebReports/cgi-bin/bug_report_document.pl
+	-rm @devel_allsrc_dir@/WebReports/cgi-bin/email_users.pl
+	-rm @devel_allsrc_dir@/WebReports/cgi-bin/WebReportUtilities.pm
+	-rm @devel_allsrc_dir@/WebReports/cgi-bin/CustomData.pm
+	-rm @devel_allsrc_dir@/WebReports/cgi-bin/EMail.pm
+	$(MAKE) -C @devel_tests_dir@ clean
+	$(MAKE) -C @devel_alldoc_dir@/manual clean
+	$(MAKE) -C @devel_alldoc_dir@/manpages clean
+	$(MAKE) -C @devel_alldoc_dir@/paper_introduce clean
+	-rm packaging/debian/conffiles
+	-rm packaging/debian/copyright
+	-rm packaging/debian/init.d
+	-rm packaging/debian/manual
+	-rm packaging/debian/@DEVEL_PRODUCT_NAME_LOWER@-doc.doc-base
+	-rm packaging/debian/@DEVEL_PRODUCT_NAME_LOWER@-doc.docs
+	-rm packaging/debian/@DEVEL_PRODUCT_NAME_LOWER@-common.docs
+	-rm packaging/debian/@DEVEL_PRODUCT_NAME_LOWER@-server.docs
+	-rm packaging/debian/@DEVEL_PRODUCT_NAME_LOWER@-tools.docs
+	-rm packaging/distribute/prepare.sh
+	-rm packaging/redhat/prepare.sh
+	-rm packaging/redhat/product.spec
+	-rm packaging/redhat/rpmmacros
+	-rm packaging/redhat/rpmrc
+	-rm -rf packaging/redhat/build
+	-rm packaging/windows/prepare.sh
+	-rm release_main.sh
+
+distclean: clean
+	$(MAKE) -C @devel_tests_dir@ distclean
+	$(MAKE) -C @devel_alldoc_dir@/paper_introduce distclean
+	$(MAKE) -C @devel_alldoc_dir@/manpages distclean
+	$(MAKE) -C @devel_alldoc_dir@/manual distclean
+	-rm Makefile configure aclocal.m4 config.log config.status config.guess config.sub install-sh config.h.in config.cache ChangeLog* debian
+	-rm product_release.conf
+	# Unfortunately, these files are not generated before the Debian
+	# packaging starts. They should not be removed on the regular
+	# clean rule
+	-rm packaging/debian/control
+	-rm packaging/debian/rules
+
+package_source: clean log
+	cp ChangeLog* ..
+	devel_product_release --config=product_release.conf
+
+# This should be manually run only once to update the debian packaging
+# files correctly, after the DEVEL_PRODUCT_VERSION variable is
+# increased in configure.in
+prepare_packages: prepare_package_debian
+
+prepare_package_debian:
+	@LN_S@ -fn packaging/debian debian
+	debchange --preserve -v @DEVEL_PRODUCT_PACKAGE_VERSION@ "New upstream release with name @DEVEL_PRODUCT_RELEASE_TAG@."
+
+package_debian:
+	@LN_S@ -fn packaging/debian debian
+	dpkg-buildpackage -tc -rfakeroot
+
+package_redhat:
+	(cd packaging/redhat; ./prepare.sh)
+
+package_windows:
+	(cd packaging/windows; fakeroot -- ./prepare.sh)
+
+distribute:
+	(cd packaging/distribute; ./prepare.sh)
+
+install: install-common install-doc install-doc-scm install-tools install-server
+
+install-common:
+	#
+	# Install @DEVEL_PRODUCT_NAME_LOWER@-common
+	#
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Activity.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@"
+	$(install_file) "@devel_allsrc_dir@/lib/product/ActivityUtilities.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Bug.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@"
+	$(install_file) "@devel_allsrc_dir@/lib/product/BugComment.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Common.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Connection.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Error.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@"
+	$(install_file) "@devel_allsrc_dir@/lib/product/VDD.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@"
+	$(install_file) "@devel_allsrc_dir@/lib/product/MergeList.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@"
+	# install common configuration files
+	$(make_directory) "$(DESTDIR)$(sysconfdir)/@DEVEL_PRODUCT_NAME_LOWER@"
+	$(install_secret) "@devel_allsrc_dir@/other/etc/product/apache.conf.template" "$(DESTDIR)$(sysconfdir)/@DEVEL_PRODUCT_NAME_LOWER@/apache.conf"
+
+install-doc:
+ifeq ($(devel_config_doc),yes)
+	#
+	# Install @DEVEL_PRODUCT_NAME_LOWER@-doc
+	#
+	# Install the html docs
+	$(make_directory) "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc"
+	$(make_directory) "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/html-single"
+	$(make_directory) "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/html-multi"
+	$(make_directory) "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/images"
+	$(install_file) "@devel_alldoc_dir@/manual/images/"*.jpg "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/images/."
+	$(install_file) "@devel_alldoc_dir@/manual/images/"*.gif "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/images/."
+	$(install_file) "@devel_alldoc_dir@/manual/output.single.html/"*.html "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/html-single/."
+	$(install_file) "@devel_alldoc_dir@/manual/output.multi.html/"*.html "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/html-multi/."
+	# Install the pdf docs
+	$(install_file) "@devel_alldoc_dir@/manual/output/manual.pdf" "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/."
+else
+	#
+	# Do not install @DEVEL_PRODUCT_NAME_LOWER@-doc
+	#
+endif
+
+install-doc-scm:
+	#
+	# Install @DEVEL_PRODUCT_NAME_LOWER@-doc-scm
+	#
+	$(make_directory) "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc"
+	$(install_file) @devel_alldoc_dir@/AUTHORS "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/."
+	$(install_file) @devel_alldoc_dir@/COPYING "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/."
+	$(install_file) @devel_alldoc_dir@/TODO "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/."
+
+install-doc-changelogs:
+	#
+	# Install @DEVEL_PRODUCT_NAME_LOWER@-doc-changelogs
+	#
+	$(make_directory) "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc"
+	$(install_file) ChangeLog.* "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/."
+
+install-tools:
+	#
+	# Install @DEVEL_PRODUCT_NAME_LOWER@-tools
+	#
+	# Install the glue library
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Glue/CVS.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Glue/CVSConsolidatedActivities.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Glue/Git.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Glue/Glue.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Glue/SCM.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Glue/Subversion.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue"
+	# Install the glue
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/bin"
+	$(install_program) "@devel_allsrc_dir@/glue/bin/activity.pl" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/bin/@DEVEL_PRODUCT_NAME_LOWER@_activity.pl"
+	# Install the glue template files
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue"
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/etc"
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/etc/@DEVEL_PRODUCT_NAME_LOWER@"
+	$(install_file) "@devel_allsrc_dir@/glue/etc/product/log_template" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/etc/@DEVEL_PRODUCT_NAME_LOWER@"
+	$(install_file) "@devel_allsrc_dir@/glue/etc/product/glue.conf.template" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/etc/@DEVEL_PRODUCT_NAME_LOWER@"
+	# CVS template files
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/up_to_1_11"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/checkoutlist" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/up_to_1_11"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/@DEVEL_CONFIG_CVSHOOK_COMMITINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/up_to_1_11/"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/@DEVEL_CONFIG_CVSHOOK_LOGINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/up_to_1_11/"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/@DEVEL_CONFIG_CVSHOOK_RCSINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/up_to_1_11"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/@DEVEL_CONFIG_CVSHOOK_TAGINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/up_to_1_11"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/up_to_1_11/@DEVEL_CONFIG_CVSHOOK_VERIFYMSG@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/up_to_1_11"
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest/checkoutlist" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest/@DEVEL_CONFIG_CVSHOOK_COMMITINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest/@DEVEL_CONFIG_CVSHOOK_LOGINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest/@DEVEL_CONFIG_CVSHOOK_RCSINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest/@DEVEL_CONFIG_CVSHOOK_TAGINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest/@DEVEL_CONFIG_CVSHOOK_VERIFYMSG@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest"
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest_cvsnt"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/checkoutlist" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest_cvsnt"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/@DEVEL_CONFIG_CVSHOOK_COMMITINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest_cvsnt"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/@DEVEL_CONFIG_CVSHOOK_LOGINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest_cvsnt"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/@DEVEL_CONFIG_CVSHOOK_RCSINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest_cvsnt"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/@DEVEL_CONFIG_CVSHOOK_TAGINFO@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest_cvsnt"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/scm_cvs/latest_cvsnt/@DEVEL_CONFIG_CVSHOOK_VERIFYMSG@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_cvs/latest_cvsnt"
+	# Subversion template files
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_svn/latest"
+	$(install_program) "@devel_allsrc_dir@/glue/templates/scm_svn/latest/@DEVEL_CONFIG_SVNHOOK_PRECOMMIT@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_svn/latest"
+	$(install_program) "@devel_allsrc_dir@/glue/templates/scm_svn/latest/@DEVEL_CONFIG_SVNHOOK_POSTCOMMIT@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_svn/latest"
+	# Git template files
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_git/latest"
+	$(install_program) "@devel_allsrc_dir@/glue/templates/scm_git/latest/@DEVEL_CONFIG_GITHOOK_COMMITMSG@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_git/latest"
+	$(install_program) "@devel_allsrc_dir@/glue/templates/scm_git/latest/@DEVEL_CONFIG_GITHOOK_POSTCOMMIT@" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/scm_git/latest"
+	# Install the tool libraries
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Tools"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Tools/Glue_Installer.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Tools/Glue_Installer.pm"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Tools/SCM_Description.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Tools/SCM_Description.pm"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Tools/SCM_Functions.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Tools/SCM_Functions.pm"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Tools/VDD_Generator.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Tools/VDD_Generator.pm"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Tools/Merge.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Tools/Merge.pm"
+	# Install the glue installation script
+	$(make_directory) "$(DESTDIR)$(bindir)"
+	$(install_program) "@devel_allsrc_dir@/scripts/install_glue.pl" "$(DESTDIR)$(bindir)/@DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl"
+ifeq ($(devel_config_doc),yes)
+	# Install the manpage of the glue installation script
+	$(make_directory) "$(DESTDIR)$(mandir)/man1"
+	$(install_file) "@devel_alldoc_dir@/manpages/@DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl.1" "$(DESTDIR)$(mandir)/man1/."
+else
+	# Do not install the manpage of the glue installation script
+endif
+	# Install the vdd generator script
+	$(make_directory) "$(DESTDIR)$(bindir)"
+	$(install_program) "@devel_allsrc_dir@/scripts/vdd_generator.pl" "$(DESTDIR)$(bindir)/@DEVEL_PRODUCT_NAME_LOWER@_vdd_generator.pl"
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/stylesheets"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/stylesheets/vdd.xsl" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/stylesheets/vdd.xsl"
+	$(install_file) "@devel_allsrc_dir@/glue/templates/stylesheets/vdd.sgml.header" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue/templates/stylesheets/vdd.sgml.header"
+ifeq ($(devel_config_doc),yes)
+	# Install the manpage of the vdd generator script
+	$(make_directory) "$(DESTDIR)$(mandir)/man1"
+	$(install_file) "@devel_alldoc_dir@/manpages/@DEVEL_PRODUCT_NAME_LOWER@_vdd_generator.pl.1" "$(DESTDIR)$(mandir)/man1/."
+else
+	# Do not install the manpage of the vdd generator script
+endif
+	# Install the merge script
+	$(install_program) "@devel_allsrc_dir@/scripts/merge.pl" "$(DESTDIR)$(bindir)/@DEVEL_PRODUCT_NAME_LOWER@_merge.pl"
+ifeq ($(devel_config_doc),yes)
+	# Install the manpage of the merge script
+	$(make_directory) "$(DESTDIR)$(mandir)/man1"
+	$(install_file) "@devel_alldoc_dir@/manpages/@DEVEL_PRODUCT_NAME_LOWER@_merge.pl.1" "$(DESTDIR)$(mandir)/man1/."
+else
+	# Do not install the manpage of the merge script
+endif
+	# Install the testing scripts
+	$(install_program) "@devel_allsrc_dir@/scripts/ActivityUtilities_test.pl" "$(DESTDIR)$(bindir)/"
+	# Install the reports
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports"
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/html"
+	$(install_file) "@devel_allsrc_dir@/WebReports/html/"*.html "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/html/."
+	$(install_file) "@devel_allsrc_dir@/WebReports/html/"*.js "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/html/."
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/cgi-bin"
+	$(install_program) "@devel_allsrc_dir@/WebReports/cgi-bin/"*.pl "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/cgi-bin/."
+	$(install_program) "@devel_allsrc_dir@/WebReports/cgi-bin/"*.pm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/cgi-bin/."
+	$(install_program) "@devel_allsrc_dir@/WebReports/cgi-bin/"*.txt "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/cgi-bin/."
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/cgi-bin/templates"
+	$(install_file) "@devel_allsrc_dir@/WebReports/cgi-bin/templates/"*.tmpl "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/cgi-bin/templates/."
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/html/images"
+	$(install_file) "@devel_allsrc_dir@/WebReports/html/images/"*.gif "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/html/images/."
+	$(install_file) "@devel_allsrc_dir@/WebReports/html/images/"*.png "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/html/images/."
+
+install-server:
+	#
+	# Install @DEVEL_PRODUCT_NAME_LOWER@-server
+	#
+	# Install the daemon library
+	$(make_directory) "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Daemon/Bugtracker.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Daemon/Bugzilla.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Daemon/Daemon.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Daemon/Integration.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Daemon/Mantis.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Daemon/Process.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Daemon/Request.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Daemon/RequestTracker.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Daemon/TestDirector.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Daemon/TestDirectorUtils.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_program) "@devel_allsrc_dir@/lib/product/Daemon/TestDirectorInterface.pl" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	$(install_file) "@devel_allsrc_dir@/lib/product/Daemon/Trapper.pm" "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon"
+	# Install the daemon
+	$(make_directory) "$(DESTDIR)$(sbindir)"
+	$(install_program) "@devel_allsrc_dir@/daemon/daemon.pl" "$(DESTDIR)$(sbindir)/@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl"
+	# Install a directory for log files
+	$(make_directory) "$(DESTDIR)$(localstatedir)/log/@DEVEL_PRODUCT_NAME_LOWER@"
+	# Install a directory for the pid file
+	$(make_directory) "$(DESTDIR)$(localstatedir)/run"
+	# install the configuration files
+	$(make_directory) "$(DESTDIR)$(sysconfdir)/@DEVEL_PRODUCT_NAME_LOWER@"
+	$(install_secret) "@devel_allsrc_dir@/daemon/etc/daemon.conf.template" "$(DESTDIR)$(sysconfdir)/@DEVEL_PRODUCT_NAME_LOWER@/daemon.conf"
+	$(install_secret) "@devel_allsrc_dir@/daemon/etc/TestDirector.conf.template" "$(DESTDIR)$(sysconfdir)/@DEVEL_PRODUCT_NAME_LOWER@/TestDirector.conf"
+	$(install_file) "@devel_allsrc_dir@/daemon/etc/WebReports.conf.template" "$(DESTDIR)$(sysconfdir)/@DEVEL_PRODUCT_NAME_LOWER@/WebReports.conf"
+	# Install a directory for the rc script
+	$(make_directory) "$(DESTDIR)$(sysconfdir)/init.d"
+	# Install an rc script
+	$(install_program) "@devel_allsrc_dir@/scripts/@DEVEL_CONFIG_DAEMON_SERVICE_ORIGINAL@" "$(DESTDIR)$(sysconfdir)/init.d/@DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED@"
+ifeq ($(devel_config_doc),yes)
+	# Install the manpage of the integration daemon
+	$(make_directory) "$(DESTDIR)$(mandir)/man8"
+	$(install_program) "@devel_alldoc_dir@/manpages/@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl.8" "$(DESTDIR)$(mandir)/man8/."
+else
+	# Do not install the manpage of the integration daemon
+endif
+
+server-start:
+	# Start the daemon
+	"$(sysconfdir)/init.d/@DEVEL_PRODUCT_NAME_LOWER@-server" start
+
+uninstall: uninstall-server uninstall-tools uninstall-doc-scm uninstall-doc uninstall-common 
+
+server-stop:
+	# Stop the daemon
+	-"$(sysconfdir)/init.d/@DEVEL_PRODUCT_NAME_LOWER@-server" stop
+
+uninstall-server:
+	#
+	# Uninstall @DEVEL_PRODUCT_NAME_LOWER@-server
+	#
+	-rm "$(DESTDIR)$(mandir)/man8/@DEVEL_PRODUCT_NAME_LOWER@_daemon.8"
+	# Uninstall the rc script
+	-rm "$(DESTDIR)$(sysconfdir)/init.d/@DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED@"
+	# Uninstall the configuration file
+	-rm -rf "$(DESTDIR)$(sysconfdir)/@DEVEL_PRODUCT_NAME_LOWER@"
+	# Uninstall the directory for log files
+	-rm -rf "$(DESTDIR)$(localstatedir)/@DEVEL_PRODUCT_NAME_LOWER@"
+	# Uninstall the daemon
+	-rm "$(DESTDIR)$(sbindir)/@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl"
+	# Uninstall the library
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/Trapper.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/TestDirector.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/TestDirectorUtils.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/TestDirectorInterface.pl"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/Request.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/RequestTracker.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/Process.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/Mantis.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/Integration.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/Daemon.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/Bugzilla.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/Bugtracker.pm"
+
+uninstall-tools:
+	#
+	# Uninstall @DEVEL_PRODUCT_NAME_LOWER@-tools
+	#
+	# Unistall the testing scripts
+	-rm "$(DESTDIR)$(bindir)/ActivityUtilities_test.pl"
+	# Uninstall the manpage of the merge script
+	-rm "$(DESTDIR)$(mandir)/man1/@DEVEL_PRODUCT_NAME_LOWER@_merge.pl.1"
+	# Uninstall the merge  script
+	-rm "$(DESTDIR)$(bindir)/@DEVEL_PRODUCT_NAME_LOWER@_merge.pl"
+	# Uninstall the manpage of the vdd generator script
+	-rm "$(DESTDIR)$(mandir)/man1/@DEVEL_PRODUCT_NAME_LOWER@_vdd_generator.pl.1"
+	# Uninstall the vdd generator script
+	-rm "$(DESTDIR)$(bindir)/@DEVEL_PRODUCT_NAME_LOWER@_vdd_generator.pl"
+	# Uninstall the manpage of the glue installation script
+	-rm "$(DESTDIR)$(mandir)/man1/@DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl.1"
+	# Uninstall the glue installation script
+	-rm "$(DESTDIR)$(bindir)/@DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl"
+	# Uninstall the reports
+	-rm -rf "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/WebReports"
+	# Uninstall the tool libraries
+	-rm -rf "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Tools"
+	# Uninstall the glue
+	-rm -rf "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/glue"
+	# Uninstall the glue library
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue/Subversion.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue/SCM.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue/Glue.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue/Git.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue/CVSConsolidatedActivities.pm"
+	-rm "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Glue/CVS.pm"
+
+uninstall-doc:
+ifeq ($(devel_config_doc),yes)
+	#
+	# Uninstall @DEVEL_PRODUCT_NAME_LOWER@-doc
+	#
+	-rm -rf "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc"
+else
+	#
+	# Do not install @DEVEL_PRODUCT_NAME_LOWER@-doc
+	#
+endif
+
+uninstall-doc-changelogs:
+	#
+	# Uninstall @DEVEL_PRODUCT_NAME_LOWER@-doc-changelogs
+	#
+	-rm -f "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/ChangeLog.*"
+
+uninstall-doc-scm:
+	#
+	# Uninstall @DEVEL_PRODUCT_NAME_LOWER@-doc-scm
+	#
+	-rm -f "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/AUTHORS"
+	-rm -f "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/COPYING"
+	-rm -f "$(DESTDIR)$(datadir)/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/TODO"
+
+uninstall-common:
+	#
+	# Uninstall @DEVEL_PRODUCT_NAME_LOWER@-common
+	#
+	-rm -rf "$(DESTDIR)$(datadir)/@DEVEL_PRODUCT_NAME_LOWER@"
+
+.PHONY: doc src

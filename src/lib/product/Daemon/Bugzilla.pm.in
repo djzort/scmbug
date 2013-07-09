@@ -1,0 +1,1755 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Daemon::Bugzilla;
+
+@ISA = qw( @DEVEL_PRODUCT_NAME@::Daemon::Bugtracker );
+
+use strict;
+use Data::Dumper;
+use @DEVEL_PRODUCT_NAME@::Daemon::Bugtracker;
+use @DEVEL_PRODUCT_NAME@::Common;
+use @DEVEL_PRODUCT_NAME@::VDD;
+
+
+my $bugzilla_bug_status_map = {
+    "ASSIGNED" => { name => "ASSIGNED",
+		    active => 1,
+                    accepts_data_as_resolution => 1,
+		    possible_resolution_states => [ "RESOLVED" ],
+		    possible_resolutions => [ ] },
+    "REOPENED" => { name => "REOPENED",
+		    active => 1,
+                    accepts_data_as_resolution => 0,
+		    possible_resolution_states => [ "ASSIGNED",
+						    "RESOLVED" ],
+		    possible_resolutions => [ ] },
+    "RESOLVED" => { name => "RESOLVED",
+		    active => 0,
+                    accepts_data_as_resolution => 0,
+		    possible_resolution_states => [ "REOPENED" ],
+		    possible_resolutions => [ "FIXED",
+					      "INVALID",
+					      "WONTFIX",
+					      "LATER",
+					      "REMIND",
+					      "DUPLICATE",
+					      "WORKSFORME" ] }
+};
+
+
+
+sub is_version_up_to_2_16 {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq "up_to_2_16" ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+sub is_version_up_to_2_18 {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq "up_to_2_18" ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+sub is_version_up_to_2_20 {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq "up_to_2_20" ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+sub is_version_up_to_2_22 {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq "up_to_2_22" ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+sub is_version_up_to_3_1_2 {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq "up_to_3_1_2" ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+sub is_version_up_to_3_4 {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq "up_to_3_4" ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+# There are various ways to talk to Bugzilla. The Bugzilla API as
+# provided by the Bugzilla source using the globals.pl file is used
+# here.
+#
+# This requires local access to the bugzilla localconfig file
+#
+sub init_specific {
+    my $self = shift;
+    my $package_name = "";
+    my $package_version = "";
+
+    # Include the bugzilla libraries
+    unshift @INC, $self->installation_directory();
+    chdir $self->installation_directory();
+
+    if ($self->is_version_up_to_3_4() || $self->is_version_latest()) {
+        unshift @INC, $self->installation_directory() . "/lib";
+    }
+
+    #
+    # Require DBI version 1.50 on Windows. Earlier versions have
+    # threading issues.
+    #
+    if ($PRODUCT_ON_WINDOWS) {
+	$package_name = "DBI";
+	$package_version = "1.50";
+	my $package_exists_retval;
+	my $package_exists_version_found = "";
+	( $package_exists_retval, $package_exists_version_found ) = package_exists( $package_name, $package_version );
+	if ( $package_exists_retval == 0 ) {
+	    if ( $package_exists_version_found eq "" ) {
+		return ( 2, "Package '" . $package_name . "' not found. v$package_version is needed.\n" . package_installation_instructions( $package_name ) );
+	    } else {
+		return ( 2, "Package '" . $package_name . "' v$package_version not found. v$package_exists_version_found found instead.\n" . package_installation_instructions( $package_name ) );
+	    }
+	}
+    }
+
+    if ( $self->is_version_up_to_3_1_2() || $self->is_version_up_to_3_4() || $self->is_version_latest() ) {
+    	$package_name = "Bugzilla";
+    	if ( package_exists( $package_name ) == 0 ) {
+            return ( 3, "Package '" . $package_name . "' not found in installation directory '" .
+		     $self->installation_directory() . "'.\n" );
+	}
+    } else {
+        # globals.pl was present up to up to Bugzilla 2.22.7.
+        # It was removed since Bugzilla 3.0.1
+        #
+	# This is the Bugzilla API file.
+	$package_name = "globals.pl";
+	if ( package_exists( $package_name ) == 0) {
+	    return ( 2, "Package '" . $package_name . "' not found in installation directory '" .
+		     $self->installation_directory() . "'.\n" );
+	}
+	do 'globals.pl';
+    }
+
+    if ( $self->is_version_up_to_2_16() ||
+	 $self->is_version_up_to_2_18() ||
+	 $self->is_version_up_to_2_20() ) {
+	# This also seems to be required. Not sure why.
+	$package_name = "CGI.pl";
+	if ( package_exists( $package_name ) == 0) {
+	    return ( 3, "Package '" . $package_name . "' not found in installation directory '" .
+		     $self->installation_directory() . "'.\n" );
+	}
+    }
+
+    if ( $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ||
+         $self->is_version_up_to_3_1_2() ||
+         $self->is_version_up_to_3_4() || 
+         $self->is_version_latest() ) {
+	# In Bugzilla 2.20 AppendComment was moved to Bugzilla::Bug
+	$package_name = "Bugzilla::Bug";
+	if ( package_exists( $package_name ) == 0) {
+	    return ( 3, "Package '" . $package_name . "' not found in installation directory '" .
+		     $self->installation_directory() . "'.\n" );
+	}
+
+	# In Bugzilla 2.20 we also need Bugzilla::User::login_to_id
+	$package_name = "Bugzilla::User";
+	if ( package_exists( $package_name ) == 0) {
+	    return ( 3, "Package '" . $package_name . "' not found in installation directory '" .
+		     $self->installation_directory() . "'.\n" );
+	}
+    }
+
+    if ( $self->is_version_up_to_3_1_2() ||
+         $self->is_version_up_to_3_4() || 
+         $self->is_version_latest() ) {
+	$package_name = "Bugzilla::Product";
+	if ( package_exists($package_name) == 0 ) {
+	    return ( 3, "Package '" . $package_name . "' not found in installation directory '" .
+		     $self->installation_directory() . "'.\n" );
+	}
+
+	$package_name = "Bugzilla::Version";
+	if ( package_exists($package_name) == 0 ) {
+	    return ( 3, "Package '" . $package_name . "' not found in installation directory '" .
+		     $self->installation_directory() . "'.\n" );
+	}
+
+	# The following two packages are needed by bug_status_map()
+	$package_name = "Bugzilla::Field";
+	if ( package_exists($package_name) == 0 ) {
+	    return ( 3, "Package '" . $package_name . "' not found in installation directory '" .
+		     $self->installation_directory() . "'.\n" );
+	}
+	
+	$package_name = "Bugzilla::Util";
+	if ( package_exists($package_name) == 0 ) {
+	    return ( 3, "Package '" . $package_name . "' not found in installation directory '" .
+		     $self->installation_directory() . "'.\n" );
+	}
+	
+        # The following is needed by integration_change_bug_resolution()
+	$package_name = "Bugzilla::Constants";
+	if ( package_exists($package_name) == 0 ) {
+	    return ( 3, "Package '" . $package_name . "' not found in installation directory '" .
+		     $self->installation_directory() . "'.\n" );
+	}
+
+        # Must load the Bugzilla package before any of its functions are used.
+        eval "use Bugzilla";
+    }
+
+    # This is direct modification to bugzilla's internal variables
+    # required to configure the database connection
+    $::db_host = $self->location();
+    $::db_port = $self->port();
+    $::db_name = $self->database();
+    $::db_user = $self->username();
+    $::db_pass = $self->password();
+
+    return 0;
+}
+
+
+
+sub execute_post_tag_cleanup {
+    my $self = shift;
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+	# If Bugzilla is installed locally to the same machine the daemon
+	# is installed, we can do more
+	if ( $self->installed_locally() ) {
+	    # Force Bugzilla to regenerate the version cache file. In this
+	    # way, the version changes as a result of tagging are
+	    # reflected in the web interface immediately.
+	    GenerateVersionTable();
+	}
+    } else {
+	# The version cache is obsolete
+    }
+}
+
+
+
+# Bugzilla 2.20 has a bug in AppendComment. It stores the comment with
+# zero time stamp, if it is not given as a parameter.
+sub bugzilla_2_20_fixed_AppendComment ($$$;$$$) {
+    my ($bugid, $whoid, $comment, $isprivate, $timestamp, $work_time) = @_;
+    $work_time ||= 0;
+    my $dbh = Bugzilla->dbh;
+
+    ValidateTime($work_time, "work_time") if $work_time;
+    trick_taint($work_time);
+
+    # Use the date/time we were given if possible (allowing calling code
+    # to synchronize the comment's timestamp with those of other records).
+    if ( !defined( $timestamp ) )
+    {
+	$timestamp = $dbh->selectrow_array("SELECT NOW()");
+    }
+
+    $comment =~ s/\r\n/\n/g;     # Handle Windows-style line endings.
+    $comment =~ s/\r/\n/g;       # Handle Mac-style line endings.
+
+    if ($comment =~ /^\s*$/) {  # Nothin' but whitespace
+        return;
+    }
+
+    # Comments are always safe, because we always display their raw contents,
+    # and we use them in a placeholder below.
+    trick_taint($comment);
+    my $privacyval = $isprivate ? 1 : 0 ;
+    $dbh->do("INSERT INTO longdescs (bug_id, who, bug_when, thetext, isprivate, work_time) VALUES (?,?,?,?,?,?)", 
+             undef, ($bugid, $whoid, $timestamp, $comment, $privacyval, $work_time));
+    $dbh->do("UPDATE bugs SET delta_ts = ? WHERE bug_id = ?",
+	     undef, ($timestamp, $bugid));
+}
+
+
+
+# Do the bulk of the work required for integration_get_vdd
+#
+# PARAMETERS:
+# $1 - The VDD to categorize
+# $2 - The comment array
+# $3 - The bug id
+# $4 - The comment counter
+sub categorizeVDD {
+    my $self = shift;
+    my ( $vdd, $comment, $bugid, $comment_counter ) = ( @_ );
+    
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+        $comment->{'author_username'} .= Param('emailsuffix');
+    } else {
+        $comment->{'author_username'} .= Bugzilla->params->{'emailsuffix'}; 
+    }
+
+    $comment->{'author_name'} = $comment->{'author_name'} || $comment->{'author_username'};
+
+    # The resolution can be blank in the database
+    if ( !defined ($comment->{'resolution'} ) ) {
+        $comment->{'resolution'} = "";
+    }
+    
+    # Enforce alphanumeric sorting of the comments
+    my $comment_counter_text = sprintf ( "inaccurate_%04d", $comment_counter );
+    
+    #aolifu: Let's use this array for redundant data
+    my @data = ( $bugid,
+        $comment->{ 'summary' },
+        $comment->{ 'status' },
+        $comment->{ 'resolution' },
+        $comment->{ 'severity' },
+        $comment->{ 'priority' },
+        $comment_counter_text,
+        $comment->{ 'content' },
+        $comment->{ 'date' },
+        $comment->{ 'author_username' },
+        $comment->{ 'author_name' },
+        $comment->{ 'author_email' } );
+    
+    $vdd->add_bug_comment( 'all', @data);
+
+    #
+    # Categorize the bug even further
+    #
+
+    # If the bug is new or unconfirmed add it in the new list as well
+    if ( $comment->{ 'status' } eq "NEW" || $comment->{ 'status' } eq "UNCONFIRMED" ) {
+        
+        $vdd->add_bug_comment( 'new', @data);
+            
+    } elsif ( $comment->{ 'status' } eq "RESOLVED" ||
+        $comment->{ 'status' } eq "VERIFIED" ||
+        $comment->{ 'status' } eq "CLOSED" ) {
+
+        # If the bug is resolved or verified or closed add it in closed list as well
+        $vdd->add_bug_comment( 'closed', @data);
+
+        # Also check if the bug was closed with no SCM activity
+        if ( ! $comment->{ 'content' } =~ m/$PRODUCT_AFFECTED_FILES_TOKEN/ ) {
+            $vdd->add_bug_comment( 'closed_untouched', @data);
+        }
+
+    } else {
+        # The bug must have been worked on but is not yet finished
+        $vdd->add_bug_comment( 'inprogress', @data);
+    }
+}
+
+
+
+# Retrieves and returns the current bug status map if it can be
+# retrieved dynamically from the bug-tracker.
+#
+# RETURNS:
+# - the status map dependent on bugzilla's version
+sub bug_status_map {
+    my $self = shift;
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+        # Return the static, hard-coded map
+        return $bugzilla_bug_status_map;
+    } else {
+        # Dynamically build up the bug status map
+
+        my $status_map = {};
+        my $status_values = Bugzilla::Field::get_legal_field_values('bug_status');
+        foreach my $status ( @$status_values ) {
+            $status_map->{ $status } = {};
+            $status_map->{ $status }->{ name } = $status;
+            $status_map->{ $status }->{ accepts_data_as_resolution } = 0;
+            $status_map->{ $status }->{ active } = 0; #Bugzilla::Bug::is_open_state( $status );
+            $status_map->{ $status }->{ possible_resolution_states } = [];
+            $status_map->{ $status }->{ possible_resolutions } = [];
+        }
+        
+        $status_map->{ 'NEW'      }->{ possible_resolution_states } = [ 'ASSIGNED', 'RESOLVED' ];
+        
+        $status_map->{ 'ASSIGNED' }->{ active } = 1;
+        $status_map->{ 'ASSIGNED' }->{ accepts_data_as_resolution } = 1;
+        # ASSIGNED -> ASSIGNED for reassignment to other user
+        $status_map->{ 'ASSIGNED' }->{ possible_resolution_states } = [ 'ASSIGNED', 'RESOLVED' ];
+        
+        $status_map->{ 'REOPENED' }->{ active } = 1;
+        $status_map->{ 'REOPENED' }->{ possible_resolution_states } = [ 'ASSIGNED', 'RESOLVED' ];
+        
+        # RESOLVED -> RESOLVED for resolution change only
+        $status_map->{ 'RESOLVED' }->{ possible_resolution_states } = [ 'RESOLVED', 'REOPENED' ];
+        
+        $status_map->{ 'VERIFIED' }->{ possible_resolution_states } = [ 'REOPENED' ];
+        $status_map->{ 'CLOSED'   }->{ possible_resolution_states } = [ 'REOPENED' ];
+        
+        
+        my $resolution_values = Bugzilla::Field::get_legal_field_values('resolution');
+        my $pos = Bugzilla::Util::lsearch($resolution_values, '');
+        if ($pos >= 0) {
+            splice(@$resolution_values, $pos, 1);
+        }
+        
+        # We don't support movements of bugs yet.
+        $pos = Bugzilla::Util::lsearch($resolution_values, 'MOVED');
+        if ($pos >= 0) {
+            splice(@$resolution_values, $pos, 1);
+        }
+        
+        my @res = grep ($_, @{$resolution_values});
+        $status_map->{ 'RESOLVED' }->{ possible_resolutions } = \@res;
+        
+        return $status_map;
+        
+    }
+}
+
+
+# -----------------------------------------------------------------------------
+# These functions are required by the Bugtracker interface
+# -----------------------------------------------------------------------------
+
+
+sub set_version_type {
+    my $self = shift;
+    my $version = $self->version();
+
+    if ( $version =~ m/(\d+)\.(\d+)\.(\d+)/ ) {
+	my $major = $1;
+	my $minor = $2;
+	my $patch = $3;
+	if ( $major == 2 ) {
+	    if ( $minor >= 14 && $minor <= 16 ) {
+		$self->{ version_type } = "up_to_2_16";
+	    } elsif ( $minor == 18 ) {
+		$self->{ version_type } = "up_to_2_18";
+	    } elsif ( $minor == 20 ) {
+		$self->{ version_type } = "up_to_2_20";
+	    } elsif ( $minor == 22 ) {
+		$self->{ version_type } = "up_to_2_22";
+	    } else {
+		$self->{ version_type } = $BUGTRACKER_VERSION_NOT_SUPPORTED;
+	    }
+	} elsif ( ($major == 3 && $minor == 0) ||
+                  ($major == 3 && $minor == 1 && $patch <= 2) ) {
+            # Bugzilla versions above 3.1.2 (e.g. 3.1.3) do not use
+            # Bugzilla::Bug::AppendComment but Bugzilla::Bug::add_comment instead
+            # Thus they function like Bugzilla 3.2
+	    $self->{ version_type } = "up_to_3_1_2";
+	} elsif ( $major == 3 && ($minor == 2 || $minor == 4)) {
+	    $self->{ version_type } = "up_to_3_4";
+	} elsif ( $major == 3 && $minor == 6) {
+	    $self->{ version_type } = $BUGTRACKER_VERSION_LATEST;
+	} else {
+	    $self->{ version_type } = $BUGTRACKER_VERSION_NOT_SUPPORTED;
+	}
+    } else {
+	$self->{ version_type } = $BUGTRACKER_VERSION_WRONG_FORMAT;
+    }
+}
+
+
+
+# -----------------------------------------------------------------------------
+# These functions are required by the Integration interface
+# -----------------------------------------------------------------------------
+
+
+
+# Connects to the bug-tracker database
+sub integration_connect_database {
+    my $self = shift;
+
+    if ( $self->is_version_up_to_2_16() ) {
+	ConnectToDatabase();
+    }
+}
+
+
+
+# Disconnects from the bug-tracker database
+sub integration_disconnect_database {
+    my $self = shift;
+}
+
+
+
+# Enters an SCM check-in comment, originating from the bug-tracking
+# username of the SCM user, against a bug
+#
+# PARAMETERS:
+# $1 - Bug id
+# $2 - Bug-tracker username of SCM user that will enter a comment
+# $3 - Comment to be entered
+#
+# RETURNS:
+# - 0 on success
+# - 1,<a string describing the error> on failure
+sub integration_add_comment {
+    my $self = shift;
+    my ( $bugid, $username, $comment ) = ( @_ );
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18()) {
+	AppendComment( $bugid, $username, $comment );
+	return 0;
+    } elsif ( $self->is_version_up_to_2_20() ) {
+	# Bugzilla 2.20 does not have AppendComment in globals.pl It
+	# was moved to Bugzilla::Bug. The original AppendComment takes
+	# the user ID instead of the user name, so we need to convert
+	# it here
+	my $userid = Bugzilla::User::login_to_id( $username );
+
+	if ( $userid > 0 ) {
+	    bugzilla_2_20_fixed_AppendComment( $bugid, $userid, $comment );
+	    return 0;
+	} else {
+	    # This should never happen. Each user should have a
+	    # corresponding userid in the database schema
+	    return 1, "Login '$username' could not be converted to an id in Bugzilla. Is username mapping setup correctly in daemon.conf ?\n" ;
+	}
+    } elsif ( $self->is_version_up_to_2_22() || $self->is_version_up_to_3_1_2() ) {
+	# AppendComment was fixed in Bugzilla 2.22. Should use the
+	# native version
+	my $userid = Bugzilla::User::login_to_id( $username );
+
+	if ( $userid > 0 ) {
+	    Bugzilla::Bug::AppendComment( $bugid, $userid, $comment );
+	    return 0;
+	} else {
+	    # This should never happen. Each user should have a
+	    # corresponding userid in the database schema
+	    return 1, "Login '$username' could not be converted to an id in Bugzilla. Is username mapping setup correctly in daemon.conf ?\n" ;
+	}
+    } else {
+        # Since Bugzilla 3.1.3 AppendComment has been replaced by add_comment
+
+        #
+        # First, check if this username exists
+        #
+        my $dbh = Bugzilla->dbh;
+        my $user = "";
+        eval {
+            $user = Bugzilla::User->check( $username );
+            return 0;
+        }; # eval
+
+        if ( $@ ) {
+            # User->check raised an exception
+            my $err = $@; 
+            log_daemon_warn( undef, $err );
+            if ($dbh->bz_in_transaction()) {
+                $dbh->bz_rollback_transaction();
+            }
+            return 1, "Login '$username' could not be converted to an id in Bugzilla. Is username mapping setup correctly in daemon.conf ?\n";
+        } else {
+            #
+            # The username exists. Now check if the bug id exists
+            #
+            Bugzilla->set_user( $user );
+            my $bug = "";
+            eval {
+                $bug = Bugzilla::Bug->check( $bugid );
+            }; # eval
+
+            if ( $@ ) {
+                # Bug->check raised an exception
+                my $err = $@; 
+                log_daemon_warn( undef, $err );
+                if ($dbh->bz_in_transaction()) {
+                    $dbh->bz_rollback_transaction();
+                }
+                return 1, "Error while adding bug comment: $err";
+            } else {
+                # The bug id exists
+                $dbh->bz_start_transaction();
+                $bug->add_comment( $comment, {isprivate => 0, work_time => 0, type => Bugzilla::Constants->CMT_NORMAL, extra_data => ""} );
+                $bug->update();
+                $dbh->bz_commit_transaction();
+                
+                return 0;
+            }
+        }
+    }
+}
+
+
+
+# Changes a bug resolution originating from the bug-tracking username
+# of the SCM user
+#
+# PARAMETERS:
+# $1 - Bug id
+# $2 - Bug-tracker username of SCM user that will change the resolution
+# $3 - New bug status
+# $4 - Possible bug resolution
+# $5 - Possible bug resolution data
+#
+# RETURNS:
+# - 0 on success
+# - 1,<a string describing the error> on failure
+sub integration_change_bug_resolution {
+    my $self = shift;
+    my ( $bugid, $username, $status, $resolution, $resolution_data ) = ( @_ );
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+        # Changing bug resolutions is not supported for earlier versions of Bugzilla
+        return ( 1, "Changing bug resolution is not implemented in this version of Bugzilla.\n");
+    } elsif ( $self->is_version_up_to_3_1_2() ) {
+
+        my $privileges_are_required = 0; #Set within check_can_change_field, not used at the moment
+        my $bug = new Bugzilla::Bug($bugid);
+        my $user = Bugzilla::User->new( { name => $username } );
+        Bugzilla->set_user($user);
+        
+        my $dbh = Bugzilla->dbh;
+        my $sql = "UPDATE bugs SET ";
+        my $has_changed = 0;
+        my @params = ();
+        if(!defined $status) {
+            $status = "none";
+        } else {
+            $status = lc $status;
+        }
+        
+        my $assignee = undef;
+        my $dupe_id = undef;
+
+        if ( $status =~ /^none$/ )  {
+
+            return ( 1, "Undefined status '$status' for bug '$bugid'.\n");
+
+        } elsif ( $status =~ /^assigned$/ )  {
+
+            if( defined($resolution) && ('' ne $resolution) ) {
+
+                # Reassign to given assignee
+                $assignee = $dbh->selectrow_array( "SELECT userid FROM profiles WHERE " .
+                                                   $dbh->sql_istrcmp('login_name', '?'), undef, $resolution);
+                                    
+                if( $assignee == 0) {
+                    return ( 1, "Unknown assignee '$resolution'.\n");
+                }
+                    
+                my %data = { 'knob' => 'reassign' }; #Needed by check_can_change_field for correctness
+                if(!$bug->check_can_change_field('assigned_to', $bug->assigned_to, $assignee, \$privileges_are_required, \%data)) {
+                    return ( 1, "Missing permission to reassign bug.\n");
+                }
+                    
+                $sql .= "bug_status=?";
+                push(@params, 'NEW'); # NOT ASSIGNED, this would break bz workflow
+                $sql .= ", assigned_to = ?";
+                push(@params, $assignee);
+                    
+            } else {
+                # Accepting bug
+                if($bug->assigned_to->id == 0) {
+                    return ( 1, "Bug '$bugid' was never confirmed. Can't change status to 'ASSIGNED'.\n");
+                }
+                    
+                if($bug->assigned_to->id != $user->id) {
+                    return ( 1, "You cannot accept a bug if you aren't the assignee. Bug '$bugid' is assigned to '" . $bug->assigned_to->login . "'\n");
+                }
+                    
+                $sql .= "bug_status=?";
+                push(@params, 'ASSIGNED');
+            }
+            $has_changed = 1;
+
+        } elsif ( $status =~ /^reopened$/ )  {
+            
+            if(!$bug->check_can_change_field('bug_status', $bug->bug_status, uc $status, \$privileges_are_required)) {
+                return ( 1, "Missing permission to reopen bug.\n");
+            }
+            $sql .= "bug_status=?";
+            push(@params, uc $status);
+            $sql .= ", resolution=?";
+            push(@params, "");
+            $has_changed = 1;
+        } elsif ( $status =~ /^resolved$/ )  {
+
+            $resolution = lc $resolution;
+
+            if(!$bug->check_can_change_field('bug_status', $bug->bug_status, uc $status, \$privileges_are_required)) {
+                return ( 1, "Missing permission to resolve bug.\n");
+            }
+                
+            if((!defined $resolution) || ('' eq $resolution)) {
+                return ( 1, "Undefined resolution for status '$status'.\n");
+            }
+                
+            if($resolution eq "moved") {
+                # Should never happen, anyway leave it here
+                return ( 1, "Movement of bugs isn't supported.\n");
+                    
+            } elsif ($resolution eq "duplicate") {
+
+                $dupe_id = $resolution_data;
+                my $reporter = $dbh->selectrow_array( "SELECT reporter FROM bugs WHERE bug_id = ?", undef, $dupe_id);
+                my $reporter_user = Bugzilla::User->new($reporter);
+                if (!$reporter_user->can_see_bug($dupe_id)) {
+                    # We don't want to be verbose to the user here, because he doesn't have the permissions
+                    return ( 1, "Error while setting status of bug '$bugid' to 'resolved duplicate $resolution_data'.\n");
+                }
+            }
+                
+            $sql .= "remaining_time = 0"; #Must reset time in this case, is also done in bugzilla's process_bug.cgi
+            $sql .= ", bug_status=?";
+            push(@params, uc $status);
+            $sql .= ", resolution=?";
+            push(@params, uc $resolution);
+            $has_changed = 1;
+        } else {
+            return ( 1, "Unknown status '$status' for bug '$bugid'.\n");
+        }
+        
+
+        my $dbh = Bugzilla->dbh;
+        # Lock database tables, avoid mid-air collisions
+        $dbh->bz_lock_tables('bugs WRITE', 'bugs_activity WRITE', 'duplicates WRITE', 'longdescs WRITE', 'fielddefs READ', 'profiles READ');
+        my $timestamp = $dbh->selectrow_array("SELECT NOW()"); # use same timestamp for all modifications
+        
+        $sql .= " WHERE bug_id = ?";
+        push(@params, $bugid);
+
+        if ($has_changed == 1) {
+
+            my $result = $dbh->do($sql, undef, @params);
+
+            if($result) {
+                
+                if ($resolution ne 'duplicate') {
+                    # Remove if previous resolution was duplicate
+                    $dbh->do( "DELETE FROM duplicates WHERE dupe = ?", undef, $bugid);
+
+                } else {
+                    # Remove previous one if dupe has changed
+                    $dbh->do( "DELETE FROM duplicates WHERE dupe = ?", undef, $bugid);
+                    
+                    if($dbh->do( "INSERT INTO duplicates VALUES (?, ?)", undef, $dupe_id, $bugid)) {
+                        # Simulate bugzilla behavior when marking as duplicate
+                        Bugzilla::Bug::AppendComment($bugid, $user->id, "", 0, $timestamp, 0, Bugzilla::Constants->CMT_DUPE_OF, $dupe_id);
+                        Bugzilla::Bug::AppendComment($dupe_id, $user->id, "", 0, $timestamp, 0, Bugzilla::Constants->CMT_HAS_DUPE, $bugid);
+                      }
+                }
+                
+                # Finally add values to bug's activity log
+                my $bug2 = new Bugzilla::Bug($bugid);
+                if( defined($assignee) && ( $bug->assigned_to->id != $bug2->assigned_to->id)) {
+                    my $old_value = Bugzilla::User::user_id_to_login($bug->assigned_to->id);
+                    my $new_value = Bugzilla::User::user_id_to_login($bug2->assigned_to->id);
+                    Bugzilla::Bug::LogActivityEntry($bugid, 'assigned_to', $old_value, $new_value, $user->id, $timestamp);
+                }
+                if($bug->bug_status ne $bug2->bug_status) {
+                    Bugzilla::Bug::LogActivityEntry($bugid, 'bug_status', $bug->bug_status, $bug2->bug_status, $user->id, $timestamp);
+                  }
+                if($bug->resolution ne $bug2->resolution) {
+                    Bugzilla::Bug::LogActivityEntry($bugid, 'resolution', $bug->resolution, $bug2->resolution, $user->id, $timestamp);
+                  }
+                
+            } else {
+                $dbh->bz_unlock_tables();
+                return ( 1, "Error while updating the status resolution of bug 'bugid'.\n");
+            }
+        }
+        $dbh->bz_unlock_tables();
+        
+        if($has_changed == 1){
+            return 0;
+        } else {
+            return ( 1, "Changing bug resolution for bug '$bugid' wasn't successful. Nothing changed.\n");
+        }
+    } elsif ( $self->is_version_up_to_3_4() || $self->is_version_latest() ) {
+        
+        my $dbh = Bugzilla->dbh;
+        
+        # Run in eval block to catch bugzilla exceptions
+        my @ret_list = eval {
+        my $privileges_are_required = 0; #Set within check_can_change_field, not used at the moment
+        my $user = Bugzilla::User->new( { name => $username } );
+        Bugzilla->set_user($user);
+        my $bug = Bugzilla::Bug->check($bugid);
+        
+        my $has_changed = 0;
+        
+        if(!defined $status) {
+            $status = "none";
+        } else {
+            $status = lc $status;
+        }
+        
+        my $new_status = undef;
+        my $resolution_params = {};
+        
+        
+        if ( $status =~ /^none$/ )  {
+
+            return ( 1, "Undefined status '$status' for bug '$bugid'.\n");
+
+        } elsif ( $status =~ /^assigned$/ )  {
+
+            if( defined($resolution) && ('' ne $resolution) ) {
+
+                # Reassign to given assignee
+                my $assignee_user = Bugzilla::User->new( {name => $resolution} );
+                if( !defined($assignee_user) ) {
+                    return ( 1, "Unknown assignee '$resolution'.\n");
+                }
+                
+                $bug->set_assigned_to($assignee_user);
+                $new_status = "NEW";
+            } else {
+                
+                # Accepting bug
+                if($bug->assigned_to->id == 0) {
+                    return ( 1, "Bug '$bugid' was never confirmed. Can't change status to 'ASSIGNED'.\n");
+                }
+                
+                if($bug->assigned_to->id != $user->id) {
+                    return ( 1, "You cannot accept a bug if you aren't the assignee. Bug '$bugid' is assigned to '" . $bug->assigned_to->login . "'\n");
+                }
+                
+                $new_status = uc $status;
+            }
+            $has_changed = 1;
+
+        } elsif ( $status =~ /^reopened$/ )  {
+            
+            $new_status = uc $status;
+            
+            $has_changed = 1;
+        } elsif ( $status =~ /^resolved$/ )  {
+
+            $resolution = lc $resolution;
+            
+            if((!defined $resolution) || ('' eq $resolution)) {
+                return ( 1, "Undefined resolution for status '$status'.\n");
+            }
+                
+            if($resolution eq "moved") {
+                # Should never happen, anyway leave it here
+                return ( 1, "Movement of bugs isn't supported.\n");
+            }
+            elsif ($resolution eq "duplicate") {
+                $resolution_params->{dupe_of} = $resolution_data;
+            }
+            
+            $resolution_params->{resolution} = uc $resolution;
+            $new_status = uc $status;
+            
+            $has_changed = 1;
+        } else {
+            return ( 1, "Unknown status '$status' for bug '$bugid'.\n");
+        }
+        
+        if($has_changed == 1) {
+            $dbh->bz_start_transaction();
+            $bug->set_status($new_status, $resolution_params);
+            $bug->update();
+            $dbh->bz_commit_transaction();
+            
+            return 0;
+        } else {
+            return ( 1, "Changing bug resolution for bug '$bugid' wasn't successful. Nothing changed.\n");
+        }
+        }; # eval
+        if ($@) {
+            my $err = $@;
+            log_daemon_warn( undef, $err );
+            $dbh->bz_rollback_transaction() if $dbh->bz_in_transaction();
+            return 1, "Error while changing bug resolution: $err";
+        }
+        else {
+            return @ret_list;
+        }
+    
+    } else {
+        # Changing bug resolutions is not supported for earlier versions of Bugzilla
+        return ( 1, "Changing bug resolution is not yet implemented in this version of Bugzilla.\n");
+    }
+}
+
+
+
+
+
+
+# Checks if the bug resolution change is valid
+#
+# PARAMETERS:
+# $1 - The bug id
+# $2 - The proposed new status
+# $3 - The proposed resolution for the new status
+# $4 - Apply case sensitive verification
+#
+# RETURNS:
+# <return_code, current_bug_status> where return_code is:
+# - 0 if the check is valid
+# - 1 if the proposed new status is invalid
+# - 2 if the proposed new resolution is invalid
+sub integration_bug_resolution_change_is_valid {
+    my $self = shift;
+    my ( $bugid, $proposed_status, $proposed_resolution, $case_sensitive_verification ) = ( @_ );
+
+    my $bug_status = $self->integration_get_bug_status( $bugid );
+    my $resolution_change_check = $self->resolution_change_check( $bug_status, $proposed_status, $proposed_resolution, $self->bug_status_map(), $case_sensitive_verification );
+
+    return ( $resolution_change_check , $bug_status );
+}
+
+
+
+# Returns a string that reports the list of valid resolution states in the
+# bug-tracker
+sub integration_valid_resolution_states_list {
+    my $self = shift;
+    my ( $bug_status_string ) = ( @_ );
+
+    return $self->valid_resolution_states_list( $bug_status_string, $self->bug_status_map() );
+}
+
+
+
+# Returns a string that reports the list of valid resolutions in the
+# bug-tracker
+#
+# PARAMETERS:
+# $1 - The bug status string for which the valid resolutions list
+#      should be reported
+# $2 - Apply case sensitive verification
+sub integration_valid_resolutions_list {
+    my $self = shift;
+    my ( $bug_status_string, $case_sensitive_verification ) = ( @_ );
+
+    return $self->valid_resolutions_list( $bug_status_string, $self->bug_status_map(), $case_sensitive_verification );
+}
+
+
+
+# Given a bug id, returns the name of the product to which the bug
+# belongs
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_product_name {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_product_name;
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+	my $sql;
+
+	if ( $self->is_version_up_to_2_16() ) {
+	    $sql = "SELECT product FROM bugs WHERE bug_id = $bugid";
+	} elsif ( $self->is_version_up_to_2_18() || $self->is_version_up_to_2_20() || $self->is_version_up_to_2_22() ) {
+	    $sql = "SELECT products.name FROM products, bugs WHERE bugs.bug_id = $bugid and bugs.product_id = products.id";
+	}
+
+	PushGlobalSQLState();
+	SendSQL( $sql );
+	$bug_product_name = FetchOneColumn();
+	PopGlobalSQLState();
+
+    } else {
+	my $bug = new Bugzilla::Bug( $bugid );
+
+	$bug_product_name = $bug->product();
+    }
+
+    return $bug_product_name;
+}
+
+
+
+# Given a bug id, returns an array with the bug-tracking usernames of
+# the users to which the bug is assigned
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_owners {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_owner;
+
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+
+	PushGlobalSQLState();
+	SendSQL("SELECT profiles.login_name FROM profiles, bugs WHERE bugs.bug_id = $bugid AND bugs.assigned_to = profiles.userid");
+	$bug_owner = FetchOneColumn();
+	PopGlobalSQLState();
+    } else {
+	my $bug = new Bugzilla::Bug( $bugid );
+
+	$bug_owner = $bug->assigned_to()->login();
+    }
+
+    my @bug_owners = ( $bug_owner );
+    return @bug_owners;
+}
+
+
+
+# Given a bug id, returns the bug-tracking email address of the user to
+# which that reported the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_reporter_email {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_reporter_email;
+
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+	my $sql = "SELECT profiles.login_name FROM profiles, bugs WHERE bugs.bug_id = $bugid AND bugs.reporter = profiles.userid";
+
+	PushGlobalSQLState();
+	SendSQL( $sql );
+	$bug_reporter_email = FetchOneColumn();
+	PopGlobalSQLState();
+    } else {
+	my $bug = new Bugzilla::Bug( $bugid );
+
+	$bug_reporter_email = $bug->reporter()->email();
+    }
+
+    return $bug_reporter_email;
+}
+
+
+
+# Given a username, returns the user's email address
+#
+# PARAMETERS:
+# $1 - Username
+sub integration_get_user_email {
+    my $self = shift;
+    my $username = shift;
+
+    return $username;
+}
+
+
+
+# Given a bug id, returns the email addresses of the users monitoring
+# the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_monitors_email_list {
+    my $self = shift;
+    my $bugid = shift;
+    my @bug_monitors_email_list;
+
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+	my $sql = "SELECT profiles.login_name from profiles, cc WHERE cc.bug_id= $bugid AND cc.who = profiles.userid";
+	
+	PushGlobalSQLState();
+	SendSQL( $sql );
+	while (MoreSQLData()) {
+	    my $bug_monitor_email;
+
+	    $bug_monitor_email = FetchOneColumn();
+	    push @bug_monitors_email_list, $bug_monitor_email;
+	}
+	PopGlobalSQLState();
+    } else {
+	my $bug = new Bugzilla::Bug( $bugid );
+	my ( @cc ) = $bug->cc();
+	if ( @cc ) {
+	    foreach my $c ( @cc ) {
+		foreach my $bug_monitor_email ( @$c ) {
+		    push @bug_monitors_email_list, $bug_monitor_email;
+		}
+	    }
+	}
+    }
+
+    return @bug_monitors_email_list;
+}
+
+
+
+# Given a project_name, returns the email addresses of all the
+# managers of the project.
+#
+# For Bugzilla, this is not applicable
+#
+# PARAMETERS:
+# $1 - Project name
+sub integration_get_managers_email_list {
+    my $self = shift;
+    my $project_name = shift;
+
+    return undef;
+}
+
+
+
+# Given a bug id, returns the status of the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_status {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_status;
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+	PushGlobalSQLState();
+	SendSQL("SELECT bugs.bug_status FROM bugs WHERE bugs.bug_id=" . $bugid);
+	$bug_status = FetchOneColumn();
+	PopGlobalSQLState();
+    } else {
+	my $bug = new Bugzilla::Bug( $bugid );
+	$bug_status = $bug->bug_status();
+    }
+
+    return $bug_status;
+}
+
+
+
+# Given a bug id, returns 1 if the bug is in a state considered
+# active, or 0 otherwise. Active bug state examples would be
+# "assigned" and "reopened". A bug can accept checkins in this
+# state. However, "new" and "confirmed" are not active since in this
+# state the bug has not been assigned to a developer. "resolved" is
+# obviously not active.
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_bug_in_active_state {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_status = $self->integration_get_bug_status( $bugid );
+    
+    # Verify that the bug is in the assigned or reopened state
+    if ( $self->bug_status_map()->{ $bug_status }->{ active } == 1 ) {
+	return (1, $bug_status);
+    } else {
+	return (0, $bug_status);
+    }
+}
+
+
+
+# Returns a string that reports the list of active states in the
+# bug-tracker
+sub integration_active_states_list {
+    my $self = shift;
+
+    return $self->active_states_list( $self->bug_status_map() );
+}
+
+
+
+# Given a bug id, returns the subject/summary line of the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_subject {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_subject;
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+
+	PushGlobalSQLState();
+	SendSQL("SELECT bugs.short_desc FROM bugs WHERE bugs.bug_id=" . $bugid);
+	$bug_subject = FetchOneColumn();
+	PopGlobalSQLState();
+    } else {
+	my $bug = new Bugzilla::Bug( $bugid );
+
+	$bug_subject = $bug->short_desc();
+    }
+
+    return $bug_subject;
+}
+
+
+
+# Given a product name and a tag name, adds the tag in the list of
+# available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+# $3 - Description of the tag
+#
+# RETURNS:
+# - 0 on success
+# - 1 if the product name does not exist
+sub integration_add_tag {
+    my $self = shift;
+    my ( $product_name, $tag_name, $description, $username ) = ( @_ );
+    my $sql;
+
+    if ( $self->is_version_up_to_2_16() ) {
+	$sql = "INSERT INTO versions(value,program) VALUES(" .
+	    SqlQuote( $tag_name ) . ", " . SqlQuote( $product_name ) . ")";
+
+	PushGlobalSQLState();
+	SendSQL( $sql );
+	PopGlobalSQLState();
+    } elsif ( $self->is_version_up_to_2_18() || $self->is_version_up_to_2_20() || $self->is_version_up_to_2_22() ) {
+	# First, find the product id of our product
+	my $product_id;
+	$sql = "SELECT id FROM products WHERE name = " . SqlQuote( $product_name );
+
+	PushGlobalSQLState();
+	SendSQL( $sql );
+	$product_id = FetchOneColumn();
+	PopGlobalSQLState();
+
+        if( !defined ( $product_id ) ) {
+            # The product name does not exist
+            return 1;
+        }
+
+	$sql = "INSERT INTO versions(value,product_id) VALUES(" .
+	    SqlQuote( $tag_name ) . ", " . $product_id . ")";
+	PushGlobalSQLState();
+	SendSQL( $sql );
+	PopGlobalSQLState();
+    } else {
+
+        my $user = "";
+        # Need to first check if the user exists
+	eval { 
+            $user = Bugzilla::User->check( $username );
+	}; # eval
+
+        my $product = new Bugzilla::Product( { name => $product_name } );
+
+        if( !defined ( $product ) ) {
+            # The product name does not exist
+            return 1;
+        }
+
+	if ( $@ ) {
+            # User->check raised an exception. The user does not exist.
+            my $err = $@;
+            log_daemon_warn( undef, $err );
+            my $dbh = Bugzilla->dbh;
+            if ( $dbh->bz_in_transaction() ) {
+                $dbh->bz_rollback_transaction();
+            }
+            return 1;
+        } else {
+            # User->check did not raise an exception. The user exists.
+            Bugzilla->set_user( $user );
+            if ($self->is_version_up_to_3_1_2() || $self->is_version_up_to_3_4()) {
+                my $version = Bugzilla::Version::create( $tag_name, $product );
+            } else {
+                # This is is_version_latest()
+                my $version = Bugzilla::Version->create( { name => $tag_name, product => $product } );
+            }
+        }
+    }
+
+    $self->execute_post_tag_cleanup();
+
+    return 0;
+}
+
+
+
+# Given a product name and a tag name, checks if the tag exists in the
+# list of available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+#
+# RETURNS:
+# - 0 the tag does not exist
+# - 1 the tag exists
+# - 2 the product name does not exist
+sub integration_tag_exists {
+    my $self = shift;
+    my ( $product_name, $tag_name ) = ( @_ );
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+	my $tag_status;
+	my $sql;
+
+	if ( $self->is_version_up_to_2_16() ) {
+	    $sql = "SELECT versions.value FROM versions WHERE versions.program=" . 
+		SqlQuote( $product_name ) .
+		" AND versions.value=" .
+		SqlQuote( $tag_name );
+	} elsif ( $self->is_version_up_to_2_18() || $self->is_version_up_to_2_20() || $self->is_version_up_to_2_22() ) {
+	    $sql = "SELECT versions.value FROM versions,products WHERE versions.value=" .
+		SqlQuote( $tag_name ) .
+		" AND versions.product_id = products.id AND products.name="
+		. SqlQuote( $product_name );
+	}
+	
+	PushGlobalSQLState();
+	SendSQL( $sql );
+	$tag_status = FetchOneColumn();
+	if ( !defined($tag_status) ) {
+	    $tag_status = "";
+	}
+	PopGlobalSQLState();
+
+	if ( $tag_status eq $tag_name ) {
+	    # The tag was found
+	    return 1;
+	} else {
+	    # There was no such tag
+	    return 0;
+	}
+    } else {
+	my $product = new Bugzilla::Product( { name => $product_name } );
+
+	if ( !defined ( $product) ) {
+            # The product name does not exist
+            return 2;
+        }
+
+	my $versions = $product->versions();
+	if ( $versions ) {
+	    foreach my $version ( @$versions ) {
+		if ( $version->name() eq $tag_name ) {
+		    return 1;
+		}
+	    }
+	}
+	return 0;
+    }
+}
+
+
+
+# Given a product name and a tag name, deletes the tag from the list
+# of available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+#
+# RETURNS:
+# - 0 on success
+# - 1 if the product name does not exist
+# - 2 if the tag name does not exist
+sub integration_delete_tag {
+    my $self = shift;
+    my ( $product_name, $tag_name ) = ( @_ );
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+	my $sql;
+
+	if ( $self->is_version_up_to_2_16() ) {
+	    $sql = "DELETE FROM versions WHERE value=" . SqlQuote( $tag_name ) . 
+		" AND program=" . SqlQuote( $product_name );
+	} elsif ( $self->is_version_up_to_2_18() || $self->is_version_up_to_2_20() || $self->is_version_up_to_2_22() ) {
+	    # First, find the product id of our product
+	    my $product_id;
+	    $sql = "SELECT id FROM products WHERE name = " . SqlQuote( $product_name );
+	    
+	    PushGlobalSQLState();
+	    SendSQL( $sql );
+	    $product_id = FetchOneColumn();
+	    PopGlobalSQLState();
+
+            if( !defined ( $product_id ) ) {
+                # The product name does not exist
+                return 1;
+            }
+	    
+	    $sql = "DELETE FROM versions WHERE value=" . SqlQuote( $tag_name ) . 
+		" AND product_id=" . $product_id;
+	}
+
+	PushGlobalSQLState();
+	SendSQL( $sql );
+	PopGlobalSQLState();
+    } else {
+	my $product = new Bugzilla::Product( { name => $product_name } );
+
+        if( !defined ( $product ) ) {
+            # The product name does not exist
+            return 1;
+        }
+
+	my $version = new Bugzilla::Version( { product => $product,
+					       name => $tag_name } );
+        if ( !defined ( $version ) ) {
+            # The tag name does not exist
+            return 2;
+        }
+
+	$version->remove_from_db;
+    }
+
+    $self->execute_post_tag_cleanup();
+
+    return 0;
+}
+
+
+
+# Runs a VDD Query
+#
+# PARAMETERS:
+# $1 - Name of product for which a VDD will be generated
+# $2 - Previous version name of the product
+# $3 - Newer version name of the product
+# $4 - Date the previous version name was applied in the SCM system for the product
+# $5 - Date the newer version name was applied in the SCM system for the product
+#
+# RETURNS:
+# - A @DEVEL_PRODUCT_NAME@::VDD object
+sub integration_get_vdd {
+    my $self = shift;
+    my ( $product_name, $from_version, $to_version, $from_label_date, $to_label_date ) = ( @_ );
+    my $vdd = @DEVEL_PRODUCT_NAME@::VDD->new();
+    my $sql;
+
+    if ( is_version_up_to_2_16() ) {
+        $sql = "SELECT profiles.login_name AS author_username,
+                      profiles.realname AS author_name,
+                      profiles.login_name AS author_email,
+                      longdescs.bug_id AS bug_id,
+                      bugs.short_desc AS summary,
+                      bugs.bug_status AS status,
+                      bugs.resolution AS resolution,
+                      bugs.bug_severity AS severity,
+                      bugs.priority AS priority,
+                      date_format(longdescs.bug_when,'%Y-%m-%d %H:%i') AS date,
+                      longdescs.thetext AS content
+               FROM   longdescs, profiles, bugs
+               WHERE  bug_when < '$to_label_date'
+               AND    bug_when > '$from_label_date'
+               AND    longdescs.who = profiles.userid
+               AND    longdescs.bug_id = bugs.bug_id
+               AND    bugs.product = '$product_name'";
+    } else {
+        $sql = "SELECT profiles.login_name AS author_username,
+                      profiles.realname AS author_name,
+                      profiles.login_name AS author_email,
+                      longdescs.bug_id AS bug_id,
+                      bugs.short_desc AS summary,
+                      bugs.bug_status AS status,
+                      bugs.resolution AS resolution,
+                      bugs.bug_severity AS severity,
+                      bugs.priority AS priority,
+                      date_format(longdescs.bug_when,'%Y-%m-%d %H:%i') AS date,
+                      longdescs.thetext AS content
+               FROM   longdescs, profiles, bugs, products
+               WHERE  bug_when < '$to_label_date'
+               AND    bug_when > '$from_label_date'
+               AND    longdescs.who = profiles.userid
+               AND    longdescs.bug_id = bugs.bug_id
+               AND    bugs.product_id = products.id
+               AND    products.name = '$product_name'";
+    }
+
+    my $comment_counter = 1;
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+
+        PushGlobalSQLState();
+        SendSQL( $sql );
+        while (MoreSQLData()) {
+            my $comment;
+            my $bugid;
+            ($comment->{'author_username'},
+             $comment->{'author_name'},
+             $comment->{'author_email'},
+             $bugid,
+             $comment->{'summary'},
+             $comment->{'status'},
+             $comment->{'resolution'},
+             $comment->{'severity'},
+             $comment->{'priority'},
+             $comment->{'date'},
+             $comment->{'content'}) = FetchSQLData();
+
+             $self->categorizeVDD( $vdd, $comment, $bugid, $comment_counter );
+             $comment_counter++;
+        }
+    } else {
+        
+        my $dbh = Bugzilla->dbh;
+        my $sth = $dbh->prepare($sql);
+        $sth->execute();
+        
+        my $list = $dbh->selectall_arrayref($sql, undef);
+        foreach my $entry (@$list) {
+            my $comment;
+            my $bugid;
+            ($comment->{'author_username'},
+             $comment->{'author_name'},
+             $comment->{'author_email'},
+             $bugid,
+             $comment->{'summary'},
+             $comment->{'status'},
+             $comment->{'resolution'},
+             $comment->{'severity'},
+             $comment->{'priority'},
+             $comment->{'date'},
+             $comment->{'content'}) = @$entry;
+    
+             $self->categorizeVDD( $vdd, $comment, $bugid, $comment_counter );
+             $comment_counter++;
+        }
+    }
+
+    return $vdd;
+}
+
+
+
+# Runs a get bugs query
+#
+# PARAMETERS:
+# $1 - Name of product in which bugs will be queried
+# $2 - List of bug ids that should be queried
+# $3 - Hash table describing which types of metadata must be
+#      retrieved.
+#
+# RETURNS:
+# - A @DEVEL_PRODUCT_NAME@::MergeList object
+# - An integer ret_val that if set to 1 indicates that an error
+#   occured.
+# - A text message that should be reported to the client if an error
+#   occurred.
+sub integration_get_bugs {
+    my $self = shift;
+    my ( $product_name, $ids, $must_retrieve ) = ( @_ );
+    my $mergelist = @DEVEL_PRODUCT_NAME@::MergeList->new();
+    my $ret_val = 0;
+    my $ret_message = "";
+
+    my $sql = "SELECT profiles.login_name AS author_username,
+                      profiles.realname AS author_name,
+                      profiles.login_name AS author_email,
+                      longdescs.bug_id AS bug_id,
+                      bugs.short_desc AS summary,
+                      bugs.bug_status AS status,
+                      bugs.resolution AS resolution,
+                      bugs.bug_severity AS severity,
+                      bugs.priority AS priority,
+                      date_format(longdescs.bug_when,'%Y-%m-%d %H:%i') AS date,
+                      longdescs.thetext AS content
+               FROM   longdescs, profiles, bugs
+               WHERE  longdescs.who = profiles.userid
+               AND    longdescs.bug_id = bugs.bug_id
+               AND    (";
+    my $id_counter = 0;
+    foreach my $id ( @{ $ids } ) {
+        if ( $id_counter >= 1) {
+            $sql .= "\n               OR     ";
+        }
+        $sql .= "bugs.bug_id = $id";
+        $id_counter++;
+    }
+    $sql .= ");";
+
+    # Collect the bugs requested in a list
+    my $list = undef;
+
+    if ( $self->is_version_up_to_2_16() ||
+         $self->is_version_up_to_2_18() ||
+         $self->is_version_up_to_2_20() ||
+         $self->is_version_up_to_2_22() ) {
+        PushGlobalSQLState();
+        SendSQL( $sql );
+        
+        my @list = ();
+        while (MoreSQLData()) {
+            my @row = FetchSQLData();
+            push(@list, @row);
+        }
+        $list = \@list;
+        PopGlobalSQLState();
+    } else {
+        my $dbh = Bugzilla->dbh;
+        my $sth = $dbh->prepare($sql);
+        $sth->execute();
+        
+        $list = $dbh->selectall_arrayref($sql, undef);
+    }
+    
+    # Examine the bugs in the list 
+    my $comment_counter = 1;
+    foreach my $entry ( @$list ) {
+        my $comment;
+        my $bugid;
+        ( $comment->{'author_username'},
+          $comment->{'author_name'},
+          $comment->{'author_email'},
+          $bugid,
+          $comment->{'summary'},
+          $comment->{'status'},
+          $comment->{'resolution'},
+          $comment->{'severity'},
+          $comment->{'priority'},
+          $comment->{'date'},
+          $comment->{'content'} ) = @$entry;
+
+        my @owners = $self->integration_get_bug_owners( $bugid );
+        my $active = $self->bug_status_map()->{ $comment->{'status'} }->{ active };
+
+        if ( $self->is_version_up_to_3_1_2() ||
+             $self->is_version_up_to_3_4() ||
+             $self->is_version_latest() ) {
+            $comment->{'author_username'} .= Bugzilla->params->{'emailsuffix'}; 
+        } else {
+            $comment->{'author_username'} .= Param('emailsuffix');
+        }
+        $comment->{'author_name'} = $comment->{'author_name'} || $comment->{'author_username'};
+
+        # The resolution can be blank in the database
+        if ( !defined ($comment->{'resolution'} ) ) {
+            $comment->{'resolution'} = "";
+        }
+        my $comment_counter_text;
+        $comment_counter_text = "inaccurate_" . $comment_counter;
+
+        my ($is_an_integration_comment, $affected_files_description, $extracted_comment, $extracted_ret_val, $extracted_ret_message) = $self->extract_affected_files( $comment->{ content }, $comment->{ bug_id }, $comment_counter_text );
+        
+        if ($is_an_integration_comment == 1) {
+
+            if ( $extracted_ret_val == 0 ) {
+                $mergelist->add_bug_comment( $bugid,
+                                             $comment->{ 'summary' },
+                                             $comment->{ 'status' },
+                                             $active,
+                                             \@owners,
+                                             $comment->{ 'resolution' },
+                                             $comment->{ 'severity' },
+                                             $comment->{ 'priority' },
+                                             $comment_counter_text,
+                                             $extracted_comment,
+                                             $comment->{ 'date' },
+                                             $comment->{ 'author_username' },
+                                             $comment->{ 'author_name' },
+                                             $comment->{ 'author_email' },
+                                             $affected_files_description );
+            } else {
+                # There was an error message detected. Should report it.
+                $ret_val = 1;
+                $ret_message .= $extracted_ret_message;
+            }
+        } else {
+            # This is just a user comment. Ignore it.
+        }
+
+        $comment_counter++;
+    }
+
+    return $mergelist, $ret_val, $ret_message;
+}
+
+
+
+# Given a bug id, returns if it is locked or not
+# return 1 if bug lock is available
+# return 0 if bug lock not available
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_bug_lock_available {
+    my $self = shift;
+    my $bugid = shift;
+
+    # Lock always available
+    return 1;
+}
+
+
+1;

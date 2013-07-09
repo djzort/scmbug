@@ -1,0 +1,30 @@
+#!/bin/sh
+
+#
+# Prepare an RPM package
+#
+
+mkdir -p build
+for dir in BUILD RPMS SOURCES SPECS SRPMS tmp; do
+    mkdir -p build/$dir
+done
+
+# Copy the source
+SOURCE="../../../@DEVEL_PRODUCT_RELEASE_TAG@.tar.gz"
+if [ ! -e "$SOURCE" ]; then
+    echo Source distribution file $SOURCE is missing. Cannot package.
+    exit -1
+fi
+cp $SOURCE build/SOURCES/.
+
+# Copy the spec file
+cp product.spec build/SPECS
+cd build/SPECS
+# Build the rpms, and sign them
+rpmbuild --rcfile /usr/lib/rpm/rpmrc:../../rpmrc -ba --sign ../../product.spec
+
+
+# Copy the rpms to the top
+cd ../..
+cp build/RPMS/noarch/* @devel_top_dir@/..
+cp build/SRPMS/* @devel_top_dir@/..

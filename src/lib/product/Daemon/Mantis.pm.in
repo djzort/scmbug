@@ -1,0 +1,1196 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Daemon::Mantis;
+
+@ISA = qw( @DEVEL_PRODUCT_NAME@::Daemon::Bugtracker );
+
+use strict;
+use Data::Dumper;
+use @DEVEL_PRODUCT_NAME@::MergeList;
+use @DEVEL_PRODUCT_NAME@::Daemon::Bugtracker;
+use @DEVEL_PRODUCT_NAME@::Common;
+
+
+
+# Numeric bug status values
+my $mantis_bug_status_map = {
+    10 => { name => "new",
+	    active => 0,
+            accepts_data_as_resolution => 0,
+	    possible_resolution_states => [ "feedback",
+					    "acknowledged",
+					    "confirmed",
+					    "assigned",
+					    "resolved" ],
+	    possible_resolutions => [] },
+    20 => { name => "feedback",
+	    active => 0,
+            accepts_data_as_resolution => 0,
+	    possible_resolution_states => [ "new",
+					    "acknowledged",
+					    "confirmed",
+					    "assigned",
+					    "resolved" ],
+	    possible_resolutions => [] },
+    30 => { name => "acknowledged",
+	    active => 0,
+            accepts_data_as_resolution => 0,
+	    possible_resolution_states => [ "feedback",
+					    "confirmed",
+					    "assigned" ],
+	    possible_resolutions => [] },
+    40 => { name => "confirmed",
+	    active => 0,
+            accepts_data_as_resolution => 0,
+	    possible_resolution_states => [ "feedback",
+					    "assigned",
+					    "resolved" ],
+	    possible_resolutions => [] },
+    50 => { name => "assigned",
+	    active => 1,
+            accepts_data_as_resolution => 1,
+	    possible_resolution_states => [ "feedback",
+					    "resolved",
+					    "closed" ],
+	    possible_resolutions => [] },
+    80 => { name => "resolved",
+	    active => 0,
+            accepts_data_as_resolution => 0,
+	    possible_resolution_states => [ "assigned",
+					    "closed" ],
+	    possible_resolutions => [ "open",
+				      "fixed",
+				      "reopened",
+				      "unable to duplicate",
+				      "not fixable",
+				      "duplicate",
+				      "not a bug",
+				      "suspended",
+				      "wont fix" ] },
+    90 => { name => "closed",
+	    active => 0,
+            accepts_data_as_resolution => 0,
+	    possible_resolution_states => [ "assigned" ],
+	    possible_resolutions => [] }
+};
+
+# Numeric bug priority values
+my $mantis_bug_priority_map = {
+    10 => "none",
+    20 => "low",
+    30 => "normal",
+    40 => "high",
+    50 => "urgent",
+    60 => "immediate"
+};
+
+# Numeric bug severity values
+my $mantis_bug_severity_map = {
+    10 => "feature",
+    20 => "trivial",
+    30 => "text",
+    40 => "tweak",
+    50 => "minor",
+    60 => "major",
+    70 => "crash",
+    80 => "block"
+};
+
+# Numeric bug resolution values;
+my $mantis_bug_resolution_map = {
+    10 => "open",
+    20 => "fixed",
+    30 => "reopened",
+    40 => "unable to duplicate",
+    50 => "not fixable",
+    60 => "duplicate",
+    70 => "not a bug",
+    80 => "suspended",
+    90 => "wont fix"
+};
+
+
+
+sub is_version_up_to_1_1 {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq "up_to_1_1" ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+#
+# There are various ways to talk to Mantis. A native Mantis API is
+# implemented here.
+#
+sub init_specific {
+    my $self = shift;
+    my $package_name = "";
+    my $package_version = "";
+
+
+
+    #
+    # Require DBI version 1.50 on Windows. Earlier versions have
+    # threading issues.
+    #
+    if ($PRODUCT_ON_WINDOWS) {
+	$package_name = "DBI";
+	$package_version = "1.50";
+	my $package_exists_retval;
+	my $package_exists_version_found = "";
+	( $package_exists_retval, $package_exists_version_found ) = package_exists( $package_name, $package_version );
+	if ( $package_exists_retval == 0 ) {
+	    if ( $package_exists_version_found eq "" ) {
+		return ( 2, "Package '" . $package_name . "' not found. v$package_version is needed.\n" . package_installation_instructions( $package_name ) );
+	    } else {
+		return ( 2, "Package '" . $package_name . "' v$package_version not found. v$package_exists_version_found found instead.\n" . package_installation_instructions( $package_name ) );
+	    }
+	}
+    } else {
+	# Just require the Perl DBI, any version
+	$package_name = "DBI";
+	if ( package_exists( $package_name ) == 0) {
+	    return ( 2, "Package '" . $package_name . "' not found.\n" . package_installation_instructions( $package_name ) );
+	}
+    }
+
+
+
+    # Check if the vendor DBD backend is available
+    $package_name = "DBD::" . $self->database_vendor();
+    if ( package_exists( $package_name ) == 0) {
+	return ( 3, "Package '" . $package_name . "' not found.\n" . package_installation_instructions( $package_name ) );
+    }
+
+    return 0;
+}
+
+
+
+sub mantis_bug_status_tostring {
+    my $self = shift;
+    my $bug_status_number = shift;
+    my $bug_status_string;
+
+    $bug_status_string = $mantis_bug_status_map->{ $bug_status_number }->{ name };
+
+    if ( !defined( $bug_status_string) ) {
+	$bug_status_string = $BUG_STATUS_INVALID_STRING;
+    }
+
+    return $bug_status_string;
+}
+
+
+sub mantis_bug_status_tokey {
+    my $self = shift;
+    my ( $bug_status_string ) = ( @_ );
+    my $bug_status_number;
+
+    foreach my $bug_status_key ( keys %{ $mantis_bug_status_map } ) {
+        if ($mantis_bug_status_map->{ $bug_status_key }->{ name } eq $bug_status_string) {
+	    return $bug_status_key;
+        }
+    }
+
+    return $BUG_STATUS_INVALID_KEY;
+}
+
+
+sub mantis_bug_priority_tostring {
+    my $bug_priority_number = shift;
+    my $bug_priority_string;
+
+    $bug_priority_string = $mantis_bug_priority_map->{ $bug_priority_number };
+    if ( !defined($bug_priority_string) ) {
+	$bug_priority_string = $BUG_PRIORITY_INVALID_STRING;
+    }
+
+    return $bug_priority_string;
+}
+
+
+
+sub mantis_bug_severity_tostring {
+    my $bug_severity_number = shift;
+    my $bug_severity_string;
+
+    $bug_severity_string = $mantis_bug_severity_map->{ $bug_severity_number };
+    if ( !defined($bug_severity_string) ) {
+	$bug_severity_string = $BUG_SEVERITY_INVALID_STRING;
+    }
+
+    return $bug_severity_string;
+}
+
+
+
+sub mantis_bug_resolution_tokey {
+    my $self = shift;
+    my ( $bug_resolution_string ) = ( @_ );
+
+    foreach my $bug_resolution_key ( keys %{ $mantis_bug_resolution_map } ) {
+        if ( $mantis_bug_resolution_map->{ $bug_resolution_key } eq $bug_resolution_string ) {
+	    return $bug_resolution_key;
+        }
+    }
+
+    return $BUG_RESOLUTION_INVALID_KEY;
+}
+
+
+
+#
+# Database handle
+#
+sub mantis_db_handle {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ db_handle } = $data;
+    } else {
+	return $self->{ db_handle };
+    }
+}
+
+
+
+sub mantis_issue_sql {
+    my $self = shift;
+    my $sql = shift;
+    my ( @arguments ) = ( @_ );
+
+    my $sth = $self->mantis_db_handle()->prepare( $sql );
+    $sth->execute(@arguments);
+}
+
+
+
+sub mantis_fetch_column_list {
+    my $self = shift;
+    my $sql = shift;
+    my ( @arguments ) = ( @_ );
+    
+    my $sth = $self->mantis_db_handle()->prepare( $sql );
+    $sth->execute(@arguments);
+    
+    my @item_list;
+    while (my $item = $sth->fetchrow_array() ) {
+	push @item_list, $item;
+    }
+
+    # Report the end of the request
+    $sth->finish();
+
+    return @item_list;
+}
+
+
+sub mantis_fetch_column {
+    my $self = shift;
+    my $sql = shift;
+    my $column = shift;
+    my @arguments = ();
+    my $arg;
+    while (defined($arg=shift)) { 
+      push @arguments,$arg;
+    }
+
+    my $sth = $self->mantis_db_handle()->prepare( $sql );
+    $sth->execute(@arguments);
+    my $ref = $sth->fetchrow_hashref();
+
+    # Report the end of the request
+    $sth->finish();
+
+    if ( !defined( $ref ) ) {
+	return "";
+    } else {
+	return $ref->{ $column };
+    }
+}
+
+
+
+sub mantis_fetch_rows {
+    my $self = shift;
+    my $sql = shift;
+    my ( @arguments ) = ( @_ );
+
+    my $sth = $self->mantis_db_handle()->prepare( $sql );
+    $sth->execute( @arguments );
+    my $row;
+    my $rows;
+    while ( $row = $sth->fetchrow_hashref() ) {
+	push @{ $rows }, $row;
+    }
+
+    # Report the end of the request
+    $sth->finish();
+
+    return $rows;
+}
+
+
+
+sub mantis_last_insert_id {
+    my $self = shift;
+    my $sql = "SELECT last_insert_id() as id";
+
+    return $self->mantis_fetch_column( $sql, 'id' );
+}
+
+
+
+sub mantis_get_product_id {
+    my $self = shift;
+    my $product_name = shift;
+    my $product_id;
+    my $sql = "SELECT id FROM mantis_project_table WHERE name=?";
+
+    # Find the product id
+    $product_id = $self->mantis_fetch_column( $sql, 'id', $product_name );
+
+    return $product_id;
+}
+
+
+
+sub mantis_get_bug_view_state {
+    my $self = shift;
+    my $bugid = shift;
+    my $view_state;
+    my $sql = "SELECT view_state FROM mantis_bug_table WHERE id=?";
+
+    # Find the product id
+    $view_state = $self->mantis_fetch_column( $sql, 'view_state', $bugid );
+
+    return $view_state;
+}
+
+
+# Converts a date into a unix timestamp
+#
+# PARAMETERS:
+# $1 - A date of the format: 2006-11-02 19:40:39
+#
+# RETURNS:
+# - A date in a unix timestamp
+# - -1 if the conversion failed
+sub mantis_date_to_timestamp {
+    my $self = shift;
+    my $date = shift;
+    my $retval = 0;
+
+    if ( $date =~ m/(\d\d\d\d)-(\d\d)-(\d\d)\s(\d\d):(\d\d):(\d\d)/ ) {
+        my $year = $1;
+        my $month = $2;
+        my $day = $3;
+        my $hour = $4;
+        my $minute = $5;
+        my $second = $6;
+
+        use Time::Local;
+        $retval = timelocal($second,$minute,$hour,$date,$month,$year);
+    } else {
+        # The date format is invalid
+        $retval = -1;
+    }
+
+    return $retval;
+}
+
+
+# -----------------------------------------------------------------------------
+# These functions are required by the Bugtracker interface
+# -----------------------------------------------------------------------------
+
+sub set_version_type {
+    my $self = shift;
+    my $version = $self->version();
+
+    if ( $version =~ m/(\d+)\.(\d+)\.(\d+)/ ) {
+	my $major = $1;
+	my $minor = $2;
+	my $patch = $3;
+	if ( ($major == 0 && $minor == 19) ||
+	     ($major == 1 && $minor == 0) || 
+	     ($major == 1 && $minor == 1) ) {
+	    $self->{ version_type } = "up_to_1_1";
+	} elsif ($major == 1 && $minor == 2) {
+	    $self->{ version_type } = $BUGTRACKER_VERSION_LATEST;
+	} else {
+	    $self->{ version_type } = $BUGTRACKER_VERSION_NOT_SUPPORTED;
+	}
+    } else {
+	$self->{ version_type } = $BUGTRACKER_VERSION_WRONG_FORMAT;
+    }
+}
+
+
+
+# -----------------------------------------------------------------------------
+# These functions are required by the Integration interface
+# -----------------------------------------------------------------------------
+
+
+
+# Connects to the bug-tracker database
+sub integration_connect_database {
+    my $self = shift;
+
+    if ( $self->is_version_up_to_1_1() ||
+         $self->is_version_latest() ) {
+	eval "use DBI";
+
+	my $dsn = "DBI:" . $self->database_vendor() . ":database=" . $self->database() . ";host=" . $self->location() . ";port=" . $self->port();
+	$self->mantis_db_handle( DBI->connect( $dsn, $self->username(), $self->password() ) );
+    }
+}
+
+
+
+# Disconnects from the bug-tracker database
+sub integration_disconnect_database {
+    my $self = shift;
+
+    $self->mantis_db_handle()->disconnect();
+}
+
+
+
+
+# Enters an SCM check-in comment, originating from the bug-tracking
+# username of the SCM user, against a bug
+#
+# PARAMETERS:
+# $1 - Bug id
+# $2 - Bug-tracker username of SCM user that will enter a comment
+# $3 - Comment to be entered
+#
+# RETURNS:
+# - 0 on success
+# - 1,<a string describing the error> on failure
+sub integration_add_comment {
+    my $self = shift;
+    my ( $bugid, $username, $comment ) = ( @_ );
+
+    # Find the reporter_id, needed by the comment insertion
+    my $sql = "SELECT id from mantis_user_table WHERE username=?";
+    my $reporter_id = $self->mantis_fetch_column( $sql, 'id', $username);
+    
+    # Add the comment
+    $sql = "INSERT INTO mantis_bugnote_text_table(note) VALUES(?)";
+    $self->mantis_issue_sql( $sql, $comment );
+    # Find the bugnote_id needed by the comment association
+    my $mantis_bugnote_text_table_id = $self->mantis_last_insert_id();
+    # Mantis proposes a 7-digit long format for bug ids.
+    my $formatted_mantis_bugnote_text_table_id = sprintf("%07d", $mantis_bugnote_text_table_id);
+
+    # Determine the state of the bug
+    my $mantis_bug_view_state = $self->mantis_get_bug_view_state($bugid);
+
+    # Associate the comment with the bug
+    if ( $self->is_version_up_to_1_1()) {
+        $sql = "INSERT INTO mantis_bugnote_table(bug_id, reporter_id, bugnote_text_id, view_state, date_submitted, last_modified) VALUES(?,?,?,?,now(), now())";
+
+        $self->mantis_issue_sql( $sql, $bugid, $reporter_id, $mantis_bugnote_text_table_id, $mantis_bug_view_state );
+
+        # Preserve bug history.
+        $sql = "INSERT INTO mantis_bug_history_table(user_id, bug_id, date_modified, field_name, old_value, new_value, type) VALUES(?,?,now(),'',?,'',2)";
+        $self->mantis_issue_sql( $sql, $reporter_id, $bugid, $formatted_mantis_bugnote_text_table_id );
+
+    } elsif ( $self->is_version_latest()) {
+        #
+        # Since Mantis 1.2.0, dates are stored in unix timestamp format
+        #
+        $sql = "INSERT INTO mantis_bugnote_table(bug_id, reporter_id, bugnote_text_id, view_state, date_submitted, last_modified) VALUES(?,?,?,?,?,?)";
+
+        my $time_now = time();
+        $self->mantis_issue_sql( $sql, $bugid, $reporter_id, $mantis_bugnote_text_table_id, $mantis_bug_view_state, $time_now, $time_now );
+
+        # Preserve bug history. Mantis proposes a 7-digit long format for bug ids.
+        $sql = "INSERT INTO mantis_bug_history_table(user_id, bug_id, date_modified, field_name, old_value, new_value, type) VALUES(?,?,?,'',?,'',2)";
+        $self->mantis_issue_sql( $sql, $reporter_id, $bugid, $time_now, $formatted_mantis_bugnote_text_table_id );
+    }
+
+
+    return 0;
+}
+
+
+
+# Changes a bug resolution originating from the bug-tracking username
+# of the SCM user
+#
+# PARAMETERS:
+# $1 - Bug id
+# $2 - Bug-tracker username of SCM user that will change the resolution
+# $3 - New bug status
+# $4 - Possible bug resolution
+# $5 - Possible bug resolution data
+#
+# RETURNS:
+# - 0 on success
+# - 1,<a string describing the error> on failure
+sub integration_change_bug_resolution {
+    my $self = shift;
+    my ( $bugid, $username, $status, $resolution, $resolution_data ) = ( @_ );
+
+     # Make string values fit the int system of Mantis
+     $status = $self->mantis_bug_status_tokey( $status );
+     $resolution = $self->mantis_bug_resolution_tokey( $resolution );
+ 
+     # Find the reporter_id, needed by the comment insertion
+     my $sql = "SELECT id from mantis_user_table WHERE username=?";
+     my $reporter_id = $self->mantis_fetch_column( $sql, 'id', $username);
+ 
+     # Find the old value of status
+     my $sql = "SELECT status from mantis_bug_table WHERE id=?";
+     my $status_old_value = $self->mantis_fetch_column ( $sql, 'status', int($bugid) );
+ 
+     # Find the old value of status
+     my $sql = "SELECT resolution from mantis_bug_table WHERE id=?";
+     my $resolution_old_value = $self->mantis_fetch_column ( $sql, 'resolution', int($bugid) );
+ 
+     # Update the History
+    if ( $self->is_version_up_to_1_1()) {
+        my $sql = "INSERT INTO mantis_bug_history_table(user_id, bug_id, date_modified, field_name, old_value, new_value, type) VALUES(?,?,now(),?,?,?,0)";
+        $self->mantis_issue_sql( $sql, $reporter_id, $bugid, 'status', $status_old_value, $status);
+        $self->mantis_issue_sql( $sql, $reporter_id, $bugid, 'resolution', $resolution_old_value, $resolution);
+    } elsif ( $self->is_version_latest()) {
+        #
+        # Since Mantis 1.2.0, dates are stored in unix timestamp format
+        #
+        my $time_now = time();
+
+        my $sql = "INSERT INTO mantis_bug_history_table(user_id, bug_id, date_modified, field_name, old_value, new_value, type) VALUES(?,?,?,?,?,?,0)";
+        $self->mantis_issue_sql( $sql, $reporter_id, $bugid, $time_now, 'status', $status_old_value, $status);
+        $self->mantis_issue_sql( $sql, $reporter_id, $bugid, $time_now, 'resolution', $resolution_old_value, $resolution);
+    }
+  
+     # Update the Status and Resolution of the bug
+     my $sql = "UPDATE mantis_bug_table SET status = ?, resolution = ? WHERE id = ?";
+     $self->mantis_issue_sql( $sql, $status, $resolution,  $bugid );
+
+    return 0;
+}
+
+
+
+# Checks if the bug resolution change is valid
+#
+# PARAMETERS:
+# $1 - The bug id
+# $2 - The proposed new status
+# $3 - The proposed resolution for the new status
+# $4 - Apply case sensitive verification
+#
+# RETURNS:
+# <return_code, current_bug_status> where return_code is:
+# - 0 if the check is valid
+# - 1 if the proposed new status is invalid
+# - 2 if the proposed new resolution is invalid
+sub integration_bug_resolution_change_is_valid {
+    my $self = shift;
+    my ( $bugid, $proposed_status, $proposed_resolution, $case_sensitive_verification ) = ( @_ );
+
+    my $bug_status = $self->integration_get_bug_status( $bugid );
+
+    return ( $self->resolution_change_check( $bug_status, $self->mantis_bug_status_tokey( $proposed_status ), $proposed_resolution, $mantis_bug_status_map ), $self->mantis_bug_status_tostring( $bug_status ), $case_sensitive_verification );
+}
+
+
+
+# Returns a string that reports the list of valid resolution states in the
+# bug-tracker
+sub integration_valid_resolution_states_list {
+    my $self = shift;
+    my ( $bug_status_string ) = ( @_ );
+
+    return $self->valid_resolution_states_list( $self->mantis_bug_status_tokey( $bug_status_string ), $mantis_bug_status_map );
+}
+
+
+
+# Returns a string that reports the list of valid resolutions in the
+# bug-tracker
+#
+# PARAMETERS:
+# $1 - The bug status string for which the valid resolutions list
+#      should be reported
+# $2 - Apply case sensitive verification
+sub integration_valid_resolutions_list {
+    my $self = shift;
+    my ( $bug_status_string, $case_sensitive_verification ) = ( @_ );
+
+    return $self->valid_resolutions_list( $bug_status_string, $mantis_bug_status_map, $case_sensitive_verification );
+}
+
+
+
+# Given a bug id, returns the name of the product to which the bug
+# belongs
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_product_name {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_product_name;
+    my $sql = "SELECT mantis_project_table.name FROM mantis_project_table, mantis_bug_table WHERE mantis_bug_table.id=? AND mantis_bug_table.project_id = mantis_project_table.id";
+
+    $bug_product_name = $self->mantis_fetch_column( $sql, 'name', $bugid );
+
+    return $bug_product_name;
+}
+
+
+
+# Given a bug id, returns an array with the bug-tracking usernames of
+# the users to which the bug is assigned
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_owners {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_owner;
+    my $sql = "SELECT mantis_user_table.username FROM mantis_bug_table, mantis_user_table WHERE mantis_bug_table.id = ? AND mantis_bug_table.handler_id = mantis_user_table.id";
+
+    $bug_owner = $self->mantis_fetch_column( $sql, 'username', $bugid );
+
+    my @bug_owners = ( $bug_owner );
+    return @bug_owners;
+}
+
+
+
+# Given a bug id, returns the bug-tracking email address of the user to
+# which that reported the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_reporter_email {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_reporter_email;
+    my $sql = "SELECT mantis_user_table.email FROM mantis_bug_table, mantis_user_table WHERE mantis_bug_table.id = ? AND mantis_bug_table.reporter_id = mantis_user_table.id";
+
+    $bug_reporter_email = $self->mantis_fetch_column( $sql, 'email', $bugid );
+
+    return $bug_reporter_email;
+}
+
+
+
+# Given a username, returns the user's email address
+#
+# PARAMETERS:
+# $1 - Username
+sub integration_get_user_email {
+    my $self = shift;
+    my $username = shift;
+    my $user_email;
+    my $sql = "SELECT email FROM mantis_user_table WHERE username = ?";
+
+    $user_email = $self->mantis_fetch_column( $sql, 'email', $username );
+
+    return $user_email;
+}
+
+
+
+# Given a bug id, returns the email addresses of the users monitoring
+# the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_monitors_email_list {
+    my $self = shift;
+    my $bugid = shift;
+    my @bug_monitors_email_list;
+    my $sql = "SELECT mantis_user_table.email FROM mantis_bug_monitor_table, mantis_user_table WHERE mantis_bug_monitor_table.bug_id = ? AND mantis_bug_monitor_table.user_id = mantis_user_table.id";
+
+    @bug_monitors_email_list = $self->mantis_fetch_column_list( $sql, $bugid );
+
+    return @bug_monitors_email_list;
+}
+
+
+
+# Given a project_name, returns the email addresses of all the
+# managers of the project.
+#
+# For Mantis, this means all users with a "manager" access level (70)
+# at a minimum.
+#
+# PARAMETERS:
+# $1 - Project name
+sub integration_get_managers_email_list {
+    my $self = shift;
+    my $project_name = shift;
+    my @managers_email_list;
+    my $sql = "SELECT mantis_user_table.email FROM mantis_project_table, mantis_project_user_list_table, mantis_user_table WHERE mantis_project_table.name = ? AND mantis_project_user_list_table.access_level = 70 AND mantis_project_user_list_table.project_id = mantis_project_table.id AND mantis_user_table.id = mantis_project_user_list_table.user_id";
+
+    @managers_email_list = $self->mantis_fetch_column_list( $sql, $project_name );
+
+    return @managers_email_list;
+}
+
+
+
+# Given a bug id, returns the status of the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_status {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_status;
+    my $sql = "SELECT status FROM mantis_bug_table WHERE id = ?";
+
+    $bug_status = $self->mantis_fetch_column( $sql, 'status', $bugid );
+
+    return $bug_status;
+}
+
+
+
+# Given a bug id, returns 1 if the bug is in a state considered
+# active, or 0 otherwise. Active bug state examples would be
+# "assigned" and "reopened". A bug can accept checkins in this
+# state. However, "new" and "confirmed" are not active since in this
+# state the bug has not been assigned to a developer. "resolved" is
+# obviously not active.
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_bug_in_active_state {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_status = $self->integration_get_bug_status( $bugid );
+
+    # Verify that the bug is in the assigned state
+    if ( $mantis_bug_status_map->{ $bug_status }->{ active } == 1 ) {
+	return (1, $self->mantis_bug_status_tostring( $bug_status ) );
+    } else {
+	return (0, $self->mantis_bug_status_tostring( $bug_status ) );
+    }
+}
+
+
+
+# Returns a string that reports the list of active states in the
+# bug-tracker
+sub integration_active_states_list {
+    my $self = shift;
+
+    return $self->active_states_list( $mantis_bug_status_map );
+}
+
+
+
+# Given a bug id, returns the subject/summary line of the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_subject {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_subject;
+    my $sql = "SELECT summary from mantis_bug_table WHERE id=?";
+
+    $bug_subject = $self->mantis_fetch_column( $sql, 'summary', $bugid );
+
+    return $bug_subject;
+}
+
+
+
+# Given a product name and a tag name, adds the tag in the list of
+# available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+# $3 - Description of the tag
+#
+# RETURNS:
+# - 0 on success
+# - 1 if the product name does not exist
+sub integration_add_tag {
+    my $self = shift;
+    my ( $product_name, $tag_name, $description ) = ( @_ );
+    my $sql;
+    my $product_id = $self->mantis_get_product_id( $product_name );
+
+    if ( $product_id eq "" ) {
+        # The product name does not exist
+        return 1;
+    }
+
+    # Insert the tag
+    if ( $self->is_version_up_to_1_1()) {
+        $sql = "INSERT INTO mantis_project_version_table(project_id, version, date_order, description) VALUES( ?,?, now(),?)";
+        $self->mantis_issue_sql( $sql, $product_id, $tag_name, $description );
+    } elsif ( $self->is_version_latest()) {
+        #
+        # Since Mantis 1.2.0, dates are stored in unix timestamp format
+        #
+        my $time_now = time();
+
+        $sql = "INSERT INTO mantis_project_version_table(project_id, version, date_order, description) VALUES( ?,?,?,?)";
+        $self->mantis_issue_sql( $sql, $product_id, $tag_name, $time_now, $description );
+    }
+
+    return 0;
+}
+
+
+
+# Given a product name and a tag name, checks if the tag exists in the
+# list of available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+#
+# RETURNS:
+# - 0 the tag does not exist
+# - 1 the tag exists
+# - 2 the product name does not exist
+sub integration_tag_exists {
+    my $self = shift;
+    my ( $product_name, $tag_name ) = ( @_ );
+    my $tag_status;
+    my $sql;
+    my $product_id = $self->mantis_get_product_id( $product_name );
+
+    if ( $product_id eq "" ) {
+        # The product name does not exist
+        return 2;
+    }
+
+    # Retrieve the tag 
+    $sql = "SELECT version FROM mantis_project_version_table WHERE project_id=? AND version=?";
+    $tag_status = $self->mantis_fetch_column( $sql, 'version', $product_id, $tag_name );
+
+    if ( $tag_status eq $tag_name ) {
+	# The tag was found
+	return 1;
+    } else {
+	# There was no such tag
+	return 0;
+    }
+}
+
+
+
+# Given a product name and a tag name, deletes the tag from the list
+# of available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+#
+# RETURNS:
+# - 0 on success
+# - 1 if the product name does not exist
+# - 2 if the tag name does not exist
+sub integration_delete_tag {
+    my $self = shift;
+    my ( $product_name, $tag_name ) = ( @_ );
+    my $sql;
+    my $product_id = $self->mantis_get_product_id( $product_name );
+
+    if ( $product_id eq "" ) {
+        # The product name does not exist
+        return 1;
+    }
+
+    $sql = "DELETE FROM mantis_project_version_table WHERE project_id=?".
+	" AND version=? ";
+    $self->mantis_issue_sql( $sql, $product_id, $tag_name );
+    
+    return 0;
+}
+
+
+
+# Runs a VDD query
+#
+# PARAMETERS:
+# $1 - Name of product for which a VDD will be generated
+# $2 - Previous version name of the product
+# $3 - Newer version name of the product
+# $4 - Date the previous version name was applied in the SCM system for the product
+# $5 - Date the newer version name was applied in the SCM system for the product
+#
+# RETURNS:
+# - A @DEVEL_PRODUCT_NAME@::VDD object
+sub integration_get_vdd {
+    my $self = shift;
+    my ( $product_name, $from_version, $to_version, $from_label_date, $to_label_date ) = ( @_ );
+    my $vdd = @DEVEL_PRODUCT_NAME@::VDD->new();
+    my $sql = "SELECT mantis_user_table.username AS author_username,
+                      mantis_user_table.realname AS author_name,
+                      mantis_user_table.email AS author_email,
+                      mantis_bug_table.id AS bug_id,
+                      mantis_bug_table.summary AS summary,
+                      mantis_bug_table.status AS status,
+                      mantis_bug_table.resolution AS resolution,
+                      mantis_bug_table.severity AS severity,
+                      mantis_bug_table.priority AS priority,
+                      date_format(mantis_bugnote_table.date_submitted,'%Y-%m-%d %H:%i') AS date,
+                      mantis_bugnote_text_table.id AS comment_id,
+                      mantis_bugnote_text_table.note AS content
+               FROM   mantis_user_table, mantis_bugnote_table, mantis_bugnote_text_table, mantis_bug_table, mantis_project_table
+               WHERE  mantis_bugnote_text_table.id = mantis_bugnote_table.bugnote_text_id
+               AND    mantis_bugnote_table.reporter_id = mantis_user_table.id
+               AND    mantis_bugnote_table.bug_id = mantis_bug_table.id
+               AND    mantis_bug_table.project_id = mantis_project_table.id
+               AND    mantis_project_table.name = ?
+               AND    mantis_bugnote_table.date_submitted < ?
+               AND    mantis_bugnote_table.date_submitted > ?";
+
+    if ( $self->is_version_latest()) {
+        #
+        # Since Mantis 1.2.0, dates are stored in unix timestamp format
+        #
+        $from_label_date = $self->mantis_date_to_timestamp($from_label_date);
+        $to_label_date = $self->mantis_date_to_timestamp($to_label_date);
+    }
+
+    my $rows = $self->mantis_fetch_rows( $sql, $product_name, $to_label_date, $from_label_date );
+    foreach my $row ( @{ $rows } ) {
+        
+        # Enforce alphanumeric sorting of the comments
+        my $comment_counter_text = sprintf ( "%04d", $row->{ 'comment_id' } );
+
+	$vdd->add_bug_comment( 'all',
+			       $row->{ 'bug_id' },
+			       $row->{ 'summary' },
+			       $self->mantis_bug_status_tostring( $row->{ 'status' } ),
+			       $row->{ 'resolution' },
+			       $self->mantis_bug_severity_tostring( $row->{ 'severity' } ),
+			       $self->mantis_bug_priority_tostring( $row->{ 'priority' } ),
+			       $comment_counter_text,
+			       $row->{ 'content' },
+			       $row->{ 'date' },
+			       $row->{ 'author_username' },
+			       $row->{ 'author_name' },
+			       $row->{ 'author_email' } );
+
+	#
+	# Categorize the bug even further
+	#
+
+	# If the bug is new or acknowledged or feedback or confirmed
+	# add it in the new list as well
+	if ( $row->{ 'status' } eq 10 ||
+	     $row->{ 'status' } eq 20 ||
+	     $row->{ 'status' } eq 30 ||
+	     $row->{ 'status' } eq 40 ) {
+	    $vdd->add_bug_comment( 'new',
+				   $row->{ 'bug_id' },
+				   $row->{ 'summary' },
+				   $self->mantis_bug_status_tostring( $row->{ 'status' } ),
+				   $row->{ 'resolution' },
+				   $self->mantis_bug_severity_tostring( $row->{ 'severity' } ),
+				   $self->mantis_bug_priority_tostring( $row->{ 'priority' } ),
+				   $comment_counter_text,
+				   $row->{ 'content' },
+				   $row->{ 'date' },
+				   $row->{ 'author_username' },
+				   $row->{ 'author_name' },
+				   $row->{ 'author_email' } );
+
+	} elsif ( $row->{ 'status' } eq 80 ||
+		  $row->{ 'status' } eq 90 ) {
+	    # If the bug is resolved or closed add it in the closed
+	    # list as well
+	    $vdd->add_bug_comment( 'closed',
+				   $row->{ 'bug_id' },
+				   $row->{ 'summary' },
+				   $self->mantis_bug_status_tostring( $row->{ 'status' } ),
+				   $row->{ 'resolution' },
+				   $self->mantis_bug_severity_tostring( $row->{ 'severity' } ),
+				   $self->mantis_bug_priority_tostring( $row->{ 'priority' } ),
+				   $comment_counter_text,
+				   $row->{ 'content' },
+				   $row->{ 'date' },
+				   $row->{ 'author_username' },
+				   $row->{ 'author_name' },
+				   $row->{ 'author_email' } );
+
+	    # Also check if the bug was closed with no SCM activity
+	    if ( ! $row->{ 'content' } =~ m/$PRODUCT_AFFECTED_FILES_TOKEN/ ) {
+		$vdd->add_bug_comment( 'closed_untouched',
+				       $row->{ 'bug_id' },
+				       $row->{ 'summary' },
+				       $self->mantis_bug_status_tostring( $row->{ 'status' } ),
+				       $row->{ 'resolution' },
+				       $self->mantis_bug_severity_tostring( $row->{ 'severity' } ),
+				       $self->mantis_bug_priority_tostring( $row->{ 'priority' } ),
+				       $comment_counter_text,
+				       $row->{ 'content' },
+				       $row->{ 'date' },
+				       $row->{ 'author_username' },
+				       $row->{ 'author_name' },
+				       $row->{ 'author_email' } );
+	    }
+
+	} else {
+	    # The bug must have been worked on but is not yet finished
+	    $vdd->add_bug_comment( 'inprogress',
+				   $row->{ 'bug_id' },
+				   $row->{ 'summary' },
+				   $self->mantis_bug_status_tostring( $row->{ 'status' } ),
+				   $row->{ 'resolution' },
+				   $self->mantis_bug_severity_tostring( $row->{ 'severity' } ),
+				   $self->mantis_bug_priority_tostring( $row->{ 'priority' } ),
+				   $comment_counter_text,
+				   $row->{ 'content' },
+				   $row->{ 'date' },
+				   $row->{ 'author_username' },
+				   $row->{ 'author_name' },
+				   $row->{ 'author_email' } );
+	}
+
+    }
+
+    return $vdd;
+}
+
+
+
+# Runs a get bugs query
+#
+# PARAMETERS:
+# $1 - Name of product in which bugs will be queried
+# $2 - List of bug ids that should be queried
+# $3 - Hash table describing which types of metadata must be
+#      retrieved.
+#
+# RETURNS:
+# - A @DEVEL_PRODUCT_NAME@::Bug_Information object
+# - An integer ret_val that if set to 1 indicates that an error
+#   occured.
+# - A text message that should be reported to the client if an error
+#   occurred.
+sub integration_get_bugs {
+    my $self = shift;
+    my ( $product_name, $ids, $must_retrieve ) = ( @_ );
+    my $mergelist = @DEVEL_PRODUCT_NAME@::MergeList->new();
+    my $ret_val = 0;
+    my $ret_message = "";
+    my $sql = "SELECT mantis_user_table.username AS author_username,
+                      mantis_user_table.realname AS author_name,
+                      mantis_user_table.email AS author_email,
+                      mantis_bug_table.id AS bug_id,
+                      mantis_bug_table.summary AS summary,
+                      mantis_bug_table.status AS status,
+                      mantis_bug_table.resolution AS resolution,
+                      mantis_bug_table.severity AS severity,
+                      mantis_bug_table.priority AS priority,
+                      date_format(mantis_bugnote_table.date_submitted,'%Y-%m-%d %H:%i') AS date,
+                      mantis_bugnote_text_table.id AS comment_id,
+                      mantis_bugnote_text_table.note AS content
+               FROM   mantis_user_table, mantis_bugnote_table, mantis_bugnote_text_table, mantis_bug_table
+               WHERE  mantis_bugnote_text_table.id = mantis_bugnote_table.bugnote_text_id
+               AND    mantis_bugnote_table.reporter_id = mantis_user_table.id
+               AND    mantis_bugnote_table.bug_id = mantis_bug_table.id
+               AND    (";
+    my $id_counter = 0;
+    my $fetch_command = '$self->mantis_fetch_rows( $sql';
+    foreach my $id ( @{ $ids } ) {
+	if ( $id_counter >= 1) {
+	    $sql .= "\n               OR     ";
+	}
+	$sql .= "mantis_bug_table.id = ?";
+	$fetch_command .= ", $id";
+	$id_counter++;
+    }
+    $fetch_command .= ');';
+    $sql .= ");";
+
+    my $rows = eval $fetch_command;
+    foreach my $row ( @{ $rows } ) {
+	my $content_without_dos_newlines = $row->{ 'content' };
+	$content_without_dos_newlines =~ s/\r//g;
+	my ($is_an_integration_comment, $affected_files_description, $extracted_comment, $extracted_ret_val, $extracted_ret_message) = $self->extract_affected_files( $content_without_dos_newlines, $row->{ 'bug_id' }, $row->{ 'comment_id' } );
+
+        my @owners = $self->integration_get_bug_owners( $row->{ 'bug_id' } );
+        my $active = $self->bug_status_map()->{ $row->{ 'status' } }->{ active };
+
+	if ($is_an_integration_comment == 1) {
+
+	    if ($extracted_ret_val == 0) {
+		# This isn't just a comment that was entered in the
+		# bugtracker by a user. It is an integration comment
+		# inserted by this system in the past.
+		$mergelist->add_bug_comment( $row->{ 'bug_id' },
+					     $row->{ 'summary' },
+					     $self->mantis_bug_status_tostring( $row->{ 'status' } ),
+                                             $active,
+                                             \@owners,
+					     $row->{ 'resolution' },
+					     $self->mantis_bug_severity_tostring( $row->{ 'severity' } ),
+					     $self->mantis_bug_priority_tostring( $row->{ 'priority' } ),
+					     $row->{ 'comment_id' },
+					     $extracted_comment,
+					     $row->{ 'date' },
+					     $row->{ 'author_username' },
+					     $row->{ 'author_name' },
+					     $row->{ 'author_email' },
+					     $affected_files_description );
+	    } else {
+		# There was an error message detected. Should report it.
+		$ret_val = 1;
+		$ret_message .= $extracted_ret_message;
+	    }
+	} else {
+	    # This is just a user comment. Ignore it.
+	}
+    }
+
+    return $mergelist, $ret_val, $ret_message;
+}
+
+
+# Given a bug id, returns if it is locked or not
+# return 1 if bug lock is available
+# return 0 if bug lock not available
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_bug_lock_available {
+    my $self = shift;
+    my $bugid = shift;
+
+    # Lock always available
+    return 1;
+}
+
+
+1;

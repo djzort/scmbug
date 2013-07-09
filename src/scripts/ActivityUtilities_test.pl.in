@@ -1,0 +1,32 @@
+#!/usr/bin/perl
+
+#
+# This script handles testing the retrieval of affected files
+#
+
+use strict;
+use lib "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/lib";
+
+use @DEVEL_PRODUCT_NAME@::ActivityUtilities;
+
+# Arg0 = Configuration file
+
+main ( @ARGV );
+exit 0;
+
+
+
+#
+# Main workhorse
+#
+sub main {
+    my ( $bugids ) = ( @_ );
+
+    my $activityUtils = @DEVEL_PRODUCT_NAME@::ActivityUtilities->new( "localhost" , @DEVEL_CONFIG_PORT_NUMBER@ );
+    my $results = $activityUtils->get_affected_files( $bugids );
+    
+    $activityUtils->printData( $results );
+}
+
+
+

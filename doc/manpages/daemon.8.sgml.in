@@ -1,0 +1,98 @@
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook V4.2//EN">
+
+<refentry id="daemon">
+	<refmeta>
+		<refentrytitle>@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl</refentrytitle>
+		<manvolnum>8</manvolnum>
+		<refmiscinfo class="date">@DEVEL_ISODATE@</refmiscinfo>
+	</refmeta>
+
+
+	<refnamediv>
+		<refname>@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl</refname>
+		<refpurpose>The @DEVEL_PRODUCT_NAME@ integration daemon</refpurpose>
+	</refnamediv>
+
+
+	<refsynopsisdiv>
+		<cmdsynopsis>
+			<command>@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl</command>
+				<arg choice="req">configuration_file</arg>
+		</cmdsynopsis>
+	</refsynopsisdiv>
+
+
+	<refsect1>
+		<title>DESCRIPTION</title>
+		<para>
+			Accepts SCM to bug-tracking integration requests.
+		</para>
+	</refsect1>
+	
+	<refsect1>
+		<title>USAGE</title>
+		<para>
+	           To start the daemon run:
+		</para>
+		<para>
+                   @sbindir@/@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl @sysconfdir@/@DEVEL_PRODUCT_NAME_LOWER@/daemon.conf
+		</para>
+	</refsect1>
+	
+	<refsect1>
+		<title>OPTIONS</title>
+		<para>
+			The parameters are:
+		</para>
+		<variablelist>
+			<varlistentry>
+				<term>configuration_file</term>
+				<listitem>
+					<para>The path to the daemon configuration file.</para>
+				</listitem>
+			</varlistentry>
+		</variablelist>
+	</refsect1>
+
+	
+	<refsect1>
+		<title>VERSION</title>
+		<para>
+			@DEVEL_PRODUCT_VERSION@
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>BUGS</title>
+		<para>
+		  The list of bugs is available at the project's
+                  <ulink url="@DEVEL_PRODUCT_BUGTRACKER@">bug-tracking system</ulink>,
+                  under the 'Daemon*' components.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>REPORTING_BUGS</title>
+		<para>
+			Please report bugs at the project's <ulink url="@DEVEL_PRODUCT_BUGTRACKER@">bug-tracking system</ulink>.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>SEE ALSO</title>
+		<para>
+			The <ulink url="@datadir@/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual">@DEVEL_PRODUCT_NAME@ manual</ulink>, provided by the package <filename>@DEVEL_PRODUCT_NAME_LOWER@-doc</filename>.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>AUTHOR</title>
+		<para>
+			The <ulink url="@DEVEL_PRODUCT_WEBPAGE@">@DEVEL_PRODUCT_NAME@ Team</ulink>.
+		</para>
+	</refsect1>
+</refentry>

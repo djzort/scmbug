@@ -1,0 +1,233 @@
+<chapter id="design">
+  <title>Design</title>
+
+  <section id="goals">
+    <title>Goals</title>
+
+    <para>
+       The goals of &devel-product-name; are:
+      <itemizedlist spacing="compact">
+	<listitem>
+	  <para>
+	    <emphasis role=bold>To solve the integration problem once
+	    and for all</emphasis>.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    Provide synchronous verification checks of SCM actions
+	    against the bug-tracking system.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    Provide a flexible architecture that can be deployed
+	    across the public Internet with reasonable
+	    security. Permit integrating repositories hosted by
+	    multiple SCM systems in separate networks, against a
+	    single, publicly accessible bug-tracking system, for use
+	    with multiple mobile developers.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    Define an SCM to bug-tracking integration interface and
+	    mechanism that will permit integration of any SCM system
+	    with any bug-tracking system.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    Integrate most popular free SCM systems, such as CVS,
+	    Subversion, and Git.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    Integrate most popular free bug-tracking systems, such as
+	    Bugzilla and Mantis.
+	  </para>
+	</listitem>
+      </itemizedlist>
+
+    </para>
+
+  </section>
+
+  <section id="system-architecture">
+    <title>System Architecture</title>
+
+    <para>
+      &devel-product-name; is developed as a client/server
+      solution. As shown in <xref linkend="fig-system-architecture">,
+      it consists of a set of SCM system hooks that capture standard
+      SCM events, a generic mechanism of handling these events on the
+      machine hosting an SCM repository, a server daemon onto which
+      integration requests corresponding to these events are
+      transported, a generic mechanism of handling these requests, and
+      functionality that can process these requests per bug-tracking
+      system.
+    </para>
+    
+    <figure id="fig-system-architecture">
+      <title>
+	System architecture.
+      </title>
+      <mediaobject>
+	<imageobject>
+	  <imagedata
+	    fileref="../images/system_architecture.jpg"
+	    format="JPG"
+	    align="center">
+	</imageobject>
+	<imageobject>
+	  <imagedata
+	    fileref="../images/system_architecture.eps"
+	    format="PS"
+	    align="center"
+	    scale="80">
+	</imageobject>
+      </mediaobject>
+    </figure>
+    
+    <para>
+      When various SCM events occur, such as committing software
+      changes or labeling a repository, they are captured using hooks
+      installed by &devel-product-name;. Before the event's activity
+      is allowed to proceed, various verification checks are performed
+      as described in <xref linkend="verification-checks">. These
+      checks are synchronous; when an error is detected, the event's
+      activity is stopped.
+    </para>
+  
+  </section>
+
+
+
+  <section id="related-systems">
+
+    <title>
+      Related Systems
+    </title>
+    
+    <para>
+      &devel-product-name; is not original work. Most of the
+      integration features separating it from related systems were
+      first conceived and implemented by John C. Quillan for CVS and
+      Bugzilla. The distinguishing features of his work are the
+      synchronous nature of the verification checks, and a <xref
+      linkend="vdd" endterm="vdd-short"> tool similar to the one
+      described in <xref linkend="vdd">. His work was never publicly
+      released. &devel-product-name; attempts to continue a
+      redesigned, clean-room implementation of that work, supporting a
+      wider variety of SCM and bug-tracking systems.
+    </para>
+
+    <para>
+      Other systems that integrate SCM with bug-tracking are described
+      below. Along with Quillan's work, these solutions are unsuitable
+      for certain development environments.
+    </para>
+
+
+
+    <section id="bugzilla-watcher">
+      <title>Bugzilla Email Gateway</title>
+
+      <para>
+	SCM systems can integrate their actions with Bugzilla using
+	the Bugzilla email gateway. Hook scripts installed in an SCM
+	system can email the results of the system's actions to an
+	email account configured to parse the email and process it
+	accordingly. An example of such a configuration is available
+	from <ulink
+	url="http://www.einval.com/~steve/software/cvs-bugzilla/">
+	<citetitle>Steve McIntyre's</citetitle></ulink> web page.
+      </para>
+
+      <para>
+	This approach is not synchronous. For example, if a user
+	accidentally commits against the wrong bug number, or a bug
+	against which he is not the owner, the SCM system will proceed
+	with the commit action regardless, without giving the user the
+	option to correct his actions. Additionally, if the email
+	gateway is not active, the developer will not be immediately
+	aware that integration failed.
+      </para>
+
+    </section>
+
+
+
+    <section id="cvszilla">
+      <title>CVSZilla</title>
+      
+      <para>
+	Tony Garnock-Jones' <ulink
+	url="http://homepages.kcbbs.gen.nz/~tonyg/">
+	<citetitle>CVSZilla</citetitle></ulink> integrates SCM events
+	produced by CVS with Bugzilla. It also extends CVS to give
+	rudimentary support to "change-sets", or "transactions".
+      </para>
+      
+      <para>
+	CVSZilla does not support integration of events produced by
+	any SCM system in a generic way. It modifies the Bugzilla
+	schema and does not work with future versions of
+	Bugzilla. Finally, it assumes that the TCP port used by MySQL
+	is accessible from the machine hosting the CVS repository.
+      </para>
+
+      <para>
+	The last assumption does not always hold true, especially when
+	a bug-tracking system is used to track development of mobile
+	developers (laptop users), needing the flexibility to work
+	both locally and remotely, on multiple projects, across
+	different organizational units. Experience has shown that this
+	is a common scenario in organizations with limited hardware,
+	software, or labor resources, such as an academic environment.
+      </para>
+
+      <para>
+	For example, imagine integrating CVS actions from a repository
+	hosted on a personal laptop with a Bugzilla instance that
+	needs to be publicly accessible from the Internet. This same
+	bug-tracking system is used for collaboration with other
+	mobile developers of a different organization on a joint
+	project hosted on a third machine. Integration over the public
+	Internet is not possible without opening the MySQL database
+	port Bugzilla uses. Opening this port is unnecessarily
+	insecure, exposing access to other applications hosted on the
+	same database system. The &devel-product-name; daemon exposes
+	the minimum required integration interface between an SCM
+	system and a bug-tracking system.
+      </para>
+
+    </section>
+
+
+    
+    <section id="other-integration-systems">
+      <title>Other Integration Systems</title>
+      
+      <para>
+	Commercial products concentrate only on integrating a
+	particular SCM system with a particular bug-tracking system,
+	in a proprietary way. They do not attempt to define a public
+	SCM to bug-tracking integration interface, and solve the
+	integration problem once and for all.
+      </para>
+
+      <para>
+	&devel-product-name; is an effort for defining an SCM to
+	bug-tracking integration interface and mechanism that will
+	permit integration of any SCM system with any bug-tracking
+	system.
+      </para>
+      
+    </section>
+
+
+  </section>
+  
+</chapter>

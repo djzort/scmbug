@@ -1,0 +1,564 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Glue::Glue;
+
+use strict;
+use Data::Dumper;
+use FileHandle;
+use @DEVEL_PRODUCT_NAME@::Error;
+use @DEVEL_PRODUCT_NAME@::Common;
+use @DEVEL_PRODUCT_NAME@::Connection;
+use @DEVEL_PRODUCT_NAME@::Glue::CVS;
+use @DEVEL_PRODUCT_NAME@::Glue::Git;
+use @DEVEL_PRODUCT_NAME@::Glue::Subversion;
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+
+    bless $self, $type;
+
+    $self->connection( @DEVEL_PRODUCT_NAME@::Connection->new() );
+
+    return $self;
+}
+
+sub policies {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ policies } = $data;
+    } else {
+	return $self->{ policies };
+    }
+}
+
+sub connection {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ connection } = $data;
+    } else {
+	return $self->{ connection };
+    }
+}
+
+sub configuration {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ configuration } = $data;
+    } else {
+	return $self->{ configuration };
+    }
+}
+
+
+
+sub scm {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ scm } = $data;
+    } else {
+	return $self->{ scm };
+    }
+}
+
+
+
+#
+# Processes the arguments of an activity
+#
+sub process {
+    my $self = shift;
+    my ( @arguments ) = ( @_ );
+    my $glue_configuration_file = shift @arguments;
+
+    # Read configuration files of this installation. Pass the
+    # configuration file.
+    $self->read_configuration( $glue_configuration_file );
+
+
+    #
+    # Setup logging as soon as possible
+    #
+    Log::Log4perl::init( \$self->configuration()->{ logging } );
+    $logger = get_logger( "Glue" );
+    @DEVEL_PRODUCT_NAME@::Common::set_logger( $logger );
+    $logger->warn( "---------------------------------------------------------\n" );
+    $logger->info("Read configuration file '$glue_configuration_file'\n");
+    $logger->debug("Arguments are" . Dumper( @arguments ) . "\n");
+
+    # Check if the glue is enabled
+    if ( $self->configuration()->{ enabled } == 0 ) {
+        $logger->warn("Glue is disabled\n");
+	exit 0;
+    }
+
+    # Check if the configuration specified is valid
+    $self->check_configuration();
+
+    # Determine the type of activity requested.
+    $self->scm()->prepare_activity( $self->policies(), @arguments );
+
+    # Automatically detect the branch name
+    $logger->info("Detecting the branch name\n");
+    $self->scm()->prepare_branch_name();
+
+    # Check if this activity adheres to the defined policies
+    $self->check_policies( $self->scm()->activity() );
+
+    # Everything went well. Process the requested activity
+    $self->connection()->process_activity( $self->scm()->activity(), $self->policies(), 1 );
+
+    # If we are processing a commit activity that resulted in an
+    # implied tagging activity (e.g. in case of a Subversion commit
+    # using an "svn copy" to create a tag or branch), also process the
+    # tagging activity.
+    if ( $self->scm()->activity()->name() ne $ACTIVITY_TAG &&
+	 defined ( $self->scm()->activity()->{ type }->{ tag } ) ) {
+	my $new_activity = @DEVEL_PRODUCT_NAME@::Activity->new();
+
+	# Build up an additional tagging activity
+	$new_activity->name( $ACTIVITY_TAG );
+	$new_activity->log_message( $self->scm()->activity()->log_message() );
+	$new_activity->ids( $self->scm()->activity()->ids() );
+	foreach my $resolution_id ( keys %{ $self->scm()->activity()->resolution_ids() } ) {
+	    # Copy the resolution ids hash
+	    $new_activity->resolution_id( $resolution_id, $self->scm()->activity()->resolution_id( $resolution_id ) );
+	}
+	$new_activity->user( $self->scm()->activity()->user() );
+	$new_activity->branch_name( $self->scm()->activity()->branch_name() );
+	$new_activity->repository( $self->scm()->activity()->repository() );
+	$new_activity->product_name( $self->scm()->activity()->product_name() );
+	$new_activity->product_name_values( $self->scm()->activity()->product_name_values() );
+	$new_activity->{ type }->{ tag } = $self->scm()->activity()->{ type }->{ tag };
+
+	foreach my $file ( keys %{ $self->scm()->activity()->{ files } } ) {
+	    # Copy the list of files from the commit activity. Store
+	    # the old version as the version that will be tagged.
+	    $new_activity->{ files }->{ $file } = $self->scm()->activity()->{ files }->{ $file }->{ old_version };
+	}
+
+	# Automatically detect the product name
+	$new_activity->prepare_product_name();
+
+	# Check if this activity adheres to the defined policies
+	$self->check_policies( $new_activity );
+
+	# Process this tagging activity as well
+	$self->connection()->process_activity( $new_activity, $self->policies(), 1 );
+    }
+}
+
+
+
+#
+# Reads the configuration file provided for the glue
+#
+sub read_configuration {
+    my $self = shift;
+    my $glue_configuration_file = shift;
+    my $file_content;
+    my $glue_configuration;
+
+    $file_content = file_content( $glue_configuration_file );
+
+    # Setup minimal logging to support displaying this error case.
+    use Log::Log4perl qw(:easy);
+    Log::Log4perl::easy_init( $WARN );
+    $logger = get_logger( "Glue" );
+    eval $file_content || log_fatal_error( $GLUE_ERROR_READING_GLUE_CONFIGURATION_FILE, "The configuration file '$glue_configuration_file' could not be interpreted correctly: $@\n");
+
+    $self->configuration( $glue_configuration );
+    $self->configuration()->{ configuration_file } = $glue_configuration_file;
+}
+
+
+
+
+#
+# Performs various checks of the configuration file
+#
+sub check_configuration {
+    my $self = shift;
+
+    $logger->info("Checking configuration\n");
+
+    if ( !defined( $self->configuration()->{ logging } ) ) {
+	log_fatal_error( $GLUE_ERROR_LOGGING_MISSING,
+                        "The logging configuration is missing.\n" );
+    }
+
+    # Check the path to the SCM tool's binaries
+    if ( !defined( $self->configuration()->{ scm }->{ binary_paths } ) ) {
+	log_fatal_error( $GLUE_ERROR_MISSING_PATH_TO_BINARIES,
+                        "The path to the SCM tool's binaries is missing.\n" );
+    }
+
+    if ( !defined( $self->configuration()->{ scm }->{ consolidate_cvs_messages } ) ) {
+	log_fatal_error( $GLUE_ERROR_MISSING_CONSOLIDATE_CVS_MESSAGES,
+                        "The consolidate_cvs_messages SCM configuration variable is missing.\n" );
+    } else {
+        if ( $PRODUCT_ON_WINDOWS &&
+             $self->configuration()->{ scm }->{ name } eq "CVS" &&
+             $self->configuration()->{ scm }->{ consolidate_cvs_messages } == 1 ) {
+            log_fatal_error( $GLUE_ERROR_CONSOLIDATE_CVS_MESSAGES_DOES_NOT_WORK_ON_WINDOWS,
+                            "The consolidate_cvs_messages SCM configuration variable does not work on Windows. Please set this variable to 0.\n" );
+        }
+    }
+
+    # Instantiate an SCM object according to the type of SCM tool used
+    if ( $self->configuration()->{ scm }->{ name } eq "CVS" ) {
+	$self->scm( @DEVEL_PRODUCT_NAME@::Glue::CVS->new( $self->configuration()->{ scm } ) );
+	$self->scm()->init();
+    } elsif ( $self->configuration()->{ scm }->{ name } eq "Subversion" ) {
+	$self->scm( @DEVEL_PRODUCT_NAME@::Glue::Subversion->new( $self->configuration()->{ scm } ) );
+	$self->scm()->init();
+    } elsif ( $self->configuration()->{ scm }->{ name } eq "Git" ) {
+	$self->scm( @DEVEL_PRODUCT_NAME@::Glue::Git->new( $self->configuration()->{ scm } ) );
+	$self->scm()->init();
+    } else {
+	log_fatal_error( $GLUE_ERROR_INVALID_SCM_IN_CONFIGURATION, "The '" . $self->configuration()->{ scm }->{ name } . "' SCM system is not supported in the glue configuration file.\n");
+}
+
+    # Check daemon configuration
+    if ( !defined( $self->configuration()->{ daemon }->{ port } ) ||
+	 !defined( $self->configuration()->{ daemon }->{ location } ) ) {
+	log_fatal_error( $GLUE_ERROR_DAEMON_INVALID,
+                        "Invalid daemon configuration.\n" );
+    } else {
+	# Setup the connection information
+	$self->connection()->port( $self->configuration()->{ daemon }->{ port } );
+	$self->connection()->location( $self->configuration()->{ daemon }->{ location } );
+	delete( $self->configuration()->{ daemon }->{ port } );
+	delete( $self->configuration()->{ daemon }->{ location } );
+    }
+
+    # Check policies configuration
+    if ( !defined( $self->configuration()->{ policies } ) ) {
+	log_fatal_error( $GLUE_ERROR_POLICIES_INVALID,
+                        "No policies found.\n" );
+    } else {
+	# Setup the policies
+	$self->policies( $self->configuration()->{ policies } );
+	delete $self->configuration()->{ policies };
+
+	# Check policy presence_of_bug_ids
+	if ( ! defined( $self->policies()->{ presence_of_bug_ids }->{ value } ) ||
+	     ( $self->policies()->{ presence_of_bug_ids }->{ value } ne 'required' &&
+	       $self->policies()->{ presence_of_bug_ids }->{ value } ne 'optional' &&
+	       $self->policies()->{ presence_of_bug_ids }->{ value } ne 'none' ) ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_PRESENCE_OF_BUG_IDS_INVALID,
+                            "Policy presence_of_bug_ids was set to the invalid value '" .
+                            $self->policies()->{ presence_of_bug_ids }->{ value } .
+                            "' instead of 'required', 'optional', or 'none'.\n" );
+	}
+
+	# Check policy log_template
+	if ( ! defined( $self->policies()->{ log_template }->{ log_bugid_regex } ) ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_LOG_TEMPLATE_NO_BUGID_REGEX,
+                            "Policy log_template is missing a log_bugid_regex value.\n");
+	}
+	if ( ! defined( $self->policies()->{ log_template }->{ log_bugid_split_regex } ) ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_LOG_TEMPLATE_NO_BUGID_SPLIT_REGEX,
+                            "Policy log_template is missing a log_bugid_split_regex value.\n");
+	}
+	if ( ! defined( $self->policies()->{ log_template }->{ log_body_regex } ) ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_LOG_TEMPLATE_NO_BODY_REGEX,
+                            "Policy log_template is missing a log_body_regex value.\n");
+	}
+
+	# Check policy resolution_template
+	if ( !defined( $self->policies()->{ resolution_template }->{ enabled } ) ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_MISSING,
+                            "The resolution_template policy configuration is missing.\n");
+	} else {
+	    if ( ! defined( $self->policies()->{ resolution_template }->{ resolution_bugid_regex } ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_NO_BUGID_REGEX,
+                                "Policy resolution_template is missing a resolution_bugid_regex value.\n");
+	    }
+	    if ( ! defined( $self->policies()->{ resolution_template }->{ resolution_bugid_split_regex } ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_NO_BUGID_SPLIT_REGEX,
+                                 "Policy resolution_template is missing a resolution_bugid_split_regex value.\n");
+	    }
+	    if ( ! defined( $self->policies()->{ resolution_template }->{ resolution_status_regex } ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_NO_STATUS_REGEX,
+                                 "Policy resolution_template is missing a resolution_status_regex value.\n");
+	    }
+            if ( ! defined( $self->policies()->{ resolution_template }->{ resolution_status_resolution_regex } ) ) {
+                log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_NO_STATUS_RESOLUTION_REGEX,
+                                 "Policy resolution_template is missing a resolution_status_resolution_regex value.\n");
+            }
+	    if ( ! defined( $self->policies()->{ resolution_template }->{ resolution_status_resolution_data_regex } ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_NO_STATUS_RESOLUTION_DATA_REGEX,
+                                 "Policy resolution_template is missing a resolution_status_resolution_data_regex value.\n");
+	    }
+	    if ( ! defined( $self->policies()->{ resolution_template }->{ resolution_status_case_sensitive_verification } ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_NO_CASE_SENSITIVE_VERIFICATION,
+                                 "Policy resolution_template is missing a resolution_status_case_sensitive_verification value.\n");
+	    }
+	    if ( ! defined( $self->policies()->{ resolution_template }->{ resolution_status_convert }->{ enabled } ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_STATUS_CONVERT_MISSING,
+                                 "The resolution_status_convert configuration is missing.\n");
+	    } else {
+		if ( ! defined( $self->policies()->{ resolution_template }->{ resolution_status_convert }->{ resolution_status_convert_from } ) ) {
+		    log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_STATUS_CONVERT_FROM,
+                                     "Policy resolution_status_convert is missing a resolution_status_convert_from value.\n");
+		}
+		if ( ! defined( $self->policies()->{ resolution_template }->{ resolution_status_convert }->{ resolution_status_convert_to } ) ) {
+		    log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_STATUS_CONVERT_TO,
+                                     "Policy resolution_status_convert is missing a resolution_status_convert_to value.\n");
+		}
+                
+	    }
+
+	    if ( ! defined( $self->policies()->{ resolution_template }->{ resolution_valid_product_name } ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_NO_VALID_PRODUCT_NAME,
+                                "Policy resolution_template is missing a resolution_valid_product_name value.\n");
+	    }
+	    if ( ! defined( $self->policies()->{ resolution_template }->{ resolution_valid_bug_owner } ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_RESOLUTION_TEMPLATE_NO_VALID_BUG_OWNER,
+                                "Policy resolution_template is missing a resolution_valid_bug_owner value.\n");
+	    }
+	}
+
+	# Check policy minimum_log_message_size
+	if ( $self->policies()->{ minimum_log_message_size }->{ enabled } == 1 &&
+	     ( !defined( $self->policies()->{ minimum_log_message_size }->{ size } ) ||
+	       $self->policies()->{ minimum_log_message_size }->{ size } <= 0 )) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_MINIMUM_LOG_MESSAGE_SIZE_INVALID,
+                            "Invalid size set for policy minimum_log_message_size.\n");
+	}
+
+	# Check policy valid_bug_owner
+	if ( !defined( $self->policies()->{ valid_bug_owner }->{ enabled } ) ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_VALID_BUG_OWNER_MISSING,
+                            "The valid_bug_owner policy configuration is missing.\n" );
+	}
+
+	# Check policy anonymous_scm_username
+	if ( !defined( $self->policies()->{ anonymous_scm_username }->{ enabled } ) ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_ANONYMOUS_SCM_USERNAME_MISSING,
+                            "The anonymous_scm_username policy configuration is missing.\n" );
+	} else {
+	    if ( $self->policies()->{ anonymous_scm_username }->{ enabled } == 1 &&
+		 ( !defined( $self->policies()->{ anonymous_scm_username }->{ value } ) ||
+		   $self->policies()->{ anonymous_scm_username }->{ value } eq '' ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_ANONYMOUS_SCM_USERNAME_VALUE_MISSING,
+                                "The anonymous_scm_username policy is enabled, but no value was defined.\n" );
+	    }
+	}
+
+	# Check policy open_bug_state
+	if ( !defined( $self->policies()->{ valid_bug_owner }->{ enabled } ) ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_OPEN_BUG_STATE_MISSING,
+                            "The open_bug_state policy configuration is missing.\n" );
+	}
+
+	# Check policy label_name
+	if ( $self->policies()->{ label_name }->{ enabled } == 1 && 
+	     ( !defined( $self->policies()->{ label_name }->{ names } ) ||
+	       scalar @{ $self->policies()->{ label_name }->{ names } } == 0 ) ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_LABEL_NAME_NO_NAMES,
+                            "The label_names policy is enabled, but the list of acceptable label names is empty.\n" );
+	}
+
+	# Check policy valid_product_name
+	if ( !defined( $self->policies()->{ valid_product_name }->{ enabled } ) ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_VALID_PRODUCT_NAME_MISSING,
+                            "The valid_product_name policy configuration is missing.\n" );
+	}
+
+        # Check policy product_name_definitions
+	if ( ! defined( $self->policies()->{ product_name_definition }->{ values } ) ||
+             $self->policies()->{ product_name_definition }->{ values } eq '' ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_PRODUCT_NAME_DEFINITION_VALUES_MISSING,
+                             "No product name values were defined in policy product_name_definition\n" );
+	} else {
+            $self->scm()->activity()->product_name_values( $self->policies()->{ product_name_definition }->{ values } );
+        }
+
+	# Check policy mail_notification
+	if ( !defined( $self->policies()->{ mail_notification } ) ) {
+	    log_fatal_error( $GLUE_ERROR_POLICY_MAIL_NOTIFICATION_MISSING,
+                            "The mail_notification policy configuration is missing.\n" );
+	} else {
+
+
+	    if ( !defined( $self->policies()->{ mail_notification }->{ mail_on_success } ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_MAIL_NOTIFICATION_MAIL_ON_SUCCESS,
+                                "Configuration option mail_on_success was not defined in policy mail_notification.\n" );
+	    }
+
+	    if ( !defined( $self->policies()->{ mail_notification }->{ mail_on_failure } ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_MAIL_NOTIFICATION_MAIL_ON_FAILURE,
+                                "Configuration option mail_on_failure was not defined in policy mail_notification.\n" );
+	    }
+
+	    if ( !defined( $self->policies()->{ mail_notification }->{ mail_on_label } ) ) {
+		log_fatal_error( $GLUE_ERROR_POLICY_MAIL_NOTIFICATION_MAIL_ON_LABEL,
+                                "Configuration option mail_on_label was not defined in policy mail_notification.\n" );
+	    }
+
+
+	    if ( $self->policies()->{ mail_notification }->{ mail_on_success } == 1 ||
+		 $self->policies()->{ mail_notification }->{ mail_on_failure } == 1 ) {
+
+		if ( !defined( $self->policies()->{ mail_notification }->{ mail_settings }->{ To } ) ||
+		     !defined( $self->policies()->{ mail_notification }->{ mail_settings }->{ From } ) ) {
+		    log_fatal_error( $GLUE_ERROR_POLICY_MAIL_NOTIFICATION_MAIL_SETTINGS_MISSING,
+                                    "Either the 'from' or 'to' fields were not defined in policy mail_notification->{ mail_settings }.\n" );
+		}
+		
+		if ( !defined( $self->policies()->{ mail_notification }->{ mail_recipients }->{ mail_also_appears_from_scm_user } ) ||
+		     !defined( $self->policies()->{ mail_notification }->{ mail_recipients }->{ mail_scm_user } ) ||
+		     !defined( $self->policies()->{ mail_notification }->{ mail_recipients }->{ mail_bug_owner } ) ||
+		     !defined( $self->policies()->{ mail_notification }->{ mail_recipients }->{ mail_bug_reporter } ) ||
+		     !defined( $self->policies()->{ mail_notification }->{ mail_recipients }->{ mail_bug_monitors } ) ||
+		     !defined( $self->policies()->{ mail_notification }->{ mail_recipients }->{ mail_product_owners } ) ) {
+		    log_fatal_error( $GLUE_ERROR_MISSING_MAIL_RECIPIENTS, "Some mail recipients were not specified in policy mail_notification->{ mail_recipients }.\n" );
+		}
+	    }
+	}
+    }
+}
+
+
+
+sub check_policies {
+    my $self = shift;
+    my $activity = shift;
+
+    $logger->info("Checking the policies\n");
+
+
+    #
+    # The value of policy presence_of_bug_ids is checked by the daemon
+    #
+
+
+    #
+    # Policy valid_bug_owner is checked by the daemon
+    #
+
+
+    #
+    # Policy anonymous_scm_username
+    #
+    if ( $self->policies()->{ anonymous_scm_username }->{ enabled } ) {
+	if ( $activity->user() eq '' ) {
+	    # The SCM system did not provide a username. Must use the
+	    # one supplied by the policy.
+	    $activity->user( $self->policies()->{ anonymous_scm_username }->{ value } );
+	}
+    } else {
+	# If the policy is not enabled, and the SCM system did not
+	# provide a username, this is an error.
+	if ( $activity->user() eq '' ) {
+	    log_fatal_error( $GLUE_ERROR_NO_USER_FOR_ACTIVITY, "No username supplied by the SCM system. Perhaps policy anonymous_scm_username should be configured ?\n" );
+	}
+    }
+
+
+    #
+    # Policy open_bug_state is checked by the daemon
+    #
+
+
+    #
+    # Policy of a log message meeting a minimum size 
+    #
+    if ( $self->policies()->{ minimum_log_message_size }->{ enabled } ) {
+
+	# This applies only to verification and committing activities
+	if ( $activity->name() eq $ACTIVITY_VERIFY || 
+	     $activity->name() eq $ACTIVITY_COMMIT ) {
+	    my $log_message_length = length ( $activity->{ log_message } );
+
+	    if ( $self->policies()->{ minimum_log_message_size }->{ size } >
+		  $log_message_length ) {
+		my $msg = "This log message was " .
+		    $log_message_length .
+		    " characters long. Minimum limit is " . 
+		    $self->policies()->{ minimum_log_message_size }->{ size } .
+		    " characters.\n";
+		log_fatal_error( $GLUE_ERROR_POLICY_MINIMUM_LOG_MESSAGE_SIZE, $msg );
+
+	    }
+	    
+	}
+    }
+
+
+    #
+    # Policy of a label name format
+    #
+    if ( $self->policies()->{ label_name }->{ enabled } ) {
+
+	# This restriction applies only when new labels are applied
+	if ( $activity->name() eq $ACTIVITY_TAG &&
+	     $activity->{ type }->{ tag }->{ operation } eq $TAG_OPERATION_ADD ) {
+	    my $accepted = 0;
+	    my $names_list = "";
+
+	    # Ensure that a tag name matches at least one of the
+	    # accepted label names
+	    foreach my $name ( @{ $self->policies()->{ label_name }->{ names } } ) {
+		$names_list .= $name . "\n";
+
+		if ( $activity->{ type }->{ tag }->{ name } =~ m/$name/ ) {
+		    # We found a matching label format. This label can
+		    # be accepted
+		    $accepted = 1;
+		    last;
+		}
+	    }
+
+	    if ( $accepted == 0 ) {
+		my $msg = "Label name '" . 
+		    $activity->{ type }->{ tag }->{ name } . "'" .
+		    " is not acceptable. It does not match one of the following label name regular expressions:\n" . $names_list;
+		log_fatal_error ( $GLUE_ERROR_POLICY_LABEL_NAME, $msg );
+	    }
+	}
+    }
+
+
+
+    #
+    # Policy valid_product_name is checked by the daemon.
+    #
+
+
+
+    #
+    # Policy mail_notification is checked by the daemon
+    #
+
+}
+
+
+
+1;

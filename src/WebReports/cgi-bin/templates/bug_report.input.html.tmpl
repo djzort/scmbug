@@ -1,0 +1,92 @@
+[% SET title = 'Fault Report' %]
+[% SET include_script = 'true' %]
+[% INCLUDE templates/header.html.tmpl %]
+
+<H2>[% title %]</H2>
+
+<BLOCKQUOTE>
+
+[% IF manual_bugs == "Y" %]
+	This report will retrieve all of the fault details for the listed faults.
+	To automatically detect a list of faults use the form located 
+	<a href=/scmbug-cgi/bug_report.pl>here</a>
+[% ELSE %]
+	This report will retrieve all of the faults that have been used to change
+	code between the two specified revisions (inclusive).
+	To manually enter a list of faults use the form located
+	<a href=/scmbug-cgi/bug_report.pl?manual_bugs=Y>here</a>
+[% END %]
+
+</BLOCKQUOTE>
+<p>
+
+<form name=theForm action=/scmbug-cgi/bug_report.pl method=post>
+
+<table border=0 id=table1>
+<tr>
+  <td width=267>Start Revision Number:</td>
+  <td><input type=text name=svn_revision_start size=20></td>
+</tr>
+
+<tr>
+  <td width=267>End Revision Number: </td>
+  <td><input type=text name=svn_revision_end size=20></td>
+</tr>
+
+<tr>
+  <td width=267>Repository Path</td>
+  <td>
+    <select size=1 name="svn_root" id="svnRoot" onChange="svnRootSelected(this)">
+    [% SET subdirDisplay = "" %]
+    
+    [% FOREACH repository IN repositories %]
+	<option id="[% repository.name %]" name="[% repository.name %]" value="[% repository.repository_url %]">
+	[% repository.name %]</option>
+	
+	[%# Check if we need to be able to list the selected items #%]
+	[% IF repository.autoproject_list == "y" %]
+	    [% SET subdirDisplay = subdirDisplay _ '<select multiple name=dirList id="' _ repository.name _ '_dirList">' %]
+
+	    [% FOREACH subdir IN repository.proj_list %]
+	    	[% SET subdirDisplay = subdirDisplay _ '<option value="' _ subdir _ '">' _ subdir _ '</option>' %]
+	    [% END %]
+
+	    [% SET subdirDisplay = subdirDisplay _ '</select>' %]
+	[% END %]
+    [% END %]
+
+    </select> &nbsp;
+    [% subdirDisplay %]<input type=text name=svn_path id="svnPath" size=46 value="trunk">
+  </td>
+</tr>
+<tr>
+  <td width=267>&nbsp;</td>
+  <td>&nbsp;</td>
+</tr>
+
+[% IF manual_bugs == "Y" %]
+    <tr><td width=267><b>Bug List</b><input type=hidden name=manual_bugs value="Y"></td></tr>
+    
+    [% SET i = 1 %]
+    [% WHILE i < 5 %]
+	<tr>
+	  <td colspan=10>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+	  <input type=text name=bug[% i %]a size=6>&nbsp;&nbsp;&nbsp;&nbsp;
+	  <input type=text name=bug[% i %]b size=6>&nbsp;&nbsp;&nbsp;&nbsp;
+	  <input type=text name=bug[% i %]c size=6>&nbsp;&nbsp;&nbsp;&nbsp;
+	  <input type=text name=bug[% i %]d size=6>&nbsp;&nbsp;&nbsp;&nbsp;
+	  <input type=text name=bug[% i %]e size=6>&nbsp;&nbsp;&nbsp;&nbsp;
+	  <input type=text name=bug[% i %]f size=6>&nbsp;&nbsp;&nbsp;&nbsp;
+	  <input type=text name=bug[% i %]g size=6></td>
+	</tr>
+	[% SET i = i + 1 %]
+    [% END %]
+[% END %]
+
+</table>
+<p align=center><input type=submit value="Submit">&nbsp;&nbsp;&nbsp; <input type=reset value="Reset"></p>
+</form>
+</p>
+
+
+[% INCLUDE templates/footer.html.tmpl %]

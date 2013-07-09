@@ -1,0 +1,341 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Activity;
+
+use strict;
+use @DEVEL_PRODUCT_NAME@::Activity;
+use @DEVEL_PRODUCT_NAME@::Common;
+use @DEVEL_PRODUCT_NAME@::Error;
+use Data::Dumper;
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+    return bless $self, $type;
+}
+
+
+
+sub name {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( defined( $data ) ) {
+	$self->{ name } = $data;
+    } else {
+	return $self->{ name };
+    }
+}
+
+
+
+sub user {
+    my $self = shift;
+    my $data = shift;
+
+    if ( defined( $data ) ) {
+	$self->{ user } = $data;
+    } else {
+	return $self->{ user };
+    }
+}
+
+
+
+sub ids {
+    my $self = shift;
+    
+    if ( !defined ( $self->{ ids } ) ) {
+	$self->{ ids } = [];
+    } else {
+	return $self->{ ids };
+    }
+}
+
+
+
+sub resolution_id {
+    my $self = shift;
+    my ( $resolutionid, $status, $resolution, $resolution_data ) = ( @_ );
+
+    if ( !defined ( $self->{ resolution_ids }->{ $resolutionid } ) ) {
+	$self->{ resolution_ids }->{ $resolutionid }->{ status } = $status;
+	$self->{ resolution_ids }->{ $resolutionid }->{ resolution } = $resolution;
+	$self->{ resolution_ids }->{ $resolutionid }->{ resolution_data } = $resolution_data;
+    }
+    return $self->{ resolution_ids }->{ $resolutionid };
+}
+
+
+
+sub resolution_ids {
+    my $self = shift;
+
+    if ( defined ( $self->{ resolution_ids } ) ) {
+	return $self->{ resolution_ids };
+    } else {
+	return {};
+    }
+}
+
+
+
+sub log_message {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( defined( $data ) ) {
+	$self->{ log_message } = $data;
+    } else {
+	return $self->{ log_message };
+    }
+}
+
+
+
+sub files {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ files } = $data;
+    } else {
+	return $self->{ files };
+    }
+}
+
+
+
+sub original_log_message {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ original_log_message } = $data;
+    } else {
+	return $self->{ original_log_message };
+    }
+}
+
+
+
+sub branch_name {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ branch_name } = $data;
+    } else {
+	return $self->{ branch_name };
+    }
+}
+
+
+
+sub product_name {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ product_name } = $data;
+    } else {
+	return $self->{ product_name };
+    }
+}
+
+
+
+sub repository {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ repository } = $data;
+    } else {
+	return $self->{ repository };
+    }
+}
+
+
+
+sub product_name_values {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ product_name_values } = $data;
+    } else {
+	return $self->{ product_name_values };
+    }
+}
+
+
+
+#
+# If the product_name must be autodetected do so
+#
+sub prepare_product_name {
+    my $self = shift;
+    my $must_autodetect_product_name = 0;
+    my $product_name;
+
+    # If this is CVS 1.11.x, it is impossible to automatically prepare
+    # the product name when verifying because the list of affected
+    # files is not provided at this stage.
+    #
+    # NOTE that we simply haven't implemented automatically
+    # preparing product names for CVSNT, while it may be possible
+    # to do so.
+    $logger->debug( "Will consider the special case of '(.*)' for the product name.\n" );
+    foreach my $match_regex ( keys %{ $self->product_name_values() } ) {
+        if ( $match_regex eq "(.*)" ) {
+            my $replace_regex = $self->product_name_values()->{ $match_regex };
+            
+            $self->product_name( $replace_regex );
+        }
+    }
+
+    if ( !defined ( $self->{ product_name } ) ) {
+        $logger->debug( "Must autodetect the product name.\n" );
+	$must_autodetect_product_name = 1;
+    } else {
+        $logger->debug( "Must not autodetect the product name. It was manually defined with the special case of '(.*)'\n" );
+    }
+
+    if ( $must_autodetect_product_name ) {
+        my $product_name_autodetected = '';
+
+	# If the product_name must be autodetected, do so for every
+	# single file
+	foreach my $filename ( keys %{ $self->{ files } } ) {
+            $logger->debug( "Autodetecting product name based on filename '$filename'.\n" );
+	    $product_name = $self->autodetect_product_name( $filename );
+
+            if ( $product_name_autodetected eq '' ) {
+                $product_name_autodetected = $product_name;
+            }
+
+            # If this is not the first time we are detecting, it
+            # should match the last match
+            if ( $product_name_autodetected ne $product_name ) {
+                log_fatal_error( $GLUE_ERROR_AUTODETECTED_MORE_THAN_ONE_PRODUCT_NAME_AFTER_FILE, "More than one product name autodetected after file '$filename'. Detected '$product_name' after already detecting '$product_name_autodetected'.\n" );
+            }
+	}
+	$self->product_name( $product_name );
+
+    }
+}
+
+
+
+sub autodetect_product_name {
+    my $self = shift;
+    my $filename = shift;
+    my $product_name_was_detected = 0;
+    my $product_name_autodetected = '';
+    my $product_name = '';
+
+    # For each prefix in the list, test if the prefix matches the full
+    # path of the filename. In that case, grab the first directory
+    # name and use that as the product name.
+    foreach my $match_regex ( keys %{ $self->product_name_values() } ) {
+        my $replace_regex = $self->product_name_values()->{ $match_regex };
+	$product_name = $filename;
+
+	if ( $product_name =~ m/$match_regex/ ) {
+	    $product_name_was_detected = 1;
+
+	    # Set the product_name to be the replacement regular
+	    # expression
+            #
+            # Escape forward slashes that may be in the definition, so
+            # that the substition evaluated next won't break.
+            $match_regex =~ s/\//\\\//g;
+            $replace_regex =~ s/\//\\\//g;
+            my $evaluation_string = '$product_name =~ ' . "s/$match_regex/$replace_regex/;";
+            $logger->debug( "Product name autodetection evaluation string is '$evaluation_string'.\n" );
+            eval $evaluation_string;
+
+	    # If this is the first time we are detecting, store the
+	    # first match
+	    if ( $product_name_autodetected eq '' ) {
+		$product_name_autodetected = $product_name;
+	    }
+
+	    # If this is not the first time we are detecting, it
+	    # should match the last match
+	    if ( $product_name_autodetected ne $product_name ) {
+		log_fatal_error( $GLUE_ERROR_AUTODETECTED_MORE_THAN_ONE_PRODUCT_NAME, "More than one product name autodetected for file '$filename'. Detected '$product_name' after already detecting '$product_name_autodetected'.\n" );
+	    }
+	}
+    }
+
+    if ( $product_name_was_detected == 0 ){
+        log_fatal_error( $GLUE_ERROR_CANNOT_AUTODETECT_PRODUCT_NAME, "Unable to autodetect product name for filename '$filename'.\n" );
+    } else {
+        $logger->debug( "Autodetected the product name '$product_name_autodetected'.\n" );
+    }
+
+
+    return $product_name_autodetected;
+}
+
+
+
+sub check {
+    my $self = shift;
+
+    if ( ! defined( $self->name() ) ) {
+        log_fatal_error( $GLUE_ERROR_ACTIVITY_HAS_NO_NAME, "The activity has no name.\n" );
+    } else {
+    
+        if ( $self->name() ne $ACTIVITY_OK &&
+             $self->name() ne $ACTIVITY_COMMIT &&
+             $self->name() ne $ACTIVITY_VERIFY &&
+             $self->name() ne $ACTIVITY_TAG &&
+             $self->name() ne $ACTIVITY_GET_VDD &&
+             $self->name() ne $ACTIVITY_GET_BUGS ) {
+            log_fatal_error( $GLUE_ERROR_INVALID_ACTIVITY, "'" . $self->name() . "' is an invalid integration activity.\n" );
+        }
+
+        if ( ! defined( $self->user() ) ) {
+            log_fatal_error( $GLUE_ERROR_ACTIVITY_HAS_NO_USER, "The activity '" . $self->name() . "' has no user.\n" );
+        }
+
+        if ( ! defined( $self->product_name() ) ) {
+            log_fatal_error( $GLUE_ERROR_ACTIVITY_HAS_NO_PRODUCT_NAME, "The activity '" . $self->name() . "' has no product_name.\n" );
+        }
+
+        if ( ! defined( $self->log_message() ) ) {
+            log_fatal_error( $GLUE_ERROR_ACTIVITY_HAS_NO_LOG_MESSAGE, "The activity '" . $self->name() . "' has no log message.\n" );
+        }
+
+        if ( ( $self->name() eq $ACTIVITY_COMMIT ||
+               $self->name() eq $ACTIVITY_TAG ) &&
+             ! defined( $self->repository() ) ) {
+            print Dumper( $self );
+            log_fatal_error ( $GLUE_ERROR_ACTIVITY_HAS_NO_REPOSITORY, "The activity has no repository.\n" );
+        }
+
+    }
+}
+
+
+
+1;

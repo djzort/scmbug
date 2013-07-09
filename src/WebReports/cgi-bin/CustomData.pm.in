@@ -1,0 +1,90 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+package CustomData;
+
+
+use strict;
+use CGI qw(:standard);
+
+my $web_utils;
+
+#
+# Reads the configuration file
+#
+sub new {
+    my $type = shift;
+    my $self = {};
+
+    bless $self, $type;
+
+    $web_utils = shift;
+
+    return $self;
+}
+
+#
+# Allows Custom settings of values read from the conf file be default
+#
+sub update_config_data {
+    my $self = shift;
+
+    # If you wanted to read values from your bug tracker in order to populate
+    # things like OSs, version, stages, dbtypes, manager then it is best
+    # to reset the values here
+    return $web_utils->webreports_config();
+}
+
+#
+# Allow Custom bug table generation so that more fields can be added
+# $buglist is a semi-colon seperated list of bug IDs
+sub get_bug_details {
+    my $self = shift;
+    my $buglist = shift;
+    my @bug_details;
+
+    # If you want to query the fault tracker to generate a custom
+    # table section for the Impact Document - do it here
+    # return the structure generated - empty if default is to be used
+
+    return @bug_details;
+}
+
+#
+# Gets any E-mail attachment that is required when E-mailing the Impact Document
+#
+sub get_email_attachment {
+    my $self = shift;
+    my $docTitle = shift;
+    my $docContent = shift;
+
+    return "", "";
+}
+
+#
+# Tidies any work after the email has been sent
+#
+sub tidy_email_attachment {
+    my $self = shift;
+    my $doc_filename = shift;
+
+    if( defined( $doc_filename ) && ($doc_filename ne "") ) {
+        unlink( $doc_filename );
+    }
+
+    return "";
+}
+
+
+1;

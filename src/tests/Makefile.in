@@ -1,0 +1,52 @@
+all: test_cvs test_svn
+
+test_cvs:
+	./test_cvs.sh
+
+test_svn:
+	./test_svn.sh
+
+test_git:
+	./test_git.sh
+
+clean:
+	-(cd product.test/scm_cvs; rm @DEVEL_PRODUCT_NAME@.{sum,log} dbg.log)
+	-(cd product.test/scm_svn; rm @DEVEL_PRODUCT_NAME@.{sum,log} dbg.log)
+	-(cd product.test/scm_git; rm @DEVEL_PRODUCT_NAME@.{sum,log} dbg.log)
+	-rm test_scm_common.inc
+	-rm product.test/config/tested_scm_version
+	-rm product.test/config/testers/mkgnu/daemon.conf.bugzilla
+	-rm product.test/config/testers/mkgnu/daemon.conf.mantis
+	-rm product.test/config/testers/mkgnu/daemon.conf.requesttracker
+	-rm product.test/config/prep.sh
+	-rm product.test/config/tested_bugtracker_name
+	-rm product.test/config/tested_tester_name
+	-rm product.test/lib/common.inc
+	-rm product.test/scm_cvs/auto_commit_file.sh
+	-rm product.test/scm_cvs/auto_commit_file2.sh
+	-rm product.test/scm_cvs/create_vdd.sh
+	-rm product.test/scm_cvs/install_glue.sh
+	-rm product.test/scm_cvs/install_glue_no_hook_overwrite.sh
+	-rm product.test/scm_cvs/install_glue_wrong_ip.sh
+	-rm product.test/scm_cvs/set_none.sh
+	-rm product.test/scm_cvs/set_optional.sh
+	-rm product.test/scm_svn/create_vdd.sh
+	-rm product.test/scm_svn/install_glue.sh
+	-rm product.test/scm_svn/install_glue_no_hook_overwrite.sh
+	-rm product.test/scm_svn/install_glue_wrong_ip.sh
+	-rm product.test/scm_svn/set_none.sh
+	-rm product.test/scm_svn/set_optional.sh
+	-rm product.test/scm_git/auto_commit_file.sh
+	-rm product.test/scm_git/auto_commit_file2.sh
+	-rm product.test/scm_git/create_vdd.sh
+	-rm product.test/scm_git/install_glue.sh
+	-rm product.test/scm_git/install_glue_no_hook_overwrite.sh
+	-rm product.test/scm_git/install_glue_wrong_ip.sh
+	-rm product.test/scm_git/set_none.sh
+	-rm product.test/scm_git/set_optional.sh
+	-rm -rf product.test/scm_cvs/CVS_VERSION_*
+	-rm -rf product.test/scm_svn/SVN_VERSION_*
+	-rm -rf product.test/scm_git/GIT_VERSION_*
+
+distclean: clean
+	-rm Makefile

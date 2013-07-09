@@ -1,0 +1,502 @@
+<chapter id="tools">
+  <title>Integration Tools</title>
+  <titleabbrev id="tools-short">Integration Tools</titleabbrev>
+
+  <section id="glue">
+    <title>Glue Installer</title>
+    <titleabbrev id="glue-installer-short">Glue Installer</titleabbrev>
+
+    <para>
+      The command
+      <filename>&devel-product-name-lower;_install_glue.pl</filename>
+      is used to install the integration glue in an SCM
+      repository. The integration glue should be installed only once
+      per repository. This will automatically establish integration
+      between the SCM repository and all bugs in the bug-tracking
+      system for that SCM repository. Existing hooks used in the SCM
+      system are not overwritten.
+    </para>
+
+    <para>
+      The <filename>--binary-paths</filename> configuration option
+      should be set to a list of paths that include all binaries
+      needed by the integration tools and the SCM system. This
+      includes the tools
+      <filename>&devel-config-general-binary-diff;</filename>,
+      <filename>&devel-config-general-binary-xsltproc;</filename>,
+      <filename>&devel-config-general-binary-docbook2pdf;</filename>,
+      <filename>&devel-config-general-binary-docbook2html;</filename>
+      and the SCM system's binaries. The <filename>--bug</filename>
+      configuration option should be set to the id of a bug in the
+      bug-tracker against which the integration glue installation will
+      be documented.
+    </para>
+
+    <tip>
+      <para>
+         It is preferable to set in
+         <filename>--binary-paths</filename> the path to the directory
+         that contains a binary, instead of the path to the binary
+         itself. Using Subversion in Windows for example, the binaries
+         require additional libraries (e.g. .dll files) that are
+         contained in the directory that holds the binary.
+      </para>
+    </tip>
+
+    <para>
+      An example installing the glue in a Subversion repository under
+      UNIX is shown in <xref
+      linkend="fig-glue-installer-example-subversion">.
+    </para>
+
+    <figure id="fig-glue-installer-example-subversion">
+      <title>Glue Installation in a Subversion repository under UNIX.</title>
+        <screen>
+<prompt>$</prompt> <command>&devel-product-name-lower;_install_glue.pl --scm=Subversion --product=TestProduct \
+  --repository=file:///tmp/testrepository --bug=770 --binary-paths=/bin,/usr/bin \
+  --daemon=127.0.0.1</command>
+ This is the installation script of the Scmbug glue.
+ The glue will be installed in repository: file:///tmp/testrepository.
+ This is a repository for the Subversion SCM tool.
+ The product name in the bug tracking system is TestProduct.
+ The integration glue will be committed against bug 770.
+ The IP address of the Scmbug integration daemon to contact is 127.0.0.1.
+ The binary paths used are: /bin,/usr/bin
+ -------------
+ Press Enter to continue or Ctrl-C to cancel
+
+Glue processing has been prepared in /tmp/Scmbug.30670
+Installing part1
+Check everything there before I commit or hit Ctrl-C to exit
+
+Glue processing has been prepared in /tmp/Scmbug.30670
+Installing part2
+Check everything there before I commit or hit Ctrl-C to exit
+        </screen>
+    </figure>
+
+    <note>
+      <para>
+        Under Windows, the paths supplied to the installer should have
+        directories separated with a <emphasis role="bold">forward (/)
+        slash</emphasis>. <xref
+        linkend="fig-glue-installer-example-cvsnt-windows"> shows an
+        example running the installer under Windows.
+      </para>
+
+      <figure id="fig-glue-installer-example-cvsnt-windows">
+        <title>Glue Installation in a CVSNT repository under Windows.</title>
+          <screen>
+<prompt>C:\Program Files\Scmbug\bin></prompt> <command>&devel-product-name-lower;_install_glue.pl --scm=CVS --product=sdvel \
+--repository=c:/cvsroot --bug=22 --daemon=192.168.136.140 \
+--binary-paths="C:/Program Files/CVSNT"</command>
+          </screen>
+      </figure>
+    </note>
+
+
+    <section id="glue-cvs">
+      <title>CVS</title>
+      <para>
+	Integration glue can be installed in both local and remote CVS
+	repositories.
+      </para>
+
+      <para>
+	After installation, the file
+	<filename>&lt;CVS_REPOSITORY_PATH&gt;/CVSROOT/etc/&devel-product-name-lower;/glue.conf</filename>
+	holds the configuration of the glue.
+      </para>
+
+      <warning>
+        <para>
+           CVSNT integration has only been verified to work with a
+           <filename>:pserver:</filename> configuration. A
+           <filename>CVSROOT</filename> starting with
+           <filename>:local:</filename> does not work. This is because
+           of the presumptious way CVSNT handles the
+           <filename>CVSROOT</filename> variable. Apparently for some
+           configurations it expands it to include the configuration
+           type. The integration hooks use this expanded variable and
+           as a result are pointed to incorrect paths.
+        </para>
+      </warning>
+
+      <warning>
+        <para>
+           CVSNT uses the two variables <filename>Name</filename> and
+           <filename>Root</filename> when configuring a repository,
+           instead of only the <filename>CVSROOT</filename>
+           variable. When hooks execute, CVSNT sets
+           <filename>CVSROOT</filename> to be equal to
+           <filename>Name</filename>. By default, CVSNT sets
+           <filename>Name</filename> omitting the drive letter. The
+           hooks will not execute if <filename>Name</filename> is not
+           set to the full path of the repository since
+           <filename>$CVSROOT</filename> will be referring to a path
+           that does not exist. An example invalid
+           <filename>Name/Root</filename> configuration is shown in
+           <xref linkend="fig-nameroot-invalid">.  An example valid
+           <filename>Name/Root</filename> configuration is shown in
+           <xref linkend="fig-nameroot-valid">.
+
+        <figure id="fig-nameroot-invalid">
+	  <title>Example invalid <filename>Name/Root</filename> for CVSNT.</title>
+	  <programlisting>
+Name: /Projects
+Root: C:/cvsrepos/Projects
+	  </programlisting>
+        </figure>
+
+        <figure id="fig-nameroot-valid">
+	  <title>Example valid <filename>Name/Root</filename> for CVSNT.</title>
+	  <programlisting>
+Name: C:/cvsrepos/Projects
+Root: C:/cvsrepos/Projects
+	  </programlisting>
+        </figure>
+        </para>
+
+
+        <para>
+           Setting <filename>Name</filename> to be equal to
+           <filename>Root</filename> produces the warning shown in
+           <xref linkend="fig-nameequalroot-warning">. The
+           <emphasis>compatibility problems</emphasis> seem to refer
+           to some clients simply not parsing a
+           <filename>CVSROOT</filename> with a drive letter in it. If
+           your development environment includes UNIX clients, and
+           problems do occur, one alternative is to let
+           <filename>Name</filename> lack a drive letter and manually
+           edit the hook files to include the full repository path.
+
+        <figure id="fig-nameequalroot-warning">
+	  <title>CVSNT warning when <filename>Name</filename> is set
+	  to <filename>Root</filename>.</title>
+	  <programlisting>
+Using drive letters in repository names can create compatibility problems with
+Unix clients and is not recommended. Are you sure you want to continue ?
+	  </programlisting>
+        </figure>
+        </para>
+      </warning>
+
+      <para>
+        A major drawback of CVS is it's lack of atomic
+        transactions. As a side-effect, when the same log message is
+        used to commit files in two separate directories, two
+        integration activities are issued using the same log
+        message. Duplicate log messages are then entered in the
+        bug-tracking system. &devel-product-name; solves this problem
+        by using the
+        <filename>&devel-config-cvshook-commitinfo;</filename> and
+        <filename>&devel-config-cvshook-loginfo;</filename> hooks to
+        detect commits in separate directories and consolidate the log
+        messages entered in the bug-tracking system as one log message
+        (one integration activity). This behavior is optional and can
+        be configured in the glue configuration file using the
+        <filename>consolidate_cvs_messages</filename> variable, as
+        shown in <xref
+        linkend="fig-consolidate-cvs-messages">. However, ActiveState
+        ActivePerl does not yet implement the <ulink
+        url="&devel-product-bugtracker;/show_bug.cgi?id=1074"><filename>getppid()</filename></ulink>
+        function. Windows systems running &devel-product-name; need to
+        disable <filename>consolidate_cvs_messages</filename>.
+
+        <figure id="fig-consolidate-cvs-messages">
+        <title>Configuration option that consolidates CVS messages.</title>
+        <programlisting>
+# This applies only to CVS. When a commit affects more than
+# one directory, multiple duplicate log comments are inserted,
+# one-per-directory. Enabling this option would consolidate
+# the commits to all use the first log message.
+consolidate_cvs_messages => 1
+        </programlisting>
+        </figure>
+
+      </para>
+
+    </section>
+
+
+    <section id="glue-svn">
+      <title>Subversion</title>
+
+      <para>
+	Subversion repositories do not support installation of the
+	integration glue remotely. Local repository access is
+	required.
+      </para>
+
+      <para>
+	After installation, the file
+	<filename>&lt;SVN_REPOSITORY_PATH&gt;/hooks/etc/&devel-product-name-lower;/glue.conf</filename>
+	holds the configuration of the glue.
+      </para>
+
+      <para>
+	Subversion does not distinguish between commit activities and
+	creation of tags or branches. It <ulink
+	url="http://svnbook.red-bean.com/svnbook/ch04s07.html"><citetitle>recommends</citetitle></ulink>
+	that the user manually creates top-level directories named
+	<filename>/trunk</filename>, <filename>/tags</filename> and
+	<filename>/branches</filename>. When it's time to create a tag
+	or branch, Subversion proposes following the convention of
+	creating a copy of the main trunk using <filename>'svn
+	copy'</filename> in the <filename>/tags</filename> or
+	<filename>/branches</filename> directories. As a result, the
+	glue must manually detect if an
+	<filename>&devel-config-activity-verify;</filename> issued by
+	Subversion also implies an
+	<filename>&devel-config-activity-tag;</filename>. To do so, it
+	checks for addition of new subdirectories in the directories
+	<filename>/tags</filename> or
+	<filename>/branches</filename>. This behavior is defined in
+	the glue configuration file using the
+	<filename>label_directories</filename> variable, as shown in
+	<xref linkend="fig-label-directories">.
+      </para>
+
+      <figure id="fig-label-directories">
+	<title>Defining the Subversion labeling directories.</title>
+	<programlisting>
+# This applies only to Subversion. It is recommended that tags
+# are stored in the 'tags' directory, and branches in the
+# 'branches' directory.
+label_directories => [
+		      'tags',
+		      'branches'
+		      ]
+	</programlisting>
+      </figure>
+
+      <para>
+        Similarly, Subversion does not distinguish between the main
+        development line and other branches. The glue must manually
+        detect if a changeset is committed under
+        <filename>/trunk</filename>. This behavior is defined in the
+        glue configuration file using the
+        <filename>main_trunk_directories</filename> variable, as shown in
+        <xref linkend="fig-main-trunk-directories">.
+      </para>
+
+      <figure id="fig-main-trunk-directories">
+	<title>Defining the Subversion main trunk directories.</title>
+	<programlisting>
+# This applies only to Subversion. It is recommended that the
+# main trunk work is stored in the 'trunk' directory.
+main_trunk_directories => [
+			   'trunk'
+			   ]
+	</programlisting>
+      </figure>
+
+      <note>
+        <para>
+          It is not mandatory that <filename>trunk</filename>,
+          <filename>tags</filename>, and <filename>branches</filename>
+          are created in the root of the repository. A more flexible
+          directory structure can be defined using the
+          <filename>product_name_definition</filename> variable as
+          shown in <xref linkend="fig-product-name-definition-auto">.
+        </para>
+      </note>
+
+
+    </section>
+
+
+    <section id="glue-git">
+      <title>Git</title>
+
+      <para>
+	Git repositories do not support installation of the
+	integration glue remotely. Local repository access is
+	required.
+      </para>
+
+      <para>
+	After installation, the file
+	<filename>&lt;GIT_REPOSITORY_PATH&gt;/.git/hooks/etc/&devel-product-name-lower;/glue.conf</filename>
+	holds the configuration of the glue.
+      </para>
+
+    </section>
+
+
+  </section>
+
+
+
+
+  <section id="vdd">
+    <title>
+      Version Description Document Generator
+    </title>
+    <titleabbrev id="vdd-short">VDD Generator</titleabbrev>
+
+    <para>
+      Since SCM changes are integrated with bug-tracking, it is
+      possible to produce a list of changes that occured for a
+      particular version of a software at a level that's higher than
+      source changes.
+    </para>
+
+    <para>
+      <filename>ChangeLog</filename> information derived strictly from
+      the SCM system, such as a report produced using the <glossterm
+      linkend="glossary-cvs2cl">cvs2cl</glossterm> tool for CVS or
+      using <filename>'svn log'</filename> in Subversion, is overly
+      detailed. It describes software changesets at a lower level,
+      which interests mostly developers. It is of little value to a
+      user simply interested in a summary of added features. Moreover,
+      when multiple changesets are committed in response to a defect,
+      such a document becomes lengthy. It takes considerable time to
+      follow the history of changes and decipher if, or how, a defect
+      was corrected.
+    </para>
+
+    <para>
+      Instead, a VDD reports at a higher level a summary of the
+      features/defects worked on and <emphasis>why</emphasis>, using
+      information recorded in the bug-tracking system. It provides
+      additional useful information such as resolution status, bug
+      owner, severity, and priority. It also reports
+      <emphasis>what</emphasis> changes occured at a lower level in
+      the SCM system per bug, effectively superseding
+      <filename>ChangeLog</filename> documents produced strictly from
+      the SCM system. Without integration of SCM with bug-tracking,
+      this level of detail in a release document would not be
+      possible.
+    </para>
+
+    <para>
+      Given two SCM label names (tag or branch names), this tool
+      queries the SCM system for the dates the labels were applied. It
+      then queries the bug-tracking system to produce a report of the
+      bugs worked between that date range. A VDD can additionally
+      reflect decisions of the development team which are not
+      documented in the SCM logs, such as choosing to not add a
+      feature, resolving it as <envar>WONTFIX</envar>. It may also
+      display bugs that were added in the period between releases but
+      not worked yet, alerting users of newly discovered defects.
+    </para>
+
+    <para>
+      A VDD can be generated using the command
+      <filename>&devel-product-name-lower;_vdd_generator.pl</filename>. An
+      example producing this document is shown in <xref
+      linkend="fig-vdd-generator">.
+    </para>
+
+    <figure id="fig-vdd-generator">
+      <title>Generating a Version Description Document.</title>
+        <screen>
+<prompt>$</prompt> <command>&devel-product-name-lower;_vdd_generator.pl --scm=Subversion --product=TestProduct \
+  --repository=file:///tmp/testrepository --from=tags/SCMBUG_RELEASE_0-8-1 \
+  --to=tags/SCMBUG_RELEASE_0-8-2</command>
+        </screen>
+    </figure>
+
+    <para>
+      The output of this tool is a collection of files. An XML file is
+      produced that contains the result of the VDD query. This file is
+      also transformed using XSLT into a Docbook 4.2 SGML
+      file. Finally, this SGML file is processed using Docbook tools
+      to produce PDF and HTML output.
+    </para>
+
+  </section>
+
+
+
+  <section id="merger">
+    <title>
+      Merger
+    </title>
+    <titleabbrev id="merger-short">Merger</titleabbrev>
+
+  <para>There are <ulink
+    url="http://bugzilla.mkgnu.net/show_bug.cgi?id=545">plans</ulink>
+    to provide a tool that will merge the work done on a list of bugs
+    into a given label.
+  </para>
+
+  <para>Work done on bugs can be merged in a label using the command
+  <filename>&devel-product-name-lower;_merge.pl</filename>. Two merging
+  capabilities are available:
+  </para>
+
+  <itemizedlist spacing="compact">
+    <listitem>
+      <para>
+	<emphasis role="bold">Merging bug changes in a codebase based on
+	an existing tag, and applying a new tag</emphasis>: The user
+	supplies a <filename>--base-label</filename> option which
+	specifies the label (usually a tag) against which the changes
+	in the specified list of bug ids should be applied. A
+	temporary branch is created based on this label, and the bug
+	changes are applied on this branch. The resulting codebase is
+	label with the name specified by
+	<filename>--target-label</filename>, and the temporary branch
+	is deleted.
+      </para>
+
+      <para>
+        An example merging bug changes in a codebase based on an
+        existing tag is shown in <xref
+        linkend="fig-merger-based-on-tag">.
+      </para>
+
+      <figure id="fig-merger-based-on-tag">
+        <title>Merging bug changes in a codebase based on an existing tag.</title>
+          <screen>
+<prompt>$</prompt> <command>&devel-product-name-lower;_merge.pl --scm=Subversion --product=TestProduct \
+  --repository=file:///tmp/testrepository --base-label=tags/SOMEPRODUCT_RELEASE_1-3-0 \
+  --new-label=tags/SOMEPRODUCT_RELEASE_1-3-1 --merge-bugs=545,591 --commit-bugs=771</command>
+          </screen>
+      </figure>
+    </listitem>
+    <listitem>
+      <para>
+        <emphasis role="bold">Merging bug changes directly in an
+	existing branch</emphasis>:The user supplies a
+	<filename>--base-label</filename> option which specifies the
+	label (usually a branch or the main development line) against
+	which the changes in the specified list of bug ids should be
+	applied. The changes are applied directly in this label. No
+	<filename>--target-label</filename> option is supplied.
+      </para>
+
+      <para>
+        An example merging bug changes directly in an existing branch
+        is shown in <xref linkend="fig-merger-directly-in-branch">.
+      </para>
+
+      <figure id="fig-merger-directly-in-branch">
+        <title>Merging bug changes directly in an existing branch.</title>
+          <screen>
+<prompt>$</prompt> <command>&devel-product-name-lower;_merge.pl --scm=Subversion --product=TestProduct \
+  --repository=file:///tmp/testrepository \
+  --base-label=branches/SOMEPRODUCT_RELEASE_1-x-0_series --merge-bugs=708 --commit-bugs=771</command>
+          </screen>
+      </figure>
+    </listitem>
+  </itemizedlist>
+
+  </section>
+
+  <section id ="web-reports">
+    <title>
+       Web Reports
+    </title>
+    <titleabbrev id="web-reports-short">Web Reports</titleabbrev>
+
+    <para>
+       A collection of Web Reports provide easy to use graphical
+       access to the integration tools.
+    </para>
+
+  </section>
+
+</chapter>

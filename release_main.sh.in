@@ -1,0 +1,46 @@
+#!/bin/sh
+
+
+#
+# This script is used to make official releases of this system
+#
+
+usage()
+{
+    echo "Usage: $0 <from_release_name> <to_release_name>"
+    echo "e.g. $0 SCMBUG_RELEASE_0-8-5 SCMBUG_RELEASE_0-8-7"
+    exit -1
+}
+
+if [ $# -ne 2 ]; then
+    usage
+fi
+
+FROM_REL=$1
+TO_REL=$2
+
+make package_source FROM_REL=$1 TO_REL=$2 || exit -4
+
+# Uncompress the source code just packaged and enter that directory,
+# because that's what Debian requires to build a Debian source
+# package.
+cd ..
+tar -zxf @DEVEL_PRODUCT_RELEASE_TAG@.tar.gz
+cd @DEVEL_PRODUCT_RELEASE_TAG@
+
+# Now we build
+./configure || exit -5
+make package_debian || exit -6
+./configure || exit -7
+make package_redhat || exit -8
+make package_windows || exit -9
+./configure || exit -10
+make || exit -11
+
+echo "Publish (y/n)?"
+read response
+
+if [ "$response" != "y" ]; then
+    exit -12
+fi
+make distribute || exit -13

@@ -1,0 +1,131 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::MergeList;
+
+use strict;
+use @DEVEL_PRODUCT_NAME@::Bug;
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+    return bless $self, $type;
+}
+
+
+
+# Adds a comment description of one bug
+sub add_bug_comment {
+   my $self = shift;
+   my ( $bugid, $summary, $status, $active, $owners, $resolution, $severity, $priority, $commentid, $comment, $date, $author_username, $author_name, $author_email, $affected_files_description ) = ( @_ );
+
+   $self->bug( $bugid )->summary( $summary );
+   $self->bug( $bugid )->status( $status );
+   $self->bug( $bugid )->active( $active );
+   $self->bug( $bugid )->owners( @{ $owners } );
+   $self->bug( $bugid )->resolution( $resolution );
+   $self->bug( $bugid )->severity( $severity );
+   $self->bug( $bugid )->priority( $priority );
+   $self->bug( $bugid )->comment( $commentid )->content( $comment );
+   $self->bug( $bugid )->comment( $commentid )->date( $date );
+   $self->bug( $bugid )->comment( $commentid )->author_username( $author_username );
+   $self->bug( $bugid )->comment( $commentid )->author_name( $author_name );
+   $self->bug( $bugid )->comment( $commentid )->author_email( $author_email );
+   $self->bug( $bugid )->comment( $commentid )->affected_files( $affected_files_description );
+}
+
+
+
+sub bug {
+   my $self = shift;
+   my ( $bugid ) = ( @_ );
+
+   my $bug_tag = "bug_" . $bugid;
+
+   if ( !defined( $self->{ mergelist }->{ all_bugs }->{ $bug_tag } ) ) {
+       $self->{ mergelist }->{ all_bugs }->{ $bug_tag }->{ data } = @DEVEL_PRODUCT_NAME@::Bug->new();
+       $self->{ mergelist }->{ all_bugs }->{ $bug_tag }->{ data }->id( $bugid );
+   }
+   return $self->{ mergelist }->{ all_bugs }->{ $bug_tag }->{ data };
+}
+
+
+
+sub all_bugs {
+    my $self = shift;
+
+    if ( defined ( $self->{ mergelist }->{ all_bugs } ) ) {
+	return $self->{ mergelist }->{ all_bugs };
+    } else {
+	return {};
+    }
+}
+
+sub product_name {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ mergelist }->{ product_name } = $data;
+    } else {
+	return $self->{ mergelist }->{ product_name };
+    }
+}
+
+
+
+sub username {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ mergelist }->{ username } = $data;
+    } else {
+	return $self->{ mergelist }->{ username };
+    }
+}
+
+
+
+sub translated_username {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ mergelist }->{ translated_username } = $data;
+    } else {
+	return $self->{ mergelist }->{ translated_username };
+    }
+}
+
+
+
+sub production_date {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ mergelist }->{ production_date } = $data;
+    } else {
+	return $self->{ mergelist }->{ production_date };
+    }
+}
+
+
+
+1;

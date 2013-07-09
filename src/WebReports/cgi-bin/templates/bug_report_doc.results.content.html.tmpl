@@ -1,0 +1,177 @@
+[% IF complete_html == 1 %]
+    <HTML><HEAD><TITLE>Impact Document</TITLE></HEAD><BODY>
+    <H2>Impact Document</H2>
+[% END %]
+
+
+<TABLE BOARDER=0>
+<TR><TD COLSPAN="4">
+<H3>Project Information</H3>
+</TD></TR>
+<TR><TD WIDTH="25">&nbsp;</TD><TD WIDTH="250">Implemented Platforms:</TD><TD>
+[% impdoc.os | html_entity | html_line_break %]
+</TD></TR>
+
+<TR><TD></TD><TD>Product:</TD><TD>
+[% impdoc.product | html_entity %]
+</TD></TR>
+
+<TR><TD></TD><TD>Implemented Version:</TD><TD>
+[% impdoc.versions | html_entity %]
+</TD></TR>
+
+<TR><TD></TD><TD>Implemented Stage:</TD><TD>
+[% impdoc.stages | html_entity %]
+</TD></TR>
+
+<TR><TD></TD><TD>Project Code:</TD><TD>
+POD/[% impdoc.project_type %]/[% impdoc.project_num %]/[% impdoc.project_desc | html_entity %]
+</TD></TR>
+
+<TR><TD></TD><TD>Reason For Release:</TD><TD>
+[% impdoc.reason_for_release | html_entity %]
+</TD></TR>
+
+<TR><TD></TD><TD>Project Manager:</TD><TD>
+[% impdoc.project_manager %]
+</TD></TR>
+
+<TR><TD></TD><TD>Produced By:</TD><TD>
+[% impdoc.produced_by | html_entity %]
+</TD></TR>
+
+<TR><TD></TD><TD>Date:</TD><TD>
+[% impdoc.date | html_entity %]
+</TD></TR>
+
+<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN=4>
+<H3>Build Information</H3>
+</TD></TR>
+
+<TR><TD></TD><TD>Start Revision Number:</TD><TD>
+[% impdoc.revision_start | html_entity %]
+</TD></TR>
+<TR><TD></TD><TD>End Revision Number:</TD><TD>
+[% impdoc.revision_end | html_entity %]
+</TD></TR>
+<TR><TD></TD><TD>Repository Path:</TD><TD>
+[% impdoc.repository %]
+</TD></TR>
+<TR><TD></TD><TD>Compiler Version:</TD><TD>
+[% impdoc.compiler | html_entity %]
+</TD></TR>
+<TR><TD></TD><TD>OS Build & Test:</TD><TD>
+[% impdoc.os_build_test | html_entity %]
+</TD></TR>
+<TR><TD></TD><TD>Install Shield Version:</TD><TD>
+[% impdoc.is_ver | html_entity %]
+</TD></TR>
+<TR><TD></TD><TD>Database Type:</TD><TD>
+[% impdoc.dbtypes | html_entity | html_line_break %]
+</TD></TR>
+
+<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN="4">
+<H3>Fault List</H3>
+</TD></TR>
+
+[% FOREACH key IN impdoc.bug_comments.keys.sort %]
+    <TR><TD></TD><TD>[% key %]</TD><TD>[% impdoc.bug_comments.$key %]</TD></TR>
+[% END %]
+
+
+<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN="4"><H3>Fault Details</H3></TD></TR>
+<TR><TD></TD><TD COLSPAN="4">
+
+[% FOREACH bug_detail IN impdoc.bug_details %]
+    [% FOREACH table IN bug_detail.keys.sort %]
+        <TABLE border=1 cellspacing=0 cellpadding=4 width=100%>
+
+        [% SET isHeader = 1 %]
+
+        [% FOREACH row IN bug_detail.$table %]
+            [% IF isHeader == 1 %]
+                <TR BGCOLOR=#c5deef>
+                [% SET colWidth = 'WIDTH=200' %]
+                [% FOREACH cell IN row %]
+                    <TD [% colWidth %]><B>[% cell | html_entity | html_line_break %]</B></TD>
+                    [% SET colWidth = '' %]
+                [% END %]
+                </TR>
+                [% SET isHeader = 0 %]
+            [% ELSE %]
+                <TR>
+                [% FOREACH cell IN row %]
+                    <TD>[% cell | html_entity | html_line_break %]</TD>
+                [% END %]
+                </TR>
+            [% END %]
+        [% END %]
+        </TABLE><BR>
+    [% END %]
+[% END %]
+
+
+
+</TD></TR>
+
+<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN="4"><H3>Restrictions</H3></TD></TR>
+<TR><TD></TD><TD COLSPAN="4">
+[% impdoc.restrictions | html_entity %]
+</TD></TR>
+
+<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN="4"><H3>Checklist</H3></TD></TR>
+<TR><TD></TD><TD>Code Review Performed:</TD><TD>
+[% impdoc.code_rev | html_entity %]
+[% IF impdoc.code_rev_comment.length > 0 %]
+    &nbsp; ( [% impdoc.code_rev_comment | html_entity %] )
+[% END %]
+</TD></TR>
+
+<TR><TD></TD><TD>Update Release Map:</TD><TD>
+[% impdoc.rel_map | html_entity %]
+[% IF impdoc.rel_map_comment.length > 0 %]
+    &nbsp; ( [% impdoc.rel_map_comment | html_entity %] )
+[% END %]
+</TD></TR>
+
+<TR><TD></TD><TD>Language Translations:</TD>
+<TD><TABLE border="0"><TR><TD>
+[% impdoc.lang_trans | html_entity %]
+&nbsp; &nbsp; </TD><TD>
+[% impdoc.lang_details  | html_entity | html_line_break %]
+</TD></TR></TABLE></TD></TR>
+
+<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN="4"><H3>Product Assurance Testing Information</H3></TD></TR>
+<TR><TD></TD><TD>Recommended Test Level:</TD><TD>
+[% impdoc.test_level | html_entity %]
+</TD></TR>
+<TR><TD></TD><TD>Features/Test Areas:</TD><TD>
+[% impdoc.test_area | html_entity %]
+</TD></TR>
+<TR><TD></TD><TD>Test Notes:</TD><TD>
+[% impdoc.test_notes | html_entity %]
+</TD></TR>
+
+<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN=4><H3>Team Leader / Project Manager Sign-off</H3></TD></TR>
+<TR><TD></TD><TD>Confirm Faults Closed:</TD><TD>
+[% impdoc.confirm_bugs_closed | html_entity %]
+</TD></TR>
+<TR><TD></TD><TD>Risk Analysis:</TD><TD>
+[% impdoc.risk_analysis | html_entity %]
+</TD></TR>
+<TR><TD></TD><TD>Comments:</TD><TD>
+[% impdoc.sign_comments | html_entity %]
+</TD></TR>
+<TR><TD></TD><TD>Signed:</TD><TD>
+[% impdoc.signed | html_entity %]
+</TD></TR>
+<TR><TD></TD><TD>Date:</TD><TD>
+[% impdoc.signed_date | html_entity %]
+</TD></TR>
+</TABLE>
+
+
+[% IF complete_html == 1 %]
+    </BODY></HTML>
+[% END %]
+

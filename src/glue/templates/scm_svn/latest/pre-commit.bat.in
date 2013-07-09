@@ -1,0 +1,57 @@
+@echo off
+REM PRE-COMMIT HOOK
+REM
+REM The pre-commit hook is invoked before a Subversion txn is
+REM committed.  Subversion runs this hook by invoking a program
+REM (script, executable, binary, etc.) named 'pre-commit' (for which
+REM this file is a template), with the following ordered arguments:
+REM
+REM   [1] REPOS-PATH   (the path to this repository)
+REM   [2] TXN-NAME     (the name of the txn about to be committed)
+REM
+REM The default working directory for the invocation is undefined, so
+REM the program should set one explicitly if it cares.
+REM
+REM If the hook program exits with success, the txn is committed; but
+REM if it exits with failure (non-zero), the txn is aborted and no
+REM commit takes place.  The hook program can use the 'svnlook'
+REM utility to help it examine the txn.
+REM
+REM On a Unix system, the normal procedure is to have 'pre-commit'
+REM invoke other programs to do the real work, though it may do the
+REM work itself too.
+REM
+REM   ***   NOTE: THE HOOK PROGRAM MUST NOT MODIFY THE TXN.    ***
+REM   This is why we recommend using the read-only 'svnlook' utility.
+REM   In the future, Subversion may enforce the rule that pre-commit
+REM   hooks should not modify txns, or else come up with a mechanism
+REM   to make it safe to do so (by informing the committing client of
+REM   the changes).  However, right now neither mechanism is
+REM   implemented, so hook writers just have to be careful.
+REM
+REM Note that 'pre-commit' must be executable by the user(s) who will
+REM invoke it (typically the user httpd runs as), and that user must
+REM have filesystem-level permission to access the repository.
+REM
+REM On a Windows system, you should name the hook program
+REM 'pre-commit.bat' or 'pre-commit.exe',
+REM but the basic idea is the same.
+REM
+REM Here is an example hook script, for a Unix /bin/sh interpreter:
+
+set REPOS=%1
+set TXN=%2
+
+
+REM @DEVEL_PRODUCT_NAME@_STANZA_START
+REM
+REM
+REM Call the @DEVEL_PRODUCT_NAME@ integration glue
+"@DEVEL_CONFIG_PERL_BINARY@" -I %REPOS%/hooks/lib/@DEVEL_PRODUCT_NAME_LOWER@ %REPOS%/hooks/bin/@DEVEL_PRODUCT_NAME_LOWER@_activity.pl %REPOS%/hooks/etc/@DEVEL_PRODUCT_NAME_LOWER@/glue.conf @DEVEL_CONFIG_ACTIVITY_VERIFY@ %REPOS% %TXN% >&2
+
+REM Do not define label @DEVEL_PRODUCT_NAME_LOWER@_script_failed. This will result in the batch
+REM file to fail without terminating the command interpreter
+if NOT %ERRORLEVEL% == 0 goto @DEVEL_PRODUCT_NAME_LOWER@_script_failed 2>nul
+REM
+REM
+REM @DEVEL_PRODUCT_NAME@_STANZA_STOP

@@ -1,0 +1,322 @@
+#!/usr/bin/perl -w 
+# Program to generate Impact Document information
+
+use lib "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/lib";
+
+use strict;
+use CGI qw(:standard);
+use @DEVEL_PRODUCT_NAME@::ActivityUtilities;
+use WebReportUtilities;
+use EMail;
+use Template;
+
+my $web_utils = WebReportUtilities->new();
+my $webreports_config = $web_utils->webreports_config();
+
+
+# Make sure text isn't buffered
+$|=1;
+
+
+
+sub main {
+    my $revision_start = param("revision_start");
+    my $revision_end   = param("revision_end");
+    my $send_email_to  = param("send_email_to");
+
+    my @bug_list = ();
+    foreach my $bugTag ( param ) {
+        if( $bugTag =~ /^bug/ ) {
+            my $bugid = $bugTag;
+            $bugid =~ s/bug//;
+    	    push @bug_list, $bugid;
+        }
+    }
+
+    my $html_data = html_impact_doc( \@bug_list );
+
+    print $html_data;
+
+    my $error_msg = send_impact_document( $send_email_to, $revision_start, $revision_end, $html_data );
+
+    if( $error_msg ne "" ) {
+        print "<HR><BLOCKQUOTE><FONT color=red><B>ERROR:<BR><BLOCKQUOTE>";
+        print $error_msg;
+        print "</B></FONT></BLOCKQUOTE></BLOCKQUOTE>\n";
+    }
+
+    print create_update_bug_tracker_button( \@bug_list );
+
+    print end_html();
+}
+
+sub get_display_param {
+    my $param_name = shift;
+    my $value = "";
+
+    if( defined(param($param_name)) ) {
+    	$value = $web_utils->get_html_format(param($param_name));
+    	$value =~ s/\n/<BR>/g;
+    }
+    return $value;
+}
+
+sub get_display_list_param {
+    my $param_name = shift;
+    my $value = "";
+
+    if( defined(param($param_name)) ) {
+    	$value = join( "\n", param($param_name) );
+    	$value = $web_utils->get_html_format($value);
+    	$value =~ s/\n/<BR>/g;
+    }
+    return $value;
+}
+
+
+#
+# Generate the HTML for the impact document
+#
+sub html_impact_doc {
+    my $buglist = shift;
+
+    my $html_data = "<TABLE BOARDER=0>\n";
+    $html_data .= "<TR><TD COLSPAN=\"4\">\n";
+    $html_data .= "<H3>Project Information</H3>";
+    $html_data .= "</TD></TR>";
+    $html_data .= "<TR><TD WIDTH=\"25\">&nbsp;</TD><TD WIDTH=\"250\">Implemented Platforms:</TD><TD>";
+    $html_data .= get_display_list_param("os");
+    $html_data .= "</TD></TR>\n";
+
+    $html_data .= "<TR><TD></TD><TD>Product:</TD><TD>" . get_display_param("product") . "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Implemented Version:</TD><TD>";
+    $html_data .= get_display_param("versions");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Implemented Stage:</TD><TD>";
+    $html_data .= get_display_param("stages");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Project Code:</TD><TD>";
+    
+    $html_data .= "POD/" . get_display_param("project_type");
+    $html_data .= "/" . get_display_param("project_num");
+    $html_data .= "/" . get_display_param("project_desc");
+
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Reason For Release:</TD><TD>";
+    $html_data .= get_display_param("reason_for_release");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Project Manager:</TD><TD>";
+    $html_data .= get_display_param("project_manager");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Produced By:</TD><TD>";
+    $html_data .= get_display_param("produced_by");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Date:</TD><TD>";
+    $html_data .= get_display_param("date");
+    $html_data .= "</TD></TR>\n";
+
+    $html_data .= "<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN=4>\n";
+    $html_data .= "<H3>Build Information</H3>";
+    $html_data .= "</TD></TR>";
+    $html_data .= "<TR><TD></TD><TD>Start Revision Number:</TD><TD>";
+    $html_data .= get_display_param("revision_start");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>End Revision Number:</TD><TD>";
+    $html_data .= get_display_param("revision_end");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Repository Path:</TD><TD>";
+    if( defined(param("repository")) ) {
+    	$html_data .= param("repository");
+    }
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Compiler Version:</TD><TD>";
+    $html_data .= get_display_param("compiler");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>OS Build & Test:</TD><TD>";
+    $html_data .= get_display_param("os_build_test");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Install Shield Version:</TD><TD>";
+    $html_data .= get_display_param("is_ver");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Database Type:</TD><TD>";
+    $html_data .= get_display_list_param("dbtypes");
+    $html_data .= "</TD></TR>\n";
+
+    $html_data .= "<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN=\"4\">\n";
+    $html_data .= "<H3>Fault List</H3>";
+    $html_data .= "</TD></TR>";
+
+    foreach my $bugid ( @{ $buglist } ) {
+    	$html_data .= "<TR><TD></TD><TD>";
+  	$html_data .= $bugid;
+  	$html_data .= "</TD><TD>";
+	$html_data .= param("bug" . $bugid);
+	$html_data .= "</TD></TR>\n";
+    }
+
+    $html_data .= "<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN=\"4\">\n";
+    $html_data .= "<H3>Fault Details</H3>";
+    $html_data .= "</TD></TR>";
+    $html_data .= "<TR><TD></TD><TD COLSPAN=\"4\">\n";
+    $html_data .= html_bug_details( $buglist );
+    $html_data .= "</TD></TR>";
+
+    $html_data .= "<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN=\"4\">\n";
+    $html_data .= "<H3>Restrictions</H3></TD></TR>";
+    $html_data .= "<TR><TD></TD><TD COLSPAN=\"4\">" . get_display_param("restrictions") . "</TD></TR>\n";
+
+    $html_data .= "<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN=\"4\">\n";
+    $html_data .= "<H3>Checklist</H3>";
+    $html_data .= "</TD></TR>";
+    $html_data .= "<TR><TD></TD><TD>Code Review Performed:</TD><TD>";
+    $html_data .= get_display_param("code_rev");
+    
+    my $code_rev_comment = get_display_param("code_rev_comment");
+    if( $code_rev_comment ne "" ) {
+	$html_data .= " &nbsp; (" . $code_rev_comment . ")";
+    }
+    $html_data .= "</TD></TR>\n";
+
+    $html_data .= "<TR><TD></TD><TD>Update Release Map:</TD><TD>";
+    $html_data .= get_display_param("rel_map");
+    
+    my $rel_map_comment = get_display_param("rel_map_comment");
+    if( $rel_map_comment ne "" ) {
+	$html_data .= " &nbsp; (" . $rel_map_comment . ")";
+    }
+    $html_data .= "</TD></TR>\n";
+
+    $html_data .= "<TR><TD></TD><TD>Language Translations:</TD>";
+    $html_data .= "<TD><TABLE border=\"0\"><TR><TD>";
+    $html_data .= get_display_param("lang_trans");
+    $html_data .= "&nbsp; &nbsp; </TD><TD>";
+    $html_data .= get_display_list_param("lang_details");
+    $html_data .= "</TD></TR></TABLE></TD></TR>\n";
+
+    $html_data .= "<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN=\"4\">\n";
+    $html_data .= "<H3>Product Assurance Testing Information</H3>";
+    $html_data .= "</TD></TR>";
+    $html_data .= "<TR><TD></TD><TD>Recommended Test Level:</TD><TD>";
+    $html_data .= get_display_param("test_level");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Features/Test Areas:</TD><TD>" . get_display_param("test_area");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Test Notes:</TD><TD>" . get_display_param("test_notes");
+    $html_data .= "</TD></TR>\n";
+
+    $html_data .= "<TR><TD>&nbsp;</TD></TR><TR><TD COLSPAN=4>\n";
+    $html_data .= "<H3>Team Leader / Project Manager Sign-off</H3>";
+    $html_data .= "</TD></TR>";
+    $html_data .= "<TR><TD></TD><TD>Confirm Faults Closed:</TD><TD>";
+    $html_data .= get_display_param("confirm_bugs_closed");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Risk Analysis:</TD><TD>";
+    $html_data .= get_display_param("risk_analysis");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Comments:</TD><TD>" . get_display_param("sign_comments") . "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Signed:</TD><TD>";
+    $html_data .= get_display_param("signed");
+    $html_data .= "</TD></TR>\n";
+    $html_data .= "<TR><TD></TD><TD>Date:</TD><TD>";
+    $html_data .= get_display_param("signed_date");
+    $html_data .= "</TD></TR>\n";
+
+    $html_data .= "</TABLE>";
+
+    return $html_data;
+}
+
+#
+# Creates an html list of bug details
+#
+sub html_bug_details {
+    my $buglist = shift;
+
+    # Check to see if a custom table has been implemented
+    my $custom_data = CustomData->new($webreports_config);
+    my $custom_html = $custom_data->get_html_bug_details(join( ';', @{ $buglist } ) );
+    
+    if( $custom_html ne "" ) {
+    	return $custom_html;
+    }
+
+    my $activityUtils = @DEVEL_PRODUCT_NAME@::ActivityUtilities->new( $webreports_config->{daemon_location},
+							$webreports_config->{daemon_port} );
+    my $results = $activityUtils->get_details_for_bug( join( ',', @{ $buglist } ) );
+
+    my $html_data = "";
+
+    foreach my $bug_details ( @{ $results } ) {
+        $html_data .= "<TABLE border=1 cellspacing=0 cellpadding=4 width=100%>";
+        $html_data .= "<TR BGCOLOR=#c5deef><TD WIDTH=200><B>";
+    	$html_data .= $bug_details->{ bugid };
+    	$html_data .= "</B></TD><TD><B>";
+    	$html_data .= $web_utils->get_html_format($bug_details->{ summary });
+    	$html_data .= "</B></TD></TR>\n";
+
+    	$html_data .= "<TR><TD><I>Status</I></TD><TD>";
+    	$html_data .= $bug_details->{ status };
+    	$html_data .= "</TD></TR>\n";
+    
+    	$html_data .= "<TR><TD><I>Investigator</I></TD><TD>";
+    	$html_data .= join( "<BR>", @{ $bug_details->{ owners }} );
+    	$html_data .= "</TD></TR>\n";
+    
+    	$html_data .= "</TABLE><BR>\n";
+    }
+
+    return $html_data;
+}
+
+
+#
+# E-mails the impact document to the given user
+#
+sub send_impact_document {
+    my ( $send_email_to, $revision_start, $revision_end, $impdoc ) = ( @_ );
+
+    # Only send E-mail if addresses and data are supplied
+    if( $send_email_to eq "" ) {
+    	return "";
+    }
+
+    my $file = 'templates/bug_report_doc.results.content.html.tmpl';
+
+    my $vars = {
+    	complete_html  => 1,
+	impdoc => $impdoc
+    };
+
+    my $template = Template->new();
+    my $email_doc = "";
+    $template->process($file, $vars, \$email_doc)
+    || die "Template process failed: ", $template->error(), "\n";
+
+    my $docTitle = "Impact Document (" . $revision_start . " - " . $revision_end . ")";
+
+    # Check to see if a custom attachment is required
+    my $custom_data = CustomData->new($webreports_config);
+    my ($doc_filename, $error_msg) = $custom_data->get_email_attachment( $docTitle, $email_doc );
+
+    if( $error_msg eq "" ) {
+        my $email_if = EMail->new($webreports_config->{ email_config });
+        
+        if( $doc_filename ne "" ) {
+            $error_msg = $email_if->mail_send_html_with_attachment($docTitle, $email_doc, $send_email_to, $doc_filename );
+        } else {
+            $error_msg = $email_if->mail_send_html($docTitle, $email_doc, $send_email_to );     
+        }
+    }
+
+    $custom_data->tidy_email_attachment( $doc_filename );
+
+    return $error_msg;
+}
+
+
+###########################################
+##  Main Invoke Code
+###########################################
+
+main();
+exit;

@@ -1,0 +1,37 @@
+TARGET=paper_introduce
+
+all: prepare paper presentation
+
+# Prepares some other files that will be used in this document
+prepare:
+	@LN_S@ -fn ../manual/images images
+
+paper:
+	latex ${TARGET}
+	bibtex ${TARGET}
+	latex ${TARGET}
+	latex ${TARGET}
+	dvips -Pcmz -t letter -o ${TARGET}.ps ${TARGET}.dvi
+	ps2pdf ${TARGET}.ps
+	cp ${TARGET}.pdf @DEVEL_PRODUCT_NAME_LOWER@_freenix_05.pdf
+	latex2html -split 0 -show_section_numbers -local_icons ${TARGET}.tex -mkdir -dir @DEVEL_PRODUCT_NAME_LOWER@_freenix_05
+	# Latex2HTML does a poor job. Must post-process this
+	cp images/system_architecture.png @DEVEL_PRODUCT_NAME_LOWER@_freenix_05/system_architecture.png
+	cat @DEVEL_PRODUCT_NAME_LOWER@_freenix_05/index.html | sed -e 's/\[scale.*/<IMG SRC=\"system_architecture\.png\">/' > tmp && mv tmp @DEVEL_PRODUCT_NAME_LOWER@_freenix_05/index.html
+	./enlarge_caption_of_figure6.sh @DEVEL_PRODUCT_NAME_LOWER@_freenix_05/index.html
+
+presentation:
+	(cd presentation; cp presentation_introduce.ppt @DEVEL_PRODUCT_NAME_LOWER@_freenix_05.ppt)
+
+clean:
+	-rm images
+	-rm ${TARGET}.ps ${TARGET}.pdf ${TARGET}.log ${TARGET}.lof ${TARGET}.dvi ${TARGET}.aux ${TARGET}.toc *.bbl *.blg *~
+	-rm @DEVEL_PRODUCT_NAME_LOWER@_freenix_05.pdf
+	-rm @DEVEL_PRODUCT_NAME_LOWER@_freenix_05
+	-rm @DEVEL_PRODUCT_NAME_LOWER@_freenix_05.ppt
+	-rm ${TARGET}.tex
+
+distclean:
+	-rm Makefile
+
+.PHONY: presentation

@@ -1,0 +1,853 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Tools::Glue_Installer;
+
+use strict;
+use Getopt::Long;
+use Cwd;
+use File::Basename;
+use File::Copy;
+use Data::Dumper;
+use @DEVEL_PRODUCT_NAME@::Glue::CVS;
+use @DEVEL_PRODUCT_NAME@::Glue::Git;
+use @DEVEL_PRODUCT_NAME@::Glue::Subversion;
+use @DEVEL_PRODUCT_NAME@::Tools::SCM_Description;
+use @DEVEL_PRODUCT_NAME@::Tools::SCM_Functions;
+use @DEVEL_PRODUCT_NAME@::Common;
+use @DEVEL_PRODUCT_NAME@::Connection;
+
+my $GLUE_CONFIGURATION_FILE = "etc/@DEVEL_PRODUCT_NAME_LOWER@/glue.conf";
+my $install_configuration;
+my $arguments;
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+
+    bless $self, $type;
+
+    $arguments->{ daemon_ip } = "";
+    $arguments->{ scm_name } = "";
+    $arguments->{ repository_path } = "";
+    $arguments->{ product_name } = "";
+    $arguments->{ bug_id } = "";
+    $arguments->{ binary_paths } = "";
+
+    return $self;
+}
+
+
+
+#
+# Processes a glue installation request
+#
+sub process {
+    my $self = shift;
+    my ( @arguments ) = ( @_ );
+
+    parse_arguments();
+    check_arguments();
+    print_input();
+    check_input_is_valid();
+    @DEVEL_PRODUCT_NAME@::Tools::SCM_Functions::checkout_repository( $install_configuration->{ scm_description } );
+
+    # Is this a new installation, or an upgrade ?
+    if ( -e $GLUE_CONFIGURATION_FILE ) {
+	print "The @DEVEL_PRODUCT_NAME@ integration glue will be upgraded to version @DEVEL_PRODUCT_VERSION@\n";
+	# This is an upgrade
+	disable_glue_triggers();
+	upgrade_glue();
+	enable_glue_triggers();
+    } else {
+	# This is a new installation
+	install_glue_part1();
+	
+	# Now that the glue files are installed, activate the glue
+	install_glue_part2();
+    }
+
+    @DEVEL_PRODUCT_NAME@::Tools::SCM_Functions::release_repository();
+}
+
+
+
+#
+# Parses the command-line arguments
+#
+sub parse_arguments {
+    GetOptions( "daemon=s" => \$arguments->{ daemon_ip },
+		"scm=s" => \$arguments->{ scm_name },
+		"repository=s" => \$arguments->{ repository_path },
+		"product=s" => \$arguments->{ product_name },
+		"bug=s" => \$arguments->{ bug_id },
+		"binary-paths=s" => \$arguments->{ binary_paths },
+	        "help" => \&show_usage_and_exit,
+	        "version" => \&show_version_and_exit,
+	        "<>", \&parse_arguments_no_such_option
+		);
+}
+
+
+#
+# Parses the command-line arguments
+#
+sub check_arguments {
+    my $errors = 0;
+
+    if ( $arguments->{ daemon_ip } eq "" ) {
+	print "Missing required argument --daemon=<ip>\n";
+	$errors = 1;
+    }
+
+    if ( $arguments->{ scm_name } eq "" ) {
+	print "Missing required argument --scm=<scm_name>\n";
+	$errors = 1;
+    }
+
+    if ( $arguments->{ repository_path } eq "" ) {
+	print "Missing required argument --repository=<path>\n";
+	$errors = 1;
+    }
+
+    if ( $arguments->{ product_name } eq "" ) {
+	print "Missing required argument --product=<product_name>\n";
+	$errors = 1;
+    }
+
+    if ( $arguments->{ bug_id } eq "" ) {
+	print "Missing required argument --bug=<id>\n";
+	$errors = 1;
+    }
+
+    if ( $arguments->{ binary_paths } eq "" ) {
+	print "Missing required argument --binary-paths=<list>\n";
+	$errors = 1;
+    }
+
+    if ( $errors == 1 ) {
+	usage();
+	exit -2;
+    } else {
+
+
+	$install_configuration->{ original_path } = "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@";
+
+        #
+        # Setup logging as soon as possible
+        #
+        use Log::Log4perl qw(:easy);
+        # Setup a really basic logger
+        Log::Log4perl::easy_init( $WARN );
+        $logger = get_logger( "Glue_Installer" );
+        @DEVEL_PRODUCT_NAME@::Common::set_logger( $logger );
+
+	$install_configuration->{ scm_description } = @DEVEL_PRODUCT_NAME@::Tools::SCM_Description->new();
+	$install_configuration->{ scm_description }->repository_path( $arguments->{ repository_path } );
+	$install_configuration->{ scm_description }->name( $arguments->{ scm_name } );
+	$install_configuration->{ scm_description }->product_name( $arguments->{ product_name } );
+
+	$install_configuration->{ bug_id } = $arguments->{ bug_id };
+	$install_configuration->{ daemon_ip } = $arguments->{ daemon_ip };
+
+	$install_configuration->{ binary_paths } = $arguments->{ binary_paths };
+
+	# Reset the PATH. Make sure we use the correct version of a
+	# tool.
+	my $required_tools;
+	$required_tools->{ '@DEVEL_CONFIG_GENERAL_BINARY_DIFF@' } = 1;
+	check_tools( $required_tools, $arguments->{ binary_paths } );
+    }
+
+
+    # Setup the list of files that will be copied, along with their
+    # destination directories. Copy everything except the glue
+    # configuration file.
+    $install_configuration->{ glue_files }->{ "glue/etc/@DEVEL_PRODUCT_NAME_LOWER@/log_template" }->{ to } = "etc/@DEVEL_PRODUCT_NAME_LOWER@";
+    $install_configuration->{ glue_files }->{ "lib/@DEVEL_PRODUCT_NAME@/Activity.pm" }->{ to } = "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@";
+    $install_configuration->{ glue_files }->{ "lib/@DEVEL_PRODUCT_NAME@/ActivityUtilities.pm" }->{ to } = "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@";
+    $install_configuration->{ glue_files }->{ "lib/@DEVEL_PRODUCT_NAME@/Connection.pm" }->{ to } = "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@";
+    $install_configuration->{ glue_files }->{ "lib/@DEVEL_PRODUCT_NAME@/Common.pm" }->{ to } = "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@";
+    $install_configuration->{ glue_files }->{ "lib/@DEVEL_PRODUCT_NAME@/Error.pm" }->{ to } = "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@";
+    $install_configuration->{ glue_files }->{ "lib/@DEVEL_PRODUCT_NAME@/Glue/CVS.pm" }->{ to } = "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@/Glue";
+    $install_configuration->{ glue_files }->{ "lib/@DEVEL_PRODUCT_NAME@/Glue/CVSConsolidatedActivities.pm" }->{ to } = "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@/Glue";
+    $install_configuration->{ glue_files }->{ "lib/@DEVEL_PRODUCT_NAME@/Glue/Glue.pm" }->{ to } = "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@/Glue";
+    $install_configuration->{ glue_files }->{ "lib/@DEVEL_PRODUCT_NAME@/Glue/SCM.pm" }->{ to } = "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@/Glue";
+    $install_configuration->{ glue_files }->{ "lib/@DEVEL_PRODUCT_NAME@/Glue/Subversion.pm" }->{ to } = "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@/Glue";
+    $install_configuration->{ glue_files }->{ "lib/@DEVEL_PRODUCT_NAME@/Glue/Git.pm" }->{ to } = "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@/Glue";
+    $install_configuration->{ glue_files }->{ "glue/bin/@DEVEL_PRODUCT_NAME_LOWER@_activity.pl" }->{ to } = "bin";
+}
+
+
+#
+# Prints a usage message and exits
+#
+sub show_usage_and_exit {
+    usage();
+    exit 0;
+}
+
+
+
+#
+# Prints a usage message and exits
+#
+sub usage{
+    print "
+Usage: @DEVEL_PRODUCT_NAME_LOWER@_install_glue [arguments]
+  --scm=<scm_name>         Name of the SCM system. The supported tools are:
+                            CVS, Subversion, Git
+  --product=<product_name> Name of the product in the bugtracking system
+  --repository=<path>      The CVSROOT equivalent. MUST use a file:// prefix
+                           for Subversion. Directory that holds the .git
+                           directory for Git
+  --bug=<id>               The bug number against which this glue installation
+                           will be documented
+  --binary-paths=<list>    A comma(,) separated list of paths to the SCM tool's
+                           binaries
+  --daemon=<ip>            The IP address of the @DEVEL_PRODUCT_NAME@
+                           integration daemon
+  --help                   This help message
+  --version                Print version
+";
+}
+
+
+
+#
+# Prints the version of this tool
+#
+sub show_version_and_exit {
+    print "@DEVEL_PRODUCT_NAME@ $PRODUCT_VERSION\n";
+    exit 0;
+}
+
+
+#
+# Handles the case where an invalid command-line argument is parsed
+#
+sub parse_arguments_no_such_option {
+    my ( $argument_name ) = ( @_ );
+
+    print "Command-line argument \"$argument_name\" is invalid.\n";
+    usage();
+    exit -1;
+}
+
+
+
+#
+# Prints the input received from the user
+#
+sub print_input {
+    print " This is the installation script of the @DEVEL_PRODUCT_NAME@ glue.\n";
+    print " The glue will be installed in repository: " . $install_configuration->{ scm_description }->repository_path() . ".\n";
+    print " This is a repository for the " . $install_configuration->{ scm_description }->name() . " SCM tool.\n";
+    print " The product name in the bug tracking system is " . $install_configuration->{ scm_description }->product_name() . ".\n";
+    print " The integration glue will be committed against bug " . $install_configuration->{ bug_id } . ".\n";
+    print " The IP address of the @DEVEL_PRODUCT_NAME@ integration daemon to contact is " . $install_configuration->{ daemon_ip } . ".\n";
+    print " The binary paths used are: " . $install_configuration->{ binary_paths } . ".\n";
+    print " -------------\n";
+    print " Press Enter to continue or Ctrl-C to cancel\n";
+
+    my $response = readline(*STDIN);
+}
+
+
+
+#
+# Checks if the input supplied is valid
+#
+sub check_input_is_valid {
+
+    #
+    # Check if the daemon is alive and well
+    #
+    my $connection = @DEVEL_PRODUCT_NAME@::Connection->new();
+    my $check_if_the_daemon_is_alive_and_well = 1;
+    $connection->port( @DEVEL_CONFIG_PORT_NUMBER@ );
+    $connection->location( $install_configuration->{ daemon_ip } );
+    my $activity = @DEVEL_PRODUCT_NAME@::Activity->new();
+    $activity->name( $ACTIVITY_OK );
+    $activity->user( "@DEVEL_PRODUCT_NAME_LOWER@_glue_installer" );
+    $activity->product_name( "@DEVEL_PRODUCT_NAME@_no_product_name" );
+    $activity->log_message( "Glue Installer checking if the daemon is alive and well" );
+    $connection->process_activity( $activity, undef, 0 );
+}
+
+
+
+#
+# Disables the integration glue. Completely disables integration from
+# all triggers. This is required in case the new package structure
+# includes changed paths which would cause the hooks to fail, leading
+# into a dead-end of committing anything ever again.
+#
+sub disable_glue_triggers {
+    
+    if ( $install_configuration->{ scm_description }->name() eq "CVS" ) {
+	foreach my $file ( qw [ @DEVEL_CONFIG_CVSHOOK_COMMITINFO@ @DEVEL_CONFIG_CVSHOOK_LOGINFO@ @DEVEL_CONFIG_CVSHOOK_TAGINFO@ @DEVEL_CONFIG_CVSHOOK_VERIFYMSG@ ] ) {
+	    disable_glue_triggers_for_file( $file, $install_configuration->{ scm_description }->name() );
+	}
+    } elsif ( $install_configuration->{ scm_description}->name() eq "Subversion" ) {
+	foreach my $file ( qw [ @DEVEL_CONFIG_SVNHOOK_PRECOMMIT@ @DEVEL_CONFIG_SVNHOOK_POSTCOMMIT@ ] ) {
+	    disable_glue_triggers_for_file( $file, $install_configuration->{ scm_description }->name() );
+	}
+    } elsif ( $install_configuration->{ scm_description}->name() eq "Git" ) {
+	foreach my $file ( qw [ @DEVEL_CONFIG_GITHOOK_COMMITMSG@ @DEVEL_CONFIG_GITHOOK_POSTCOMMIT@ ] ) {
+	    disable_glue_triggers_for_file( $file, $install_configuration->{ scm_description }->name() );
+	}
+    }
+
+    # Provide a warning message that we are about to commit
+    warn_commit("Disabling glue\n"); 
+
+    # Recommit the configuration file
+    scm_commit_glue ( "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX@" . $install_configuration->{ bug_id } . "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX@" . "Disabling @DEVEL_PRODUCT_NAME@ integration glue due to an upcoming upgrade to version @DEVEL_PRODUCT_VERSION@.\n" );
+}
+
+
+#
+# Disables the glue integration for a given trigger file
+#
+sub disable_glue_triggers_for_file {
+    my ( $file, $scm_name ) = ( @_);
+    my $regex_match = '(.*@DEVEL_PRODUCT_NAME_LOWER@_activity\.pl)';
+    my $regex_replace = '@DEVEL_CONFIG_COMMENT_TOKEN@';
+
+    if ( $scm_name eq "CVS" ) {
+	# CVSNT does not execute hooks as .bat files, but as regular
+	# shell scripts.
+	$regex_replace = '@DEVEL_CONFIG_COMMENT_TOKEN_UNIX@';
+    }
+
+    my $file_content = file_content( $file );
+    my $new_output = $file_content;
+    $new_output =~ s/$regex_match/$regex_replace$1/;
+
+    open TRIGGER_FILE, "> $file";
+    print TRIGGER_FILE $new_output;
+    close TRIGGER_FILE;
+}
+
+
+
+#
+# Upgrades the glue with a new version
+#
+sub upgrade_glue {
+    print  "================================================================\n";
+    print  "** The file " . $install_configuration->{ scm_description }->repository_dir() . "/" . $GLUE_CONFIGURATION_FILE . " already exists.
+It will NOT be modified, but it's HIGHLY recommended to verify that its
+contents are correct and any required new configuration lines are added.
+The differences between the existing configuration file and the new one
+are shown below: **\n";
+    my $cmd = "diff \"" . $GLUE_CONFIGURATION_FILE . "\" \"" . $install_configuration->{ original_path } . "/glue/" . $GLUE_CONFIGURATION_FILE . ".template\"";
+    system ( $cmd );
+    print  "================================================================\n";
+
+    # Add any misssing directories if needed
+    add_glue_directories();
+
+    # Add new copies of the glue files
+    copy_glue_files();
+
+    # Add them in the repository, too
+    add_glue_files();
+
+    # Add new copies of the files that are specific to SCM
+    scm_add_glue();
+    # These new copies are set to enable the glue by default. Re-disable it.
+    disable_glue_triggers();
+
+    # Provide a warning message that we are about to commit
+    warn_commit("Upgrading glue\n"); 
+
+    # Commit the glue files
+    scm_commit_glue ( "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX@" . $install_configuration->{ bug_id } . "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX@" . "Updating to version @DEVEL_PRODUCT_VERSION@ of @DEVEL_PRODUCT_NAME@.\n
+@DEVEL_PRODUCT_DESCRIPTION_LONG@\n
+
+" );
+}
+
+
+
+#
+# Enables the integration glue. Re-enables integration from all triggers.
+# 
+#
+sub enable_glue_triggers {
+
+    if ( $install_configuration->{ scm_description }->name() eq "CVS" ) {
+	foreach my $file ( qw [ @DEVEL_CONFIG_CVSHOOK_COMMITINFO@ @DEVEL_CONFIG_CVSHOOK_LOGINFO@ @DEVEL_CONFIG_CVSHOOK_TAGINFO@ @DEVEL_CONFIG_CVSHOOK_VERIFYMSG@ ] ) {
+	    enable_glue_triggers_for_file( $file, $install_configuration->{ scm_description }->name() );
+	}
+    } elsif ( $install_configuration->{ scm_description}->name() eq "Subversion" ) {
+	foreach my $file ( qw [ @DEVEL_CONFIG_SVNHOOK_PRECOMMIT@ @DEVEL_CONFIG_SVNHOOK_POSTCOMMIT@ ] ) {
+	    enable_glue_triggers_for_file( $file, $install_configuration->{ scm_description }->name() );
+	}
+    } elsif ( $install_configuration->{ scm_description}->name() eq "Git" ) {
+	foreach my $file ( qw [ @DEVEL_CONFIG_GITHOOK_COMMITMSG@ @DEVEL_CONFIG_GITHOOK_POSTCOMMIT@ ] ) {
+	    enable_glue_triggers_for_file( $file, $install_configuration->{ scm_description }->name() );
+	}
+    }
+
+    # Provide a warning message that we are about to commit
+    warn_commit("Enabling glue\n"); 
+
+    # Recommit the configuration file
+    scm_commit_glue ( "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX@" . $install_configuration->{ bug_id } . "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX@" . "Enabling @DEVEL_PRODUCT_NAME@ after an upgrade to version @DEVEL_PRODUCT_VERSION@.\n" );
+
+}
+
+
+
+#
+# Enables the glue integration for a given trigger file
+#
+sub enable_glue_triggers_for_file {
+    my ( $file, $scm_name ) = ( @_ );
+    my $comment_token = '@DEVEL_CONFIG_COMMENT_TOKEN@';
+
+    if ( $scm_name eq "CVS" ) {
+	# CVSNT does not execute hooks as .bat files, but as regular
+	# shell scripts.
+	$comment_token = '@DEVEL_CONFIG_COMMENT_TOKEN@';
+    }
+    my $regex_match = '(' . $comment_token . '\s*)(.*@DEVEL_PRODUCT_NAME_LOWER@_activity\.pl)';
+
+    my $file_content = file_content( $file );
+    my $new_output = $file_content;
+    $new_output =~ s/$regex_match/$2/;
+
+    open TRIGGER_FILE, "> $file";
+    print TRIGGER_FILE $new_output;
+    close TRIGGER_FILE;
+}
+
+
+
+#
+# Adds the required glue files in the repository of the selected SCM
+# tool
+#
+sub scm_add_glue {
+
+    # Used only to duplicate the data structure used when describing
+    # an SCM system in the glue configuration file
+    my $scm_hash = {
+	binary_paths => $install_configuration->{ binary_paths },
+	label_directories => {},
+	main_trunk_directories => {},
+	consolidate_cvs_messages => 0,
+    };
+
+    if ( $install_configuration->{ scm_description }->name() eq "CVS" ) {
+	my $scm = @DEVEL_PRODUCT_NAME@::Glue::CVS->new( $scm_hash );
+	$scm->init();
+
+        # Now copy the files that are needed to actually activate the glue
+	foreach my $hook ( qw [ checkoutlist @DEVEL_CONFIG_CVSHOOK_COMMITINFO@ @DEVEL_CONFIG_CVSHOOK_LOGINFO@ @DEVEL_CONFIG_CVSHOOK_RCSINFO@ @DEVEL_CONFIG_CVSHOOK_TAGINFO@ @DEVEL_CONFIG_CVSHOOK_VERIFYMSG@ ] ) {
+	    copy ( $install_configuration->{ original_path } . "/glue/templates/scm_cvs/" . $scm->version_type() . "/$hook", "." );
+	}
+    } elsif ( $install_configuration->{ scm_description }->name() eq "Subversion" ) {
+	my $scm = @DEVEL_PRODUCT_NAME@::Glue::Subversion->new( $scm_hash );
+	$scm->init();
+
+	foreach my $hook ( qw [ @DEVEL_CONFIG_SVNHOOK_PRECOMMIT@ @DEVEL_CONFIG_SVNHOOK_POSTCOMMIT@ ] ) {
+	    # Remove an existing hook stanza, and add it again.
+
+	    # If the hook file does not exist at all, add it
+	    if ( ! -e "./$hook") {
+		copy ( $install_configuration->{ original_path } . "/glue/templates/scm_svn/" . $scm->version_type() . "/$hook", "." );
+	    } else {
+		# The hook file exists. Add the glue stanza at the
+		# end. First, remove any previous stanzas that may
+		# have been installed in a past release
+		my $hook_contents = file_content( $hook );
+		my $new_hook_contents = remove_stanza( $hook_contents, $install_configuration->{ scm_description }->name() );
+
+		# Load the new stanza from the template.
+		my $hook_template_contents = file_content ( $install_configuration->{ original_path } . "/glue/templates/scm_svn/" . $scm->version_type() ."/$hook" );
+		my $hook_template_stanza = extract_stanza( $hook_template_contents, $install_configuration->{ scm_description }->name() );
+
+		# Add the new stanza
+		$new_hook_contents .= $hook_template_stanza . "\n";
+
+		# Overwrite the old hook with it's new contents
+		open (HOOK_FILE, "> $hook");
+		print HOOK_FILE $new_hook_contents;
+		close (HOOK_FILE);
+
+	    }
+	    chmod 0755, "$hook";
+	    # The Subversion repository may be accessed by the
+	    # svnserve service, or Apache, which may be running as a
+	    # different user than the one installing the glue. We must
+	    # detect the existing permissions of the current
+	    # directory, and change the permissions of the file to
+	    # match it.
+	    reset_owner_and_group( $hook );
+	}
+    } elsif ( $install_configuration->{ scm_description }->name() eq "Git" ) {
+	my $scm = @DEVEL_PRODUCT_NAME@::Glue::Git->new( $scm_hash );
+	$scm->init();
+
+	foreach my $hook ( qw [ @DEVEL_CONFIG_GITHOOK_COMMITMSG@ @DEVEL_CONFIG_GITHOOK_POSTCOMMIT@ ] ) {
+	    # Remove an existing hook stanza, and add it again.
+
+	    # If the hook file does not exist at all, add it
+	    if ( ! -e "./$hook") {
+		copy ( $install_configuration->{ original_path } . "/glue/templates/scm_git/" . $scm->version_type() . "/$hook", "." );
+	    } else {
+		# The hook file exists. Add the glue stanza at the
+		# end. First, remove any previous stanzas that may
+		# have been installed in a past release
+		my $hook_contents = file_content( $hook );
+		my $new_hook_contents = remove_stanza( $hook_contents, $install_configuration->{ scm_description }->name() );
+
+		# Load the new stanza from the template.
+		my $hook_template_contents = file_content ( $install_configuration->{ original_path } . "/glue/templates/scm_git/" . $scm->version_type() ."/$hook" );
+		my $hook_template_stanza = extract_stanza( $hook_template_contents, $install_configuration->{ scm_description }->name() );
+
+		# Dynamically set the repository path into the
+		# hook. This is needed for the path to the hook
+		# libraries to be supplied.
+		my $new_hook_template_stanza = dynamically_add_repository_path_in_stanza ( $hook_template_stanza, $install_configuration->{ scm_description }->repository_path() );
+
+		# Add the new stanza
+		$new_hook_contents .= $new_hook_template_stanza . "\n";
+
+		# Overwrite the old hook with it's new contents
+		open (HOOK_FILE, "> $hook");
+		print HOOK_FILE $new_hook_contents;
+		close (HOOK_FILE);
+
+	    }
+	    chmod 0755, "$hook";
+	    # The Git repository may be accessed by other processes
+	    # which may be running as a different user than the one
+	    # installing the glue. We must detect the existing
+	    # permissions of the current directory, and change the
+	    # permissions of the file to match it.
+	    reset_owner_and_group( $hook );
+	}
+    }
+}
+
+
+
+sub remove_stanza {
+    my ( $hook_contents, $scm_name ) = ( @_ );
+    my $new_hook_contents = $hook_contents;
+    my $comment_token = '@DEVEL_CONFIG_COMMENT_TOKEN@';
+
+    if ($scm_name eq "CVS") {
+	# CVSNT does not execute hooks as .bat files, but as regular
+	# shell scripts.
+	$comment_token = '@DEVEL_CONFIG_COMMENT_TOKEN_UNIX@';
+    }
+
+    # Remove the old stanza. Escape the first character of
+    # the comment, in case it's a #. Should really be
+    # doing this with a Sed module
+    $new_hook_contents =~ s/$comment_token @DEVEL_PRODUCT_NAME@_STANZA_START.*@DEVEL_PRODUCT_NAME@_STANZA_STOP//s;
+
+    return $new_hook_contents;
+}
+
+
+
+
+sub extract_stanza {
+    my ( $hook_template_contents, $scm_name ) = ( @_ );
+    my $new_hook_template_stanza = $hook_template_contents;
+    my $pre;
+    my $post;
+    my $comment_token = '@DEVEL_CONFIG_COMMENT_TOKEN@';
+
+    if ($scm_name eq "CVS") {
+	# CVSNT does not execute hooks as .bat files, but as regular
+	# UNIX shell scripts.
+	$comment_token = '@DEVEL_CONFIG_COMMENT_TOKEN_UNIX@';
+    }
+
+    $new_hook_template_stanza =~ s/.*($comment_token @DEVEL_PRODUCT_NAME@_STANZA_START.*)/$1/s;
+    $new_hook_template_stanza =~ s/(.*@DEVEL_CONFIG_COMMENT_TOKEN@ @DEVEL_PRODUCT_NAME@_STANZA_STOP).*/$1/s;
+
+    return $new_hook_template_stanza;
+}
+
+
+
+sub dynamically_add_repository_path_in_stanza {
+    my ( $hook_template_contents, $repository_path ) = ( @_ );
+    my $new_hook_template_stanza = $hook_template_contents;
+
+    $new_hook_template_stanza =~ s/REPOS=\"@DEVEL_PRODUCT_NAME@_STANZA_REPOS\"/REPOS=\"$repository_path\"/s;
+
+    return $new_hook_template_stanza;
+}
+
+
+
+#
+# Commits the glue installation
+#
+sub scm_commit_glue {
+    my ( $log_message ) = ( @_ );
+
+    if ( $install_configuration->{ scm_description }->name() eq "CVS" ) {
+	system ( "@DEVEL_CONFIG_SCM_BINARY_CVS@ -d " . $install_configuration->{ scm_description }->repository_path() . " commit -m \"" . $log_message . "\"" );
+    } elsif ( $install_configuration->{ scm_description }->name() eq "Subversion" ) {
+	# As of Subversion 1.0.0, hooks cannot be installed
+	# remotely. Local access is required, thus there will be no
+	# commit of a checked-out version.
+    } elsif ( $install_configuration->{ scm_description }->name() eq "Git" ) {
+	# As of Git 1.4.2, hooks cannot be installed remotely. Local
+	# access is required, thus there will be no commit of a
+	# checked-out version.
+    }
+}
+
+
+
+#
+# Installs part 1 of the glue
+#
+sub install_glue_part1 {
+
+    # Add the required directories
+    add_glue_directories();
+
+    # Copy the common glue files
+    copy_glue_files();
+
+    # Add them in the repository, too
+    add_glue_files();
+
+
+    # Copy the glue configuration file
+    # Set the location of the daemon, the product name, and the SCM
+    # tool
+    my $file_content = file_content( $install_configuration->{ original_path } . "/glue/" . $GLUE_CONFIGURATION_FILE . ".template" );
+    my $new_output = $file_content;
+    my $regex_replace = $install_configuration->{ daemon_ip };
+
+    $new_output =~ s/replace_with_location_ip_address/$regex_replace/;
+    $regex_replace = $install_configuration->{ scm_description }->product_name();
+    $new_output =~ s/replace_with_product_name/$regex_replace/;
+    $regex_replace = $install_configuration->{ scm_description }->name();
+    $new_output =~ s/replace_with_scm_tool_name/$regex_replace/;
+    $regex_replace = $install_configuration->{ binary_paths };
+    $new_output =~ s/replace_with_paths_to_scm_binaries/$regex_replace/;
+
+    open NEW_CONFIGURATION_FILE, "> $GLUE_CONFIGURATION_FILE" or die "Could not open file '$GLUE_CONFIGURATION_FILE' for writing: $!";
+    print NEW_CONFIGURATION_FILE $new_output;
+    close NEW_CONFIGURATION_FILE;
+
+    scm_add ( $GLUE_CONFIGURATION_FILE );
+
+    # Now commit the installation
+    # Provide a warning message that we are about to commit
+    warn_commit("Installing part 1\n"); 
+
+    # Commit the glue files
+    scm_commit_glue ( "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX@" . $install_configuration->{ bug_id } . "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX@" . "Installed a new instance of version @DEVEL_PRODUCT_VERSION@ of @DEVEL_PRODUCT_NAME@.\n
+@DEVEL_PRODUCT_DESCRIPTION_LONG@\n
+This is part 1 of the installation." );
+
+    # Since we are just installing the glue (so it's not in effect
+    # right now), our comment has not been entered in the bugtracking
+    # system. Add a comment manually
+    add_comment("Installed a new instance of version @DEVEL_PRODUCT_VERSION@ of @DEVEL_PRODUCT_NAME@.\n
+@DEVEL_PRODUCT_DESCRIPTION_LONG@\n
+This is part 1 of the installation." );
+}
+
+
+#
+# Installs part 2 of the glue
+#
+sub install_glue_part2 {
+
+    # Add the required SCM tool specific glue files
+    scm_add_glue();
+
+    # Provide a warning message that we are about to commit
+    warn_commit("Installing part 2\n"); 
+
+    # Commit the glue files
+    scm_commit_glue ( "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX@" . $install_configuration->{ bug_id } . "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX@" . "Installed a new instance of version @DEVEL_PRODUCT_VERSION@ of @DEVEL_PRODUCT_NAME@\n
+@DEVEL_PRODUCT_DESCRIPTION_LONG@\n
+This is part 2 of the installation." );
+
+}
+
+
+#
+# Creates and adds the required glue directories if they do not exist
+# already
+#
+sub add_glue_directories {
+    # Make the required directories
+    add_a_glue_directory( "etc" );
+    add_a_glue_directory( "etc/@DEVEL_PRODUCT_NAME_LOWER@" );
+    scm_add ( "etc" );
+    scm_add ( "etc/@DEVEL_PRODUCT_NAME_LOWER@" );
+
+    add_a_glue_directory( "lib" );
+    add_a_glue_directory( "lib/@DEVEL_PRODUCT_NAME_LOWER@" );
+    add_a_glue_directory( "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@" );
+    add_a_glue_directory( "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@/Glue" );
+    scm_add ( "lib" );
+    scm_add ( "lib/@DEVEL_PRODUCT_NAME_LOWER@" );
+    scm_add ( "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@" );
+    scm_add ( "lib/@DEVEL_PRODUCT_NAME_LOWER@/@DEVEL_PRODUCT_NAME@/Glue" );
+
+    add_a_glue_directory( "bin" );
+    scm_add ( "bin" );
+}
+
+
+
+#
+# Creates a directory, and resets its owner and group to match the
+# current directory.
+#
+sub add_a_glue_directory
+{
+    my $directory = shift;
+
+    if ( ! -e $directory ) {
+	mkdir $directory or die "Unable to create directory '$directory': $!";
+    }
+    reset_owner_and_group ( $directory );
+}
+
+
+
+#
+# Copies the glue files in the SCM repository.
+#
+sub copy_glue_files {
+    foreach my $file ( keys %{ $install_configuration->{ glue_files } } ) {
+	copy( $install_configuration->{ original_path } . "/" . $file,
+	      $install_configuration->{ glue_files }->{ $file }->{ to } );
+    }
+}
+
+
+
+#
+# Adds the glue files in the SCM repository
+#
+sub add_glue_files {
+    foreach my $file ( keys %{ $install_configuration->{ glue_files } } ) {
+	my $file_to_add = $install_configuration->{ glue_files }->{ $file }->{ to } . "/" . basename( $install_configuration->{ original_path } . $file );
+	
+	scm_add ( $file_to_add );
+    }
+}
+
+
+#
+# Adds a file or directory in the repository of the selected SCM tool
+#
+sub scm_add
+{
+    my ( $file_to_add ) = ( @_ );
+
+    if ( $install_configuration->{ scm_description }->name() eq "CVS" ) {
+	my $add_command = "@DEVEL_CONFIG_SCM_BINARY_CVS@ add $file_to_add";
+	system ( $add_command );
+    } elsif ( $install_configuration->{ scm_description }->name() eq "Subversion" ) {
+	# As of Subversion 1.0.0, hooks cannot be installed
+	# remotely. Local access is required, thus there will be no
+	# commit of a checked-out version.
+
+	# The Subversion repository may be accessed by the svnserve
+	# service, or Apache, which may be running as a different user
+	# than the one installing the glue. We must detect the
+	# existing permissions of the current directory, and change
+	# the permissions of the file to match it.
+	reset_owner_and_group( $file_to_add );
+    } elsif ( $install_configuration->{ scm_description }->name() eq "Git" ) {
+	# As of Git 1.4.2, hooks cannot be installed remotely. Local
+	# access is required, thus there will be no commit of a
+	# checked-out version.
+
+	# The Git repository may be accessed by other processes which
+	# may be running as a different user than the one installing
+	# the glue. We must detect the existing permissions of the
+	# current directory, and change the permissions of the file to
+	# match it.
+	reset_owner_and_group( $file_to_add );
+    }
+}
+
+
+#
+# Warns the user that we are about to commit
+#
+sub warn_commit
+{
+    my $comment = shift;
+
+    print "Glue processing has been prepared in " . '@DEVEL_CONFIG_TEMP_DIR@/@DEVEL_PRODUCT_NAME@' . ".$$" . "\n";
+    print $comment;
+    print "Check everything there before I commit. Hit Ctrl-C to exit or press Enter to continue.\n";
+    my $response = readline(*STDIN);
+}
+
+
+
+#
+# Resets the owner and group of all files to match the owner and group
+# of the current directory
+#
+sub reset_owner_and_group
+{
+    my $filename_to_reset = shift;
+    my $current_directory = ".";
+    my ($dev, $ino, $mode, $nlink, $uid, $gid, $rdev, $size, $atime, $mtime, $ctime, $blksize, $blocks) = stat $current_directory;
+    my $current_dir = getcwd();
+
+    print "Will chown $uid $gid " . $current_dir . "/$filename_to_reset\n";
+    my $number_of_files_changed = chown( $uid, $gid, $filename_to_reset );
+    if ($number_of_files_changed != 1) {
+	print "Unable to change the owner and group of file '" . $current_dir . "/$filename_to_reset'. $number_of_files_changed files were changed.\n";
+	exit -3;
+    }
+}
+
+
+
+#
+# Adds a comment in the bug-tracker
+#
+sub add_comment
+{
+
+
+}
+
+
+
+
+1;

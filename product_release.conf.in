@@ -1,0 +1,204 @@
+# ------------------------------------------------------------------------------
+# This is a template, sample configuration file for use with the
+# product_release.pl tool. The configuration variables used in it are
+# defined in a Perl-like definition of a hash table
+# ------------------------------------------------------------------------------
+
+
+# ------------------------------------------------------------------------------
+# Product identity configuration variables
+# ------------------------------------------------------------------------------
+
+# Name of product to be packaged
+DEVEL_PRODUCT_RELEASE_CONFIG_NAME => "@DEVEL_PRODUCT_NAME@",
+
+# Version of product to be packaged
+DEVEL_PRODUCT_RELEASE_CONFIG_VERSION => "@DEVEL_PRODUCT_VERSION@",
+
+# Name of the release tag used
+DEVEL_PRODUCT_RELEASE_CONFIG_RELEASE_NAME => "@DEVEL_PRODUCT_RELEASE_TAG@",
+
+
+
+# ------------------------------------------------------------------------------
+# Product management configuration variables
+# ------------------------------------------------------------------------------
+
+# The name of the source code version control tool used for
+# management of this product. Valid values are:
+# - "CVS"
+# - "none"
+DEVEL_PRODUCT_RELEASE_CONFIG_SOURCE_CODE_VERSION_CONTROL_TOOL => "CVS",
+
+# The name of the copyright license used for this product. Valid
+# values are:
+# - "GPL"
+# - "<custom_name>"
+# - "none"
+DEVEL_PRODUCT_RELEASE_CONFIG_COPYRIGHT_LICENSE => "GPL",
+
+# The name of the file containing a copy of the copyright license used
+# for this product.
+DEVEL_PRODUCT_RELEASE_CONFIG_COPYRIGHT_LICENSE_FILENAME => "doc/COPYING",
+
+# The names of the files that should be excluded from any checks to
+# see if the copyright license used for this product is included in
+# them. This list of files should usually include binary files, or
+# even text files that cannot possibly contain a text version of the
+# licence (e.g. XFig files, PDF, plaintext files). Valid values are
+# Perl-like regular expressions, and should follow the format:
+#
+#     => (
+# 	"\.pdf"
+# 	),
+
+DEVEL_PRODUCT_RELEASE_CONFIG_COPYRIGHT_LICENSE_FILES_LIST_EXCLUDED
+    => [
+	"\.pdf"
+	],
+
+
+# ------------------------------------------------------------------------------
+# Release behavior configuration variables
+# ------------------------------------------------------------------------------
+
+# Type of release file that will be created. Valid values are:
+# - "tar.gz"
+# - "tar.bz2"
+DEVEL_PRODUCT_RELEASE_CONFIG_RELEASE_FILETYPE => "tar.gz",
+
+# Should a ChangeLog be generated from the source code version control
+# tool, if one is used for management of this product ? Valid values are:
+# - 0
+# - 1
+DEVEL_PRODUCT_RELEASE_CONFIG_RELEASE_CREATE_CHANGELOG => 1,
+
+# Should all files that will be packaged be checked if they are
+# properly tagged within the source code version control tool, if one
+# is used for management of this product ? Valid values are:
+# - 0
+# - 1
+DEVEL_PRODUCT_RELEASE_CONFIG_RELEASE_CHECK_TAGS => 0,
+
+# Should all files that will be packaged be checked if they contain
+# the designated copyright license banner set for this product ?
+# Valid values are:
+# - 0
+# - 1
+DEVEL_PRODUCT_RELEASE_CONFIG_RELEASE_CHECK_LICENSE => 0,
+
+# Should custom checks be performed during the attempt to release this
+# product ? Valid values are:
+# - 0
+# - 1
+DEVEL_PRODUCT_RELEASE_CONFIG_RELEASE_CHECK_CUSTOM => 0,
+
+# List of executable files that will be invoked as additional checks
+# during the attempt to release this product. A return value of 0
+# indicates that the check succeeded. Otherwise it failed. Valid
+# values follow the format:
+#  =>  {
+#      "check_name_1" => "file_to_be_executed_for_check_1_with_its_arguments",
+#      "check_name_2" => "file_to_be_executed_for_check_2_with_its_arguments",
+#      ...
+#      },
+DEVEL_PRODUCT_RELEASE_CONFIG_RELEASE_CHECK_CUSTOM_LIST
+   =>  {
+#       "ls command works" => "ls",
+#       "uname works" => "uname -a",
+       },
+
+
+
+# ------------------------------------------------------------------------------
+# Release contents configuration variables
+# ------------------------------------------------------------------------------
+
+
+# List of files that will be included in the release. This is a list
+# of regular expressions describing the files to be included. Valid
+# values are Perl-like regular expressions, and should follow the
+# format:
+#
+#     => [
+# 	"COPYING",
+# 	"README",
+# 	"src/",
+# 	"doc/manual/"
+# 	],
+DEVEL_PRODUCT_RELEASE_CONFIG_RELEASE_FILES_LIST_INCLUDED
+    => [
+	'configure$',
+	"configure.in",
+	'ChangeLog.*$',
+	"regen.sh",
+	"release.sh",
+	"release_main.sh.in",
+	"Makefile.in",
+	"doc/AUTHORS",
+	"doc/COPYING",
+	"doc/DEVELOPING",
+	"doc/TODO",
+	"doc/manpages",
+	"doc/manual",
+	"doc/paper_introduce",
+	"src/daemon",
+	"src/glue",
+	"src/other",
+	"src/lib/product",
+	"src/scripts",
+	"src/tests",
+	"src/WebReports",
+	"packaging/debian",
+	"packaging/distribute",
+	"packaging/redhat/.*in",
+	"packaging/redhat/rpmmacros_orig",
+	"packaging/windows",
+	"product_release.conf.in"
+	],
+
+# List of files that will be excluded in the release. This is a list
+# of regular expressions describing the files to be excluded. The list
+# of excluded files supercedes the list of included files. Valid
+# values are Perl-like regular expressions, and should follow the
+# format:
+#
+#     => [
+# 	"CVS",
+#	"~",
+#	".#"
+# 	],
+DEVEL_PRODUCT_RELEASE_CONFIG_RELEASE_FILES_LIST_EXCLUDED
+    => [
+	'doc/manpages/Makefile$',
+	'doc/manual/Makefile$',
+	'doc/paper_introduce/Makefile$',
+	'packaging/debian/control$',
+	'packaging/debian/rules$',
+	'src/tests/Makefile$',
+	'CVS/Entries$',
+	'CVS/Repository$',
+	'CVS/Root$',
+	'CVS/Tag$',
+	'CVS/Template$',
+	'~',
+	'.#'
+	],
+
+
+
+# List of files that will be excluded from tag checks in the
+# release. This is a list of regular expressions describing the files
+# to be excluded. The list of excluded files supercedes the list of
+# included files. Valid values are Perl-like regular expressions, and
+# should follow the format:
+#
+#     => [
+# 	"doc/INSTALL",
+#	"Makefile",
+# 	],
+DEVEL_PRODUCT_RELEASE_CONFIG_RELEASE_TAG_FILES_LIST_EXCLUDED
+    => [
+	'^configure$',
+	'ChangeLog'
+	],

@@ -1,0 +1,119 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Tools::SCM_Description;
+
+use strict;
+use Data::Dumper;
+use @DEVEL_PRODUCT_NAME@::Common;
+use @DEVEL_PRODUCT_NAME@::Error;
+
+
+
+#
+# Constructor
+#
+sub new {
+    my $type = shift;
+    my $self = {};
+
+    bless $self, $type;
+
+    return $self;
+}
+
+
+# Must be called after repository_path()
+sub name {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ name } = $data;
+
+        if ( ! defined ( $self->repository_path() ) ) {
+	    log_fatal_error( $TOOLS_ERROR_SCM_DESCRIPTION_REPOSITORY_PATH_NOT_SET, "SCM_Description->name() was called before calling SCM_Description->repository_path(). This is a bug.\n");
+        }
+
+	if ( $self->name() eq "CVS" ) {
+	    $self->template_dir( "cvs" );
+	    $self->repository_dir( "CVSROOT" );
+	} elsif ( $self->name() eq "Subversion" ) {
+	    $self->template_dir( "svn" );
+	    $self->repository_dir( $self->repository_path() . "/hooks" );
+	} elsif ( $self->name() eq "Git" ) {
+	    $self->template_dir( "git" );
+	    $self->repository_dir( $self->repository_path() . "/.git/hooks" );
+	} else {
+	    log_fatal_error ( $TOOLS_ERROR_INVALID_SCM_NAME_IN_DESCRIPTION, "The '" . $self->name() . "' SCM system is not supported by the SCM_Description. This is an internal bug.\n");
+	}
+    } else {
+	return $self->{ name };
+    }
+}
+
+
+sub repository_path {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ repository_path } = $data;
+    } else {
+	return $self->{ repository_path };
+    }
+}
+
+
+sub repository_dir {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ repository_dir } = $data;
+    } else {
+	return $self->{ repository_dir };
+    }
+}
+
+
+
+sub template_dir {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ template_dir } = $data;
+    } else {
+	return $self->{ template_dir };
+    }
+}
+
+
+
+sub product_name {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ product_name } = $data;
+    } else {
+	return $self->{ product_name };
+    }
+}
+
+
+
+1;

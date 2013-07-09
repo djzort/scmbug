@@ -1,0 +1,1283 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Daemon::Process;
+
+use @DEVEL_PRODUCT_NAME@::Error;
+use @DEVEL_PRODUCT_NAME@::VDD;
+use @DEVEL_PRODUCT_NAME@::Daemon::Request;
+use @DEVEL_PRODUCT_NAME@::Daemon::Integration;
+use @DEVEL_PRODUCT_NAME@::Common;
+use strict;
+use IO::Socket;
+use FileHandle;
+use Data::Dumper;
+use File::Spec qw( devnull );
+use POSIX qw(setsid);
+use POSIX ":sys_wait_h"; # for WNOHANG
+
+
+
+my $DAEMON_BANNER_START = "@DEVEL_PRODUCT_NAME_CAPS@-SERVER $PRODUCT_VERSION $PRODUCT_PROTOCOL_NUMBER";
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my ( $daemon_configuration, $bugtracker ) = ( @_ );
+    my $self = {};
+    my $object = bless $self, $type;
+
+    # Save the deamon configuration
+    $self->daemon_configuration ( $daemon_configuration );
+
+    # Save the bugtracker
+    $self->bugtracker( $bugtracker );
+
+    return $object;
+}
+
+
+sub daemon_configuration {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ daemon_configuration } = $data;
+    } else {
+	return $self->{ daemon_configuration };
+    }
+}
+
+
+
+sub bugtracker {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ bugtracker } = $data;
+    } else {
+	return $self->{ bugtracker };
+    }
+}
+
+
+#
+# Processes an incoming connection from an integration glue
+#
+sub process_connection() {
+    my $self = shift;
+    my ( $socket_in, $socket_out, $request ) = ( @_ );
+    my $ret_val;
+    my $ret_message;
+
+    print $socket_out "$DAEMON_BANNER_START\n";
+
+    # This request will not be ignored until we are told otherwise
+    $request->{ silently_ignore } = 0;
+
+    my $line = "";
+
+    # Retrieve the requested activity
+    $line = <$socket_in>;
+    $line =~ s/\n$//g;
+    $request->{ name } = $line;
+
+    # Retrieve the username submitting the request
+    $line = <$socket_in>;
+    $line =~ s/\n$//g;
+    $request->{ username } = $line;
+
+    # Retrieve the product name
+    $line = <$socket_in>;
+    $line =~ s/\n$//g;
+    $request->{ product_name } = $line;
+
+    if ( $request->{ name } eq $ACTIVITY_OK ) {
+        my $msg = "Processing an '$ACTIVITY_OK'.\n";
+        log_daemon_warn( $request, "$msg" );
+    } elsif ( $request->{ name } eq $ACTIVITY_COMMIT ) {
+	$request->{ name } = $ACTIVITY_COMMIT;
+	$self->process_connection_policies( $socket_in, $request );
+	$self->process_connection_common( $socket_in, $request );
+	$self->process_connection_commit( $socket_in, $request );
+    } elsif ( $request->{ name } eq $ACTIVITY_VERIFY ) {
+	$request->{ name } = $ACTIVITY_VERIFY;
+	$self->process_connection_policies( $socket_in, $request );
+	$self->process_connection_common( $socket_in, $request );
+	$self->process_connection_verify( $socket_in, $request );
+    } elsif ( $request->{ name } eq $ACTIVITY_TAG ) {
+	$request->{ name } = $ACTIVITY_TAG;
+	$self->process_connection_policies( $socket_in, $request );
+	$self->process_connection_common( $socket_in, $request );
+	$self->process_connection_tag( $socket_in, $request );
+    } elsif ( $request->{ name } eq $ACTIVITY_GET_VDD ) {
+	$request->{ name } = $ACTIVITY_GET_VDD;
+	$self->process_connection_get_vdd( $socket_in, $request );
+    } elsif ( $request->{ name } eq $ACTIVITY_GET_BUGS ) {
+	$request->{ name } = $ACTIVITY_GET_BUGS;
+	$self->process_connection_get_bugs( $socket_in, $request );
+    } else {
+	$self->reply_to_request( $socket_out, 1, "Unsupported operation '" . $request->{ name } . "'\n" );
+    }
+
+    
+    # Retrieve the log message
+    my $original_log_message = "";
+    while ( $line = <$socket_in> ) {
+	# Remove the newline character
+	$line =~ s/\n$//g;
+	# Stop when an end token is found.
+	last if $line eq $PRODUCT_END_TOKEN;
+	$original_log_message .= $line . "\n";
+    }
+    $request->{ original_log_message } = $original_log_message;
+
+    # First, verify that the request was supplied in a valid format
+    ($ret_val, $ret_message) = $self->check_request( $request );
+
+    if ($ret_val == 0) {
+	# Since the format was valid, process this activity
+	($ret_val, $ret_message) = $self->process_activity( $request );
+    }
+    $self->reply_to_request( $socket_out, $ret_val, $ret_message );
+}
+
+
+
+#
+# Common processing of a connection after the activity name has been
+# supplied
+#
+sub process_connection_common {
+    my $self = shift;
+    my ( $socket, $request ) = ( @_ );
+    my $line;
+
+    # Retrieve the branch_name
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ branch_name } = $line;
+
+    # Retrieve the list of resolution entries
+    my $resolution_id;
+    my $resolutions_state_counter = 0;
+    while ( $line = <$socket> ) {
+	# Remove the newline character
+	$line =~ s/\n$//g;
+	# Break when the end of files token is found
+	last if $line eq $PRODUCT_RESOLUTIONS_END_TOKEN;
+
+	if ( $resolutions_state_counter == 0) {
+	    $resolution_id = $line;
+	    $resolutions_state_counter = 1;
+	} elsif ( $resolutions_state_counter == 1) {
+	    $request->{ resolution_ids } ->{ $resolution_id }->{ status } = $line;
+	    $resolutions_state_counter = 2;
+	} elsif ( $resolutions_state_counter == 2) {
+	    $request->{ resolution_ids } ->{ $resolution_id }->{ resolution } = $line;
+	    $resolutions_state_counter = 3;
+	} elsif ( $resolutions_state_counter == 3) {
+	    $request->{ resolution_ids } ->{ $resolution_id }->{ resolution_data } = $line;
+	    $resolutions_state_counter = 0;
+	}
+    }
+}
+
+
+
+#
+# Processes a connection after the activity name has been supplied
+#
+sub process_connection_after_activity {
+    my $self = shift;
+    my ( $socket, $request ) = ( @_ );
+    my $line;
+
+    # Retrieve the branch_name
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ branch_name } = $line;
+}
+
+
+
+#
+# Processes a connection that provides a verify activity
+#
+sub process_connection_verify {
+    my $self = shift;
+    my ( @arguments ) = ( @_ );
+
+    $self->process_connection_common_verify_commit( @arguments );
+}
+
+
+
+#
+# Processes a connection that provides a commit activity
+#
+sub process_connection_commit {
+    my $self = shift;
+    my ( $socket_in, $request ) = ( @_ );
+
+    # Retrieve the repository
+    my $line = <$socket_in>;
+    $line =~ s/\n$//g;
+    $request->{ repository } = $line;
+
+    $self->process_connection_common_verify_commit( $socket_in, $request );
+}
+
+
+
+#
+# Processes a connection that provides a tag activity
+#
+sub process_connection_tag {
+    my $self = shift;
+    my ( $socket, $request ) = ( @_ );
+    my $line;
+
+    # Retrieve the repository
+    my $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ repository } = $line;
+
+    # Retrieve the tagging operation type
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ type }->{ tag }->{ operation } = $line;
+
+    # Retrieve the tag name
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ type }->{ tag }->{ name } = $line;
+
+    # Retrieve the comma separated list of ids against which this
+    # request should be served
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    my ( @ids ) = split( ",", $line);
+    foreach my $id ( @ids ) {
+	push @ { $request->{ ids } }, $id ;
+    }
+    
+    my $files_state_counter = 0;
+    my $files_filename;
+    my $files_revision;
+    # Retrieve the list of filename, file revision pairs
+    while ( $line = <$socket> ) {
+	# Remove the newline character
+	$line =~ s/\n$//g;
+	# Break when the end of files token is found
+	last if $line eq $PRODUCT_AFFECTED_FILES_END_TOKEN;
+
+	if ( $files_state_counter == 0) {
+	    $files_filename = $line;
+	    $files_state_counter = 1;
+	} elsif ( $files_state_counter == 1) {
+	    $files_revision = $line;
+	    $request->{ files }->{ $files_filename } = $files_revision;
+	    $files_state_counter = 0;
+	}
+    }
+
+}
+
+
+
+#
+# Processes a connection that requests a vdd
+#
+sub process_connection_get_vdd {
+    my $self = shift;
+    my ( $socket, $request ) = ( @_ );
+    my $line;
+
+    # Retrieve the from_version
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ type }->{ get_vdd }->{ from_version } = $line;
+
+    # Retrieve the to_version
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ type }->{ get_vdd }->{ to_version } = $line;
+
+    # Retrieve the from_label_date
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ type }->{ get_vdd }->{ from_label_date } = $line;
+
+    # Retrieve the to_label_date
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ type }->{ get_vdd }->{ to_label_date } = $line;
+
+    # Retrieve the end of vdd query token
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    if ( $line ne $PRODUCT_VDD_QUERY_END_TOKEN ) {
+	my $msg = "Failed to provide VDD Query end token\n";
+        log_daemon_warn( $request, $msg );
+	$self->reply_to_request( $socket, 1, $msg );
+    }
+}
+
+
+
+#
+# Processes a connection that requests a get bugs query 
+#
+sub process_connection_get_bugs {
+    my $self = shift;
+    my ( $socket, $request ) = ( @_ );
+    my $line;
+
+    # Retrieve the bugs
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    my ( @ids ) = split( ",", $line);
+    foreach my $id ( @ids ) {
+	push @ { $request->{ ids } }, $id ;
+    }
+    
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ must_retrieve }->{ summary } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ must_retrieve }->{ status } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ must_retrieve }->{ owners } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ must_retrieve }->{ severity } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ must_retrieve }->{ priority } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ must_retrieve }->{ resolution } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ must_retrieve }->{ comments_data } = $line;
+
+    # Retrieve the end of get bugs query token
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    if ( $line ne $PRODUCT_GET_BUGS_QUERY_END_TOKEN ) {
+	my $msg = "Failed to provide get bugs query end token\n";
+        log_daemon_warn( $request, $msg );
+	$self->reply_to_request( $socket, 1, $msg );
+    }
+}
+
+
+
+#
+# Performs some common connection processing used in most (but not
+# all) activities
+#
+sub process_connection_common_verify_commit {
+    my $self = shift;
+    my ( $socket, $request ) = ( @_ );
+    my $line;
+
+    # Retrieve the comma separated list of ids against which this
+    # request should be served
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    my ( @ids ) = split( ",", $line);
+    foreach my $id ( @ids ) {
+	push @ { $request->{ ids } }, $id ;
+    }
+
+    # Retrieve the list of old version, new version, filename entries
+    my $files_state_counter = 0;
+    my $files_old_version = "";
+    my $files_new_version = "";
+    my $files_filename = "";
+    while ( $line = <$socket> ) {
+	# Remove the newline character
+	$line =~ s/\n$//g;
+	# Break when the end of files token is found
+	last if $line eq $PRODUCT_AFFECTED_FILES_END_TOKEN;
+
+	if ($files_state_counter == 0) {
+	    $files_old_version = $line;
+	    $files_state_counter = 1;
+	} elsif ($files_state_counter == 1) {
+	    $files_new_version = $line;
+	    $files_state_counter = 2;
+	} elsif ($files_state_counter == 2) {
+	    $files_filename = $line;
+	    $request->{ files }->{ $files_filename }->{ old_version } = $files_old_version;
+	    $request->{ files }->{ $files_filename }->{ new_version } = $files_new_version;
+	    $files_state_counter = 0;
+	}
+    }
+}
+
+
+
+sub process_connection_policies {
+    my $self = shift;
+    my ( $socket, $request ) = ( @_ );
+    my $line;
+
+    # Retrieve the presence_of_bug_ids policy
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ presence_of_bug_ids }->{ value } = $line;
+
+    # Retrieve the valid_bug_owner policy
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ valid_bug_owner }->{ enabled } = $line;
+
+    # Retrieve the open_bug_state policy
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ open_bug_state }->{ enabled } = $line;
+
+    # Retrieve the valid_product_name policy
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ valid_product_name }->{ enabled } = $line;
+
+    # Retrieve the resolution_template policy
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ resolution_template }->{ enabled } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ resolution_template }->{ resolution_status_case_sensitive_verification } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ resolution_template }->{ resolution_valid_product_name } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ resolution_template }->{ resolution_valid_bug_owner } = $line;
+
+    # Retrieve the mail_notification policy
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_on_success } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_on_failure } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_on_label } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_settings }->{ To } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_settings }->{ From } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_settings }->{ Smtp } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_also_appears_from_scm_user } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_scm_user } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_bug_owner } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_bug_reporter } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_bug_monitors } = $line;
+    $line = <$socket>;
+    $line =~ s/\n$//g;
+    $request->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_product_owners } = $line;
+}
+
+
+
+#
+# Performs various checks on the request to ensure it can be accepted
+#
+sub check_request {
+    my $self = shift;
+    my ( $request ) = ( @_ );
+    my $ret_val = 0;
+    my $ret_message = "";
+    my $should_have_translated = 0;
+
+    # Do not do any checking of the request if this is an activity
+    # that checks if we are alive and well.
+    if ( $request->{ name } eq $ACTIVITY_OK ) {
+        return ( 0, "" );
+    }
+
+
+
+    # Make sure a username was supplied
+    if ( $request->{ username } eq "" ) {
+	my $msg = "No username supplied.\n";
+	$ret_val = 1;
+	$ret_message .= $msg;
+        log_daemon_warn( $request, $msg );
+    }
+
+
+
+    # Make sure a product name was supplied
+    if ( $request->{ product_name } eq "" &&
+	 $request->{ policies }->{ valid_product_name }->{ enabled } ) {
+	my $msg = "No product name supplied.\n";
+	$ret_val = 1;
+	$ret_message .= $msg;
+        log_daemon_warn( $request, $msg );
+    }
+
+
+
+    #
+    # Translate SCM usernames if translation was enabled
+    #
+    if ( $self->daemon_configuration()->{ userlist }->{ mappings}->{ enabled } == 1 ) {
+
+	# Translate the username to the bugtracking system's login name,
+	# if translation based on mapping_ldap is enabled.
+	if ( $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_ldap }->{ enabled } ) {
+	    $should_have_translated = 1;
+	    
+	    my $LDAP_server = $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_server };
+	    my $LDAP_port = $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_port };
+	    my $LDAP_binddn = $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_binddn };
+	    my $LDAP_binddn_password = $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_binddn_password };
+	    my $LDAP_basedn = $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_basedn };
+	    my $LDAP_scm_username_attribute = $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_scm_username_attribute };
+	    my $LDAP_bugtracking_username_attribute = $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_bugtracking_username_attribute };
+	    my $LDAP_filter = $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_filter };
+	    
+	    eval "use Net::LDAP";
+	    
+	    # Connect to the LDAP server
+	    my $LDAP_conn = Net::LDAP->new( $LDAP_server, port => $LDAP_port, version => 3);
+	    
+	    # If connecting failed, abort
+	    if( ! $LDAP_conn ) {
+		my $msg = "Connection to LDAP server '$LDAP_server' at port '$LDAP_port' failed.\n";
+		$ret_val = 1;
+		$ret_message .= $msg;
+                log_daemon_warn( $request, $msg );
+		goto mapping_ldap_exit;
+	    }
+	    
+	    # If the binddn is empty, bind anonymously
+	    my $LDAP_response;
+	    if ( $LDAP_binddn eq '' ) {
+		$LDAP_response = $LDAP_conn->bind();
+	    } else {
+		$LDAP_response = $LDAP_conn->bind($LDAP_binddn, password => $LDAP_binddn_password);
+	    }
+	    
+	    # If binding failed, abort
+	    if( $LDAP_response->code ) {
+		my $msg = "Binding to the LDAP server using the binddn '$LDAP_binddn' failed.\n";
+		$ret_val = 1;
+		$ret_message .= $msg;
+                log_daemon_warn( $request, $msg );
+		goto mapping_ldap_exit;
+	    }
+	    
+	    # Look up the user.
+	    $LDAP_response = $LDAP_conn->search( base   => $LDAP_basedn,
+						 scope  => "sub",
+						 filter => '(&(' . $LDAP_scm_username_attribute . "=" . $request->{ username } . ")" . $LDAP_filter . ')',
+						 attrs  => ['dn'],
+						 );
+	    
+	    # If looking up the user failed , abort
+	    if ( ! $LDAP_response->count ) {
+		my $msg = "Looking up the SCM username in LDAP using the ldap_scm_username_attribute '$LDAP_scm_username_attribute' failed. " . $LDAP_response->error . "\n";
+		$ret_val = 1;
+		$ret_message .= $msg;
+                log_daemon_warn( $request, $msg );
+		goto mapping_ldap_exit;
+	    }
+	    
+	    # Repeat the search, not requesting only the "dn" attribute,
+	    # so that we can get the mail attribute for this user.
+	    $LDAP_response = $LDAP_conn->search( base   => $LDAP_basedn,
+						 scope  => "sub",
+						 filter => '(&(' . $LDAP_scm_username_attribute . "=" . $request->{ username } . ")" . $LDAP_filter . ')'	
+						 );
+	    # Retrieve the user entry.
+	    my $LDAP_entry = $LDAP_response->shift_entry;
+	    
+	    # If the ldap_bugtracking_username_attribute does not exist,
+	    # abort
+	    if( !$LDAP_entry ||
+		!$LDAP_entry->exists( $LDAP_bugtracking_username_attribute ) ) {
+		my $msg = "Retrieving the ldap_bugtracking_username_attribute '$LDAP_bugtracking_username_attribute' failed.\n";
+		$ret_val = 1;
+		$ret_message .= $msg;
+                log_daemon_warn( $request, $msg );
+		goto mapping_ldap_exit;
+	    }
+	    
+	    # Perform the translation.
+	    $request->{ translated_username } = $LDAP_entry->get_value( $LDAP_bugtracking_username_attribute );
+	}
+      mapping_ldap_exit:
+	
+	# Translate the username to the bugtracking system's login name,
+	# if translation based on mapping_regexes is enabled.
+	if ( $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_regexes }->{ enabled } ) {
+	    $should_have_translated = 1;
+	    foreach my $regex_match ( keys %{ $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_regexes }->{ values } } ) {
+		my $value = $request->{ username };
+		my $regex_map = $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_regexes }->{ values }->{ $regex_match };
+		
+		if ( $value =~ m/$regex_match/ ) {
+		    my $mapping_command = '$value =~ s/' . $regex_match . '/' . $regex_map . '/';
+		    # Apply the mapping
+		    eval $mapping_command;
+		    $request->{ translated_username } = $value;
+                    $ret_val = 0;
+		}
+	    }
+	}
+	
+	# Translate the username to the bugtracking system's login
+	# name, if translation based on mapping_values is enabled.
+	if ( $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_values }->{ enabled } ) {
+	    $should_have_translated = 1;	
+	    
+	    # Apply the mapping, only if one exists. This overrides a
+	    # possible mapping that might have already occured based on
+	    # mapping_regexes
+	    if ( defined ( $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_values }->{ values }->{ $request->{ username } } ) ) {
+		$request->{ translated_username } = $self->daemon_configuration()->{ userlist }->{ mappings }->{ mapping_values }->{ values }->{ $request->{ username } };
+		$ret_val = 0;
+	    }
+	}
+	
+	# Username translation is enabled, but one did not occur
+	if ( $should_have_translated == 1 ) {
+	    
+	    if ( ! defined ( $request->{ translated_username } ) ) {
+		my $msg = "Username '" . $request->{ username } . "' could not be translated\n";
+		$ret_val = 1;
+		$ret_message .= $msg;
+                log_daemon_warn( $request, $msg );
+	    }
+	    
+	} else {
+	    # Username translation is enabled, but no translation was
+	    # specified. This is a user configuration error.
+	    my $msg = "Username translation is enabled, but no translation was specified. This is a user configuration error.\n";
+	    $ret_val = 1;
+	    $ret_message .= $msg;
+            log_daemon_warn( $request, $msg );
+	}
+    } else {
+	# Username translation is not enabled. Use the same username.
+	$request->{ translated_username } = $request->{ username };
+    }
+
+
+    
+    # Only perform some verification checks if the activity performed
+    # is not a tag, vdd or get_bugs operation. Tag operations do not
+    # permit users to enter a log message, and thus they cannot supply
+    # a list of bug ids.
+    #
+    # Also vdd queries and get_bugs queries do not adhere to policies
+    if ( $request->{ name } ne $ACTIVITY_TAG &&
+	 $request->{ name } ne $ACTIVITY_GET_VDD &&
+	 $request->{ name } ne $ACTIVITY_GET_BUGS ) {
+
+	if ( $request->{ policies }->{ presence_of_bug_ids }->{ value } eq 'required' ) {
+	    # Providing bug ids is required.
+	    if ( ! defined ( $request->{ ids } ) ) {
+		my $msg = "No bug list was supplied.\n";
+		$ret_val = 1;
+		$ret_message .= $msg;
+                log_daemon_warn( $request, $msg );
+	    }
+
+	} elsif ( $request->{ policies }->{ presence_of_bug_ids }->{ value } eq 'optional' ) {
+	    # Providing bug ids is optional. If some are provided, we
+	    # are integrating. If not, we are not.
+	    if ( ! defined ( $request->{ ids } ) ) {
+		$request->{ silently_ignore } = 1;
+	    }
+
+	} elsif ( $request->{ policies }->{ presence_of_bug_ids }->{ value } eq 'none' ) {
+	    # Do not integrate this activity. But the SCM system's
+	    # commit can go through
+	    $request->{ silently_ignore } = 1;
+	} else {
+	    my $msg = "Invalid value '" .
+		$request->{ policies }->{ presence_of_bug_ids }->{ value } .
+		"' for policy presence_of_bug_ids.\n";
+	    $ret_val = 1;
+	    $ret_message .= $msg;
+            log_daemon_warn( $request, $msg );
+	}
+	
+    }
+
+    return ( $ret_val, $ret_message );
+}
+
+
+
+#
+# Provides an acceptance or rejection response to an integration
+# request. This is transmitted back to the glue.
+#
+sub reply_to_request {
+    my $self = shift;
+    my ( $socket, $ret_val, $ret_message ) =  ( @_ );
+
+    if ( $ret_val == 0) {
+	print $socket $DAEMON_REQUEST_RESULT_ACCEPTED . "\n";
+    } else {
+	print $socket $DAEMON_REQUEST_RESULT_DENIED . "\n";
+    }
+    print $socket $ret_message;
+}
+
+
+#
+# Processes an integration activity
+#
+sub process_activity {
+    my $self = shift;
+    my ( $request ) = ( @_ );
+    my $ret_val = 0;
+    my $ret_message = "";
+    my $tag_was_new = 0;
+
+    # Ignore processing the request if ordered to do so
+    if ( $request->{ silently_ignore } != 1) {
+
+	# Check the type of activity that should be performed
+	if ( $request->{ name } eq $ACTIVITY_COMMIT ) {
+	    # Prepare the log message
+	    $self->prepare_log_message( $request );
+	    $self->process_activity_commit( $request );
+	} elsif ( $request->{ name } eq $ACTIVITY_VERIFY ) {
+	    $self->process_activity_verify( $request );
+	} elsif ( $request->{ name } eq $ACTIVITY_TAG ) {
+	    $tag_was_new = $self->process_activity_tag( $request );
+	} elsif ( $request->{ name } eq $ACTIVITY_GET_VDD ) {
+	    $ret_message = $self->process_activity_get_vdd( $request );
+	} elsif ( $request->{ name } eq $ACTIVITY_GET_BUGS ) {
+	    $ret_message = $self->process_activity_get_bugs( $request );
+	}
+    } else {
+	if ( $request->{ name } eq $ACTIVITY_COMMIT ) {
+	    # Still prepare the log message on a commit, since it may
+	    # be needed by policy mail_notification
+	    $self->prepare_log_message( $request );
+	}
+    }
+
+    # If the request has not failed so far, serve policy mail_notification
+    if ( !$request->result_failed() ) {
+	if ( $request->{ policies }->{ mail_notification }->{ mail_on_success } ) {
+	    $self->mail_notification( $request, $tag_was_new, 1 );
+	}
+    } else {
+	# If the request failed, report the failure messages
+
+	$ret_message = $request->result_messages();
+        log_daemon_warn( $request, $ret_message );
+	$ret_val = 1;
+
+	# If the request failed on a commit, serve policy
+	# mail_notification. We want the user to be immediately
+	# notified of commit errors. That's because some SCM systems
+	# (e.g. Subversion) perhaps won't reveal the errors on a
+	# commit hook.
+	if ( $request->{ name } eq $ACTIVITY_COMMIT ) {
+	    if ( $request->{ policies }->{ mail_notification }->{ mail_on_failure } ) {
+		$self->mail_notification( $request, $tag_was_new, 0 );
+	    }
+	}
+    }
+
+    return ( $ret_val, $ret_message );
+}
+
+
+
+#
+# Prepares the log message that will be used in the activities
+#
+sub prepare_log_message {
+    my $self = shift;
+    my ( $request ) = ( @_ );
+
+    # Prepare a log message that will list the affected files commited
+    $request->{ log_message } = $request->{ original_log_message } . "\n";
+    $request->{ log_message } .= $PRODUCT_BRANCH_NAME_TOKEN . $PRODUCT_BRANCH_NAME_SPACE_TOKEN . $request->{ branch_name } . "\n";
+    $request->{ log_message } .= $PRODUCT_AFFECTED_FILES_TOKEN;
+    foreach my $file ( sort keys %{ $request->{ files } } ) {
+	$request->{ log_message } .= $request->{ files }->{ $file }->{ old_version };
+	$request->{ log_message } .= $OLD_VERSION_TO_NEW_VERSION_TOKEN;
+	$request->{ log_message } .= $request->{ files }->{ $file }->{ new_version };
+	$request->{ log_message } .= $NEW_VERSION_TO_FILENAME_TOKEN;
+	$request->{ log_message } .= $request->{ product_name} . $PRODUCT_AFFECTED_FILES_PRODUCT_FILE_TOKEN . $file;
+	$request->{ log_message } .= "\n";
+    }
+}
+
+
+
+#
+# Processes a general commit activity
+#
+sub process_activity_commit {
+    my $self = shift;
+    my ( $request ) = ( @_ );
+    my $retval;
+    my $integration = @DEVEL_PRODUCT_NAME@::Daemon::Integration->new( $self->bugtracker(), $request );
+    my $msg = "Processing an '$ACTIVITY_COMMIT' for " .
+	$self->bug_ids_string( $request->{ ids } ) .
+	" from SCM user '" . $request->{ username } . "'\n";
+
+    log_daemon_warn( $request, $msg );
+    $retval = $integration->process_activity_commit();
+
+    return $retval;
+}
+
+
+
+#
+# Processes a general verification activity
+#
+sub process_activity_verify {
+    my $self = shift;
+    my ( $request ) = ( @_ );
+    my $integration = @DEVEL_PRODUCT_NAME@::Daemon::Integration->new( $self->bugtracker(), $request );
+    my $msg = "Processing an '$ACTIVITY_VERIFY' for " .
+	$self->bug_ids_string( $request->{ ids } ) .
+	" from SCM user '" . $request->{ username } . "'\n";
+
+    log_daemon_warn( $request, $msg );
+    $integration->process_activity_verify();
+}
+
+
+
+#
+# Processes a general tagging activity
+#
+sub process_activity_tag {
+    my $self = shift;
+    my ( $request ) = ( @_ );
+    my $integration = @DEVEL_PRODUCT_NAME@::Daemon::Integration->new( $self->bugtracker(), $request );
+    my $tag_was_new;
+    my $msg = "Processing an '$ACTIVITY_TAG' for '" .
+	$request->{ type }->{ tag }->{ name } .
+	"' from SCM user '" . $request->{ username } . "'\n";
+
+    log_daemon_warn( $request, $msg );
+    $tag_was_new = $integration->process_activity_tag();
+
+    return $tag_was_new;
+}
+
+
+
+#
+# Processes a general VDD Query activity
+#
+sub process_activity_get_vdd {
+    my $self = shift;
+    my ( $request ) = ( @_ );
+    my $integration = @DEVEL_PRODUCT_NAME@::Daemon::Integration->new( $self->bugtracker(), $request );
+    my $vdd;
+    my $msg = "Processing an '$ACTIVITY_GET_VDD' for '" .
+	# Only 1 product is used on a VDD Query
+	$request->{ product_name } .
+	"' from SCM user '" . $request->{ username } . "'\n";
+
+    log_daemon_warn( $request, $msg );
+    $vdd = $integration->process_activity_get_vdd() ;
+    
+    # Add some more information in the VDD that will be useful
+    $vdd->bug_url_prefix( $self->bugtracker()->bug_url_prefix() );
+    $vdd->username( $request->{ username } );
+    $vdd->translated_username( $request->{ translated_username } );
+    $vdd->product_name( $request->{ product_name } );
+    $vdd->from_version( $request->{ type }->{ get_vdd }->{ from_version } );
+    $vdd->to_version( $request->{ type }->{ get_vdd }->{ to_version } );
+    $vdd->from_label_date( $request->{ type }->{ get_vdd }->{ from_label_date } );
+    $vdd->to_label_date( $request->{ type }->{ get_vdd }->{ to_label_date } );
+    $vdd->production_date( get_isodate() );
+
+    return $self->object_to_string( $vdd );
+}
+
+
+
+#
+# Processes a general get bugs query activity
+#
+sub process_activity_get_bugs {
+    my $self = shift;
+    my ( $request ) = ( @_ );
+    my $integration = @DEVEL_PRODUCT_NAME@::Daemon::Integration->new( $self->bugtracker(), $request );
+    my $mergelist;
+    my $msg = "Processing an '$ACTIVITY_GET_BUGS' for '" .
+	# Only 1 product is used on a get bugs
+	$request->{ product_name } .
+	"' from SCM user '" . $request->{ username } . "'\n";
+
+    log_daemon_warn( $request, $msg );
+    $mergelist = $integration->process_activity_get_bugs() ;
+    
+    # Add some more information in the bugs information that will be useful
+    $mergelist->product_name( $request->{ product_name } );
+
+    return $self->object_to_string( $mergelist );
+}
+
+
+
+#
+# Converts an object into an XML string
+#
+sub object_to_string {
+    my $self = shift;
+    my ( $vdd ) = shift;
+
+    use XML::Simple;
+
+    my $xml = new XML::Simple (NoAttr=>1);
+    my $ret_message = $xml->XMLout( $vdd );
+
+    return $ret_message;
+}
+
+
+
+#
+# Returns a string describing the list of bug ids processed by an
+# activity
+#
+sub bug_ids_string
+{
+    my $self = shift;
+    my $bug_ids_array_ref = shift;
+    my $msg = "bug id";
+
+    my $ids;
+    my $ids_counter = 0;
+    foreach my $bug_id ( @{ $bug_ids_array_ref } ) {
+	if ( $ids_counter > 0 ) {
+	    $ids .= ",";
+	}
+	$ids .= $bug_id;
+	$ids_counter++;
+    }
+    if ( $ids_counter > 1 ) {
+	$msg .= "s";
+    }
+    $msg .= " '" . $ids . "'";
+
+    return $msg;
+}
+
+
+
+#
+# Policy mail_notification
+#
+sub mail_notification {
+    my $self = shift;
+    my ( $request, $tag_was_new, $notification_on_success ) = ( @_ );
+
+    my $integration = @DEVEL_PRODUCT_NAME@::Daemon::Integration->new( $self->bugtracker(), $request );
+
+    if ( $request->{ name } eq $ACTIVITY_VERIFY ) {
+	# If we are verifying, ensure the libraries needed are
+	# available
+
+	eval "use Mail::Sendmail";
+	
+    } elsif ( $request->{ name } eq $ACTIVITY_COMMIT ) {
+	# If we are committing, send an email
+
+	eval "use Mail::Sendmail";
+
+	my $subject = "";
+	
+	$self->bugtracker()->integration_connect_database();
+	
+	if ( defined( $request->{ ids } ) ) {
+	    # If this is not an activity with a
+	    # presence_of_bug_ids configuration of 'none', or
+	    # 'optional' with no bug, send individual bug emails
+	    foreach my $bugid ( @{ $request->{ ids } } ) {
+		my $message = "";
+		my $mailing_list;
+
+		if ( $notification_on_success ) {
+		    # This is a notification on success
+		    $subject .= "[" . $self->bugtracker()->integration_get_product_name( $bugid ) . "][Bug " . $bugid . "]:";
+		    $subject .= " " . $self->bugtracker()->integration_get_bug_subject( $bugid );
+		    
+		    $message .= "The following changeset has been COMMITED.\n";
+		} else {
+		    $subject .= $ACTIVITY_COMMIT . " FAILURE for [" . $self->bugtracker()->integration_get_product_name( $bugid ) . "][Bug " . $bugid . "]:";
+		    $subject .= " " . $self->bugtracker()->integration_get_bug_subject( $bugid );
+		    
+		    $message .= "The following commit ERROR has occured:\n";
+		    $message .= $request->result_messages() . "\n";
+		    $message .= "\n";
+		}
+		$message .= "----------------------------------------------------------------------\n";
+		$message .= "Bug(s)      :" . $self->array_list_string( $request->{ ids }, 0) . "\n";
+		$message .= "Product     : " . $self->bugtracker()->integration_get_product_name( $bugid ) . "\n";
+		$message .= "Commited by : " . $request->{ translated_username } . "\n";
+		$message .= "----------------------------------------------------------------------\n";
+		$message .= "SCM Repository : " . $request->{ repository } . "\n\n";
+		$message .= "Description    :\n";
+		$message .= $request->{ log_message };
+		$message .= "----------------------------------------------------------------------\n";
+		
+		# compute the list of users that should be notified
+		$mailing_list = $integration->get_mailing_list( 0, $bugid );
+		
+		# send the email
+		$self->mail_notification_send_mail( $request, $subject, $message, $mailing_list );
+	    }
+	} else {
+	    # No bug ids were defined. Can still report most
+	    # things though.
+	    my $message = "";
+	    my $mailing_list;
+
+	    if ( $notification_on_success ) {
+		$subject .= "[" . $request->{ product_name } . "][Bug " . $self->array_list_string( $request->{ ids } ). "]";
+		$message .= "The following changeset has been COMMITED.\n";
+	    } else {
+		$subject = $ACTIVITY_COMMIT . " FAILURE for [" . $request->{ product_name } . "][Bug " . $self->array_list_string( $request->{ ids } ). "]";
+		$message .= "The following commit ERROR has occured:\n";
+		$message .= $request->result_messages() . "\n";
+		$message .= "\n";
+	    }
+	    
+	    $message .= "----------------------------------------------------------------------\n";
+	    $message .= "Commited by : " . $request->{ translated_username } . "\n";
+	    $message .= "Product     : " . $request->{ product_name } . "\n";
+	    $message .= "----------------------------------------------------------------------\n";
+	    $message .= "SCM Repository : " . $request->{ repository } . "\n\n";
+	    $message .= "Description    :\n";
+	    $message .= $request->{ log_message };
+	    $message .= "----------------------------------------------------------------------\n";
+	    
+	    # compute the list of users that should be notified
+	    $mailing_list = $integration->get_mailing_list( $request, 0 );
+	    
+	    # send the email
+	    $self->mail_notification_send_mail( $request, $subject, $message, $mailing_list );
+	}
+
+	$self->bugtracker()->integration_disconnect_database();
+
+    } elsif ( $request->{ name } eq $ACTIVITY_TAG &&
+	      $request->{ policies }->{ mail_notification }->{ mail_on_label } == 1 ) {
+	# If we are tagging, and the policy permits mailing on
+	# tagging, send an email
+	
+	# Do so only if this tag does not exist already. 
+	if ( $tag_was_new == 1 ) {
+
+	    eval "use Mail::Sendmail";
+				
+	    my $tag_verb;
+	    if ( $request->{ type }->{ tag }->{ operation } eq $TAG_OPERATION_ADD ) {
+		$tag_verb = "added";
+	    } elsif ( $request->{ type }->{ tag }->{ operation } eq $TAG_OPERATION_DELETE ) {
+		$tag_verb = "deleted";
+	    } elsif ( $request->{ type }->{ tag }->{ operation } eq $TAG_OPERATION_MOVE ) {
+		$tag_verb = "moved";
+	    }
+
+	    my $subject;
+	    $subject = "[" . $request->{ product_name } . "] Tag " . $request->{ type }->{ tag }->{ name } . " " . $tag_verb;
+	    
+	    if ( defined( $request->{ ids } ) ) {
+		# If we tagged against multiple bug ids, we may
+		# need to send multiple emails. Tagging and
+		# providing a bug id is possible in some SCM
+		# systems (e.g. Subversion)
+		foreach my $bugid ( @{ $request->{ ids } } ) {
+		    my $message = "";
+		    my $mailing_list;
+		    
+		    $message .= "The following products have been TAGGED.\n";
+		    $message .= "----------------------------------------------------------------------\n";
+		    $message .= "Tagged by : " . $request->{ translated_username } . ".\n";
+		    $message .= "Product   : " . $request->{ product_name } . "\n";
+		    $message .= "  had tag : " . $request->{ type }->{ tag }->{ name } . " " . $tag_verb . ".\n";
+		    $message .= "----------------------------------------------------------------------\n";
+		    $message .= "SCM Repository : " . $request->{ repository } . "\n\n";
+		    $message .= "Description    :\n";
+		    $message .= $request->{ original_log_message };
+		    $message .= "----------------------------------------------------------------------\n";
+		    
+		    # compute the list of users that should be notified
+		    $self->bugtracker()->integration_connect_database();
+		    $mailing_list = $integration->get_mailing_list( $request, 1, $bugid );
+		    $self->bugtracker()->integration_disconnect_database();
+		    
+		    if ( $notification_on_success ) {
+			# send the email
+			$self->mail_notification_send_mail( $request, $subject, $message, $mailing_list );
+		    }
+		}
+	    } else {
+		# No bug ids were defined.
+		my $message = "";
+		my $mailing_list;
+
+		$message .= "The following products have been TAGGED.\n";
+		$message .= "----------------------------------------------------------------------\n";
+		$message .= "Tagged by : " . $request->{ translated_username } . ".\n";
+		$message .= "Product   : " . $request->{ product_name } . "\n";
+		$message .= "  had tag : " . $request->{ type }->{ tag }->{ name } . " " . $tag_verb . ".\n";
+		$message .= "----------------------------------------------------------------------\n";
+		$message .= "SCM Repository : " . $request->{ repository } . "\n\n";
+		$message .= "Description    :\n";
+		$message .= $request->{ original_log_message };
+		$message .= "----------------------------------------------------------------------\n";
+		
+		# compute the list of users that should be notified
+		$self->bugtracker()->integration_connect_database();
+		$mailing_list = $integration->get_mailing_list( $request, 1 );
+		$self->bugtracker()->integration_disconnect_database();
+		
+		if ( $notification_on_success ) {
+		    # send the email
+		    $self->mail_notification_send_mail( $request, $subject, $message, $mailing_list );
+		}
+	    }
+	} else {
+	    # An SCM system mistakenly issued multiple tag
+	    # activities (e.g. CVS). Do not send an email again.
+	}
+    }
+}
+
+
+
+sub mail_notification_send_mail {
+    my $self = shift;
+    my ($request, $subject, $message, $mailing_list) = ( @_ );
+    my %mail;
+
+    # Set values. This permits users to override the default behavior
+    # of Mail::Sendmail
+    %mail = \%{ $request->{ policies }->{ mail_notification }->{ mail_settings } };
+    %mail->{ 'X-Mailer' } = "Mail::Sendmail version $Mail::Sendmail::VERSION";
+    %mail->{ Subject } = $subject;
+    %mail->{ Message } = $message;
+
+    #
+    # Since we just reset %mail to values, we haven't really picked up
+    # the To,From,Reply-To that were computed. We do this next
+    #
+    
+    # Don't blindly ignore the To list that was computed
+    my $mailing_list_to = $self->emails_to_csv( $mailing_list->{ To } );
+    %mail->{ To } = $mailing_list_to;
+
+    # Don't blindly ignore the From list that was computed
+    my $mailing_list_from = $self->emails_to_csv( $mailing_list->{ From } );
+    %mail->{ From } = $mailing_list_from;
+
+    # Don't blindly ignore the 'Reply-To' list that was computed
+    my $mailing_list_replyto = $self->emails_to_csv( $mailing_list->{ 'Reply-To' } );
+    %mail->{ 'Reply-To' } = $mailing_list_replyto;
+
+
+    if ( !sendmail(%mail) ) {
+	my $msg = "Sending mail on " . $request->{ name } .
+	    " failed. Log error was:\n" . $Mail::Sendmail::error . "\n";
+	$request->add_result(1, $msg);
+    }
+}
+
+
+
+sub array_list_string {
+    my $self = shift;
+    my ( $list, $set_s ) = ( @_ );
+    my $retval = "";
+
+    # An undefined bug ids list may be supplied when
+    # presence_of_bug_ids is set to 'optional' or 'none'
+    if ( !defined( $list ) ) {
+	return " NONE";
+    }
+    
+    if ( scalar( @{ $list } > 1 ) ) {
+	if ( $set_s ) {
+	    $retval .= "s";
+	}
+    }
+    $retval .= " ";
+    $retval .= join (",", @{ $list } );
+
+    return $retval;
+}
+
+
+
+sub emails_to_csv {
+    my $self = shift;
+    my ( $mailing_list ) = ( @_ );
+    my $mailing_list_string = "";
+    my $counter = 0;
+
+    # When sorting, use the priorities supplied for things that should
+    # sort first. Items with higher priority (lower value), are sorted
+    # first.
+    foreach my $email( sort { $mailing_list->{ $a } <=> $mailing_list->{ $b } } keys %{ $mailing_list } ) {
+	if ( $counter != 0) {
+	    $mailing_list_string .= ",";
+	}
+	$mailing_list_string .= $email;
+	$counter++;
+    }
+
+    return $mailing_list_string;
+}
+
+
+
+1;

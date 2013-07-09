@@ -1,0 +1,119 @@
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook V4.2//EN"
+ [
+
+ <!ENTITY devel-product-name "@DEVEL_PRODUCT_NAME@">
+ <!ENTITY devel-product-name-caps "@DEVEL_PRODUCT_NAME_CAPS@">
+ <!ENTITY devel-product-name-lower "@DEVEL_PRODUCT_NAME_LOWER@">
+ <!ENTITY devel-product-name-pronounce "@DEVEL_PRODUCT_NAME_PRONOUNCE@">
+ <!ENTITY devel-product-version "@DEVEL_PRODUCT_VERSION@">
+ <!ENTITY devel-product-webpage "@DEVEL_PRODUCT_WEBPAGE@">
+ <!ENTITY devel-product-bugtracker "@DEVEL_PRODUCT_BUGTRACKER@">
+ <!ENTITY devel-product-mailing-list-users-email "mailto:@DEVEL_PRODUCT_MAILING_LIST_USERS_EMAIL@">
+ <!ENTITY devel-product-mailing-list-users-http "@DEVEL_PRODUCT_MAILING_LIST_USERS_HTTP@">
+ <!ENTITY devel-iso-date "@DEVEL_ISODATE@">
+ <!ENTITY devel-sysconf-dir "@sysconfdir@">
+ <!ENTITY devel-lib-dir "@libdir@">
+ <!ENTITY devel-config-log-template-bugid-token-prefix "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX@">
+ <!ENTITY devel-config-log-template-bugid-token-postfix "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX@">
+ <!ENTITY devel-config-resolution-template-bugid-token-prefix "@DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_PREFIX@">
+ <!ENTITY devel-config-resolution-template-bugid-token-postfix "@DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_POSTFIX@">
+ <!ENTITY devel-config-log-template-bugid-regex "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_REGEX@">
+ <!ENTITY devel-config-log-template-bugid-split-regex "@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_SPLIT_REGEX@">
+ <!ENTITY devel-config-log-template-body-regex "@DEVEL_CONFIG_LOG_TEMPLATE_BODY_REGEX@">
+ <!ENTITY devel-config-resolution-template-bugid-regex "@DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_REGEX@">
+ <!ENTITY devel-config-resolution-template-bugid-split-regex "@DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_SPLIT_REGEX@">
+ <!ENTITY devel-config-resolution-template-status-regex "@DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_REGEX@">
+ <!ENTITY devel-config-resolution-template-status-resolution-regex "@DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_REGEX@">
+ <!ENTITY devel-config-resolution-template-status-resolution-data-regex "@DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_DATA_REGEX@">
+ <!ENTITY devel-config-resolution-template-status-convert-from-regex "@DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_FROM_REGEX@">
+ <!ENTITY devel-config-resolution-template-status-convert-to-regex "@DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_TO_REGEX@">
+ <!ENTITY devel-config-activity-commit "@DEVEL_CONFIG_ACTIVITY_COMMIT@">
+ <!ENTITY devel-config-activity-verify "@DEVEL_CONFIG_ACTIVITY_VERIFY@">
+ <!ENTITY devel-config-activity-tag "@DEVEL_CONFIG_ACTIVITY_TAG@">
+ <!ENTITY devel-config-activity-get-vdd "@DEVEL_CONFIG_ACTIVITY_GET_VDD@">
+ <!ENTITY devel-config-activity-get-bugs "@DEVEL_CONFIG_ACTIVITY_GET_BUGS@">
+ <!ENTITY devel-config-cvshook-commitinfo "@DEVEL_CONFIG_CVSHOOK_COMMITINFO@">
+ <!ENTITY devel-config-cvshook-loginfo "@DEVEL_CONFIG_CVSHOOK_LOGINFO@">
+ <!ENTITY devel-config-svnhook-postcommit "@DEVEL_CONFIG_SVNHOOK_POSTCOMMIT@">
+ <!ENTITY devel-config-windows-prefix "@DEVEL_CONFIG_WINDOWS_PREFIX@">
+ <!ENTITY devel-config-windows-perl "@DEVEL_CONFIG_WINDOWS_PERL@">
+ <!ENTITY devel-config-windows-temp-dir "@DEVEL_CONFIG_WINDOWS_TEMP_DIR@">
+ <!ENTITY devel-config-daemon-service-deployed-unix "@DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED_UNIX@">
+ <!ENTITY devel-config-daemon-service-deployed-windows "@DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED_WINDOWS@">
+ <!ENTITY devel-config-general-binary-diff "@DEVEL_CONFIG_GENERAL_BINARY_DIFF@">
+ <!ENTITY devel-config-general-binary-xsltproc "@DEVEL_CONFIG_GENERAL_BINARY_XSLTPROC@">
+ <!ENTITY devel-config-general-binary-docbook2pdf "@DEVEL_CONFIG_GENERAL_BINARY_DOCBOOK2PDF@">
+ <!ENTITY devel-config-general-binary-docbook2html "@DEVEL_CONFIG_GENERAL_BINARY_DOCBOOK2HTML@">
+
+ <!ENTITY about SYSTEM "about.sgml">
+ <!ENTITY conventions SYSTEM "conventions.sgml">
+ <!ENTITY introduction SYSTEM "introduction.sgml">
+ <!ENTITY design SYSTEM "design.sgml">
+ <!ENTITY features SYSTEM "features.sgml">
+ <!ENTITY scm-frontends SYSTEM "scm-frontends.sgml">
+ <!ENTITY bugtracking-backends SYSTEM "bugtracking-backends.sgml">
+ <!ENTITY tools SYSTEM "tools.sgml">
+ <!ENTITY resources SYSTEM "resources.sgml">
+ <!ENTITY faq SYSTEM "faq.sgml">
+ <!ENTITY gfdl SYSTEM "gfdl.sgml">
+ <!ENTITY glossary SYSTEM "glossary.sgml">
+ ]
+>
+
+<book>
+
+  <bookinfo>
+    <title>&devel-product-name; manual</title>
+    <subtitle>&devel-product-version;</subtitle>
+
+    <authorgroup>
+      <corpauthor>The &devel-product-name; Team</corpauthor>
+    </authorgroup>
+
+    <pubdate>@DEVEL_ISODATE@</pubdate>
+
+    <abstract>
+      <para>
+	This is the documentation of &devel-product-name;, a system
+	that integrates software configuration management with
+	bug-tracking.
+      </para>
+    </abstract>
+
+  </bookinfo>
+
+
+  <!-- About -->  
+  &about
+
+  <!-- Introduction -->  
+  &introduction
+
+  <!-- Design -->
+  &design
+
+  <!-- Features -->
+  &features
+
+  <!-- SCM frontends -->
+  &scm-frontends
+
+  <!-- Bugtracking backends -->
+  &bugtracking-backends
+
+  <!-- Tools -->
+  &tools
+
+  <!-- Resources -->
+  &resources
+
+  <!-- Appendix: FAQ -->
+  &faq;
+
+  <!-- Appendix: GNU Free Documentation License -->
+  &gfdl;
+
+  <!-- Glossary -->
+  &glossary;
+
+</book>

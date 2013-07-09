@@ -1,0 +1,16 @@
+function test_scm()
+{
+    SCM_VERSIONS=$1
+    SCM_NAME_LOWER=$2
+    SCM_NAME_UPPER=$3
+
+    for version in $SCM_VERSIONS; do
+        export SCM_VERSION=$version
+	mkdir -p product.test/scm_$SCM_NAME_LOWER/${SCM_NAME_UPPER}_VERSION_$version
+	echo "${SCM_NAME_UPPER}_VERSION_$version" > product.test/config/tested_scm_version
+	echo "===================="
+	echo "Testing ${SCM_NAME_UPPER}_VERSION_$version"
+	echo "===================="
+	(cd product.test/scm_$SCM_NAME_LOWER; runtest --all --output ${SCM_NAME_UPPER}_VERSION_$version --debug --tool @DEVEL_PRODUCT_NAME@ tests_${SCM_NAME_LOWER}.exp)
+    done
+}

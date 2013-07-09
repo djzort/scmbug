@@ -1,0 +1,140 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper. 
+# GNU copyright 1997 by Joey Hess.
+#
+# This version is for a hypothetical package that builds an
+# architecture-dependant package, as well as an architecture-independent
+# package.
+
+# Uncomment this to turn on verbose mode. 
+#export DH_VERBOSE=1
+
+
+package = $(shell grep Source debian/control | sed 's/^Source: //' |head -1)
+DEBIANTOP = `pwd`/debian
+
+
+# install commands
+install_file   := install -p    -o root -g root -m 644
+install_program:= install -p    -o root -g root -m 755
+make_directory := install -p -d -o root -g root -m 755
+
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -g
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+
+configure: configure-stamp
+configure-stamp:
+	dh_testdir
+	# Add here commands to configure the package.
+	./regen.sh
+	./configure
+
+	touch configure-stamp
+
+
+build-arch: configure-stamp  build-arch-stamp
+build-arch-stamp:
+	dh_testdir
+
+	# Add here command to compile/build the package.
+
+	touch build-arch-stamp
+
+build-indep:  configure-stamp build-indep-stamp
+build-indep-stamp:
+	dh_testdir
+
+	# Add here command to compile/build the arch indep package.
+	# It's ok not to do anything here, if you don't need to build
+	#  anything for this package.
+	$(MAKE) doc
+
+	touch build-indep-stamp
+
+build: build-indep
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp configure-stamp build-indep-stamp
+
+	# Add here commands to clean up after the build process.
+	$(MAKE) clean
+
+	dh_clean
+
+install: DH_OPTIONS=
+install: build
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	# Add here commands to install the package into debian/@DEVEL_PRODUCT_NAME_LOWER@.
+	#
+	# Install @DEVEL_PRODUCT_NAME_LOWER@-server
+	#
+	$(MAKE) install-server DESTDIR=$(CURDIR)/debian/@DEVEL_PRODUCT_NAME_LOWER@-server
+	# Install an rc script
+	dh_installinit
+
+
+	#
+	# Install @DEVEL_PRODUCT_NAME_LOWER@-tools
+	#
+	$(MAKE) install-tools DESTDIR=$(CURDIR)/debian/@DEVEL_PRODUCT_NAME_LOWER@-tools
+
+
+	#
+	# Install @DEVEL_PRODUCT_NAME_LOWER@-common
+	#
+	$(MAKE) install-common DESTDIR=$(CURDIR)/debian/@DEVEL_PRODUCT_NAME_LOWER@-common
+
+
+	#
+	# Install @DEVEL_PRODUCT_NAME_LOWER@-doc
+	#
+	$(MAKE) install-doc DESTDIR=$(CURDIR)/debian/@DEVEL_PRODUCT_NAME_LOWER@-doc
+
+
+	#dh_movefiles
+
+# Build architecture-independent files here.
+# Pass -i to all debhelper commands in this target to reduce clutter.
+binary-indep: build install
+	dh_testdir -i
+	dh_testroot -i
+#	dh_installdebconf -i
+	dh_installdocs -i -A
+	dh_installexamples -i
+	dh_installmenu -i
+#	dh_installlogrotate -i
+#	dh_installemacsen -i
+#	dh_installpam -i
+#	dh_installmime -i
+#	dh_installinit -i
+	dh_installcron -i
+	dh_installman -p@DEVEL_PRODUCT_NAME_LOWER@-tools -i doc/manpages/@DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl.1
+	dh_installman -p@DEVEL_PRODUCT_NAME_LOWER@-tools -i doc/manpages/@DEVEL_PRODUCT_NAME_LOWER@_vdd_generator.pl.1
+	dh_installman -p@DEVEL_PRODUCT_NAME_LOWER@-server -i doc/manpages/@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl.8
+	dh_installinfo -i
+#	dh_undocumented -i
+	dh_installchangelogs -i
+	dh_link -i
+	dh_compress -i --exclude=.jpg --exclude=.gif
+	dh_fixperms -i
+	dh_installdeb -i
+#	dh_perl -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch:
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary install configure

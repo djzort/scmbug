@@ -1,0 +1,228 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Tools::SCM_Functions;
+
+use strict;
+use Data::Dumper;
+use Cwd;
+use @DEVEL_PRODUCT_NAME@::Tools::SCM_Description;
+use @DEVEL_PRODUCT_NAME@::Error;
+use @DEVEL_PRODUCT_NAME@::Common;
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+
+    bless $self, $type;
+
+    return $self;
+}
+
+
+
+#
+# Checks out an SCM repository
+#
+sub checkout_repository {
+    my ( $scm_description ) = ( @_ );
+
+    # If the temp directory is missing create it
+    if ( ! -d '@DEVEL_CONFIG_TEMP_DIR@' ) {
+	mkdir ( '@DEVEL_CONFIG_TEMP_DIR@' ) or die "Unable to create temporary directory " . '@DEVEL_CONFIG_TEMP_DIR@';
+    }
+    chdir ( '@DEVEL_CONFIG_TEMP_DIR@' ) or die "Unable to change into " . '@DEVEL_CONFIG_TEMP_DIR@';
+    mkdir ( '@DEVEL_PRODUCT_NAME@' . ".$$" ) or die "Unable to create directory " . '@DEVEL_PRODUCT_NAME@' . ".$$";
+    chdir ( '@DEVEL_PRODUCT_NAME@' . ".$$" ) or die "Unable to change into " . '@DEVEL_PRODUCT_NAME@' . ".$$";
+
+    if ( $scm_description->name() eq "CVS" ) {
+	system( "@DEVEL_CONFIG_SCM_BINARY_CVS@ -d " . $scm_description->repository_path() . " co " . $scm_description->repository_dir() );
+	chdir( $scm_description->repository_dir() ) or die "Unable to change into " . $scm_description->repository_dir();
+    } elsif( $scm_description->name() eq "Subversion" ) {
+	# As of Subversion 1.0.0, hooks cannot be installed
+	# remotely. Local access is required, thus there will be no
+	# checkout of the tree.
+	my $local_dir = local_repository_directory( $scm_description );
+	chdir( $local_dir ) or die "Unable to change into " . $local_dir;
+    } elsif( $scm_description->name() eq "Git" ) {
+	# As of Git 1.4.2, hooks cannot be installed remotely. Local
+	# access is required, thus there will be no checkout of the
+	# tree.
+	my $local_dir = local_repository_directory( $scm_description );
+	chdir( $local_dir ) or die "Unable to change into " . $local_dir;
+    }
+}
+
+
+
+sub local_repository_directory {
+    my ( $scm_description ) = ( @_ );
+    my $local_repository_directory = "";
+
+    if ( $scm_description->name() eq "CVS" ) {
+	$local_repository_directory =  $scm_description->repository_dir();
+    } elsif ( $scm_description->name() eq "Subversion" ) {
+	$local_repository_directory =  $scm_description->repository_dir();
+	if ( $local_repository_directory =~ m/^file:\/\// ) {
+	    if ( $PRODUCT_ON_WINDOWS == 1) {
+		# Subversion expects paths in Windows to be defined
+		# with an extra forward slash
+		#
+		# e.g. /c:/SVNRepository
+		#
+		# This extra leading slash should be removed to give
+		# us a local path we can chdir to
+		$local_repository_directory =~ s/^file:\/\/\///;
+	    } else {
+		$local_repository_directory =~ s/^file:\/\///;
+	    }
+	} else {
+	    log_fatal_error( $GLUE_ERROR_SVN_FILE_PREFIX_NOT_SPECIFIED, "file:// prefix not specified for Subversion repository path.\n" );
+	}
+    } elsif ( $scm_description->name() eq "Git" ) {
+	$local_repository_directory =  $scm_description->repository_dir();
+    } else {
+	log_fatal_error( $TOOLS_ERROR_INVALID_SCM_NAME_IN_FUNCTIONS, "The '" . $scm_description->name() . "' SCM system is not supported by the SCM_Functions. This is an internal bug.\n");
+    }
+
+    return $local_repository_directory;
+}
+
+
+
+sub glue_configuration_file {
+    my ( $scm_description ) = ( @_ );
+    my $glue_configuration_file = 'etc/@DEVEL_PRODUCT_NAME_LOWER@/glue.conf';
+
+    return $glue_configuration_file;
+}
+
+
+#
+# Returns the date a label (tag or branch) was applied
+#
+sub get_label_date {
+    my ($scm_description, $glue, $label) = ( @_ );
+    my $label_date = "";
+    my $valid = 0;
+
+    if ( $scm_description->name() eq "CVS" ) {
+	print "SCM_Functions:get_label_date not yet implemented for CVS\n";
+	exit -1;
+    } elsif( $scm_description->name() eq "Subversion" ) {
+	{
+	    # Determine the date the tag was applied.
+
+	    # Will try to slurp the file in
+	    local $/; 
+	    my $data;
+
+	    open ( SVN_LOG, "@DEVEL_CONFIG_SCM_BINARY_SVN@ log --stop-on-copy " . $scm_description->repository_path() . "/" . $label . "|" ) || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_SVN_LOG, "Cannot execute 'svn log': $!\n");
+	    # Cygwin has a problem with newlines
+	    binmode( SVN_LOG, ":crlf" );
+
+	    $data = <SVN_LOG>;
+	    my $line = $data;
+            if ( $line =~ m/(\d\d\d\d-\d\d-\d\d\s\d\d:\d\d:\d\d)/ ) {
+		# The svn log date format looks like:
+                #
+ 		# 2006-11-02 19:40:39 
+ 		$label_date = $1;
+	    } else {
+		# This label does not exist. No line containing any
+		# "<date>"s were encountered. Bail.
+		log_fatal_error( $VDD_ERROR_LABEL_DOES_NOT_EXIST, "Label '$label' does not exist.\n");
+	    }
+	    close ( SVN_LOG );
+	}
+    } elsif( $scm_description->name() eq "Git" ) {
+	print "SCM_Functions:get_label_date not yet implemented for Git\n";
+	exit -1;
+    }
+
+    return $label_date;
+}
+
+
+
+#
+# Releases an SCM repository
+#
+sub release_repository {
+    recursive_rm( '@DEVEL_CONFIG_TEMP_DIR@/@DEVEL_PRODUCT_NAME@' . ".$$" );
+}
+
+
+# Recursively removes a directory
+sub recursive_rm {
+    my $count = 0;
+
+    while ($#_ > -1) {
+	my $dir = shift;
+
+        # symbolic link
+	if (-l $dir) {
+	    unlink($dir) or die "Cound not remove $dir.";
+	    $count += 1;
+	    next;
+	}
+
+	next if not -e $dir;
+
+	# file
+	if (not -d $dir) {
+	    unlink($dir) or die "Cound not remove $dir.";
+	    $count +=  1;
+	    next;
+	}
+	
+	{
+	    local ($_, *DIR);
+	    opendir(DIR, $dir) || die "can't opendir $dir: $!";
+	    map { /^\.\.?$/ ? '' : ($count += &recursive_rm("$dir/$_")) }
+	    readdir(DIR);
+	    closedir(DIR);
+	    
+	    chdir("@DEVEL_CONFIG_DEFAULT_TEMP_DIR@") or die "Could not chdir to @DEVEL_CONFIG_DEFAULT_TEMP_DIR@: $!";
+	    rmdir $dir or die "Could not remove $dir: $!";
+	    $count += 1;
+	}
+    }
+    return $count;
+}
+
+
+sub run_with_no_errors {
+    my $cmd = shift;
+    my $return_value;
+
+    $return_value = 0xffff & system( $cmd );
+
+    if ( $return_value == 0 ) {
+        print "Executed command correctly.\n";
+        return 1;
+    } else {
+        $return_value >>= 8;
+        print "Failed to execute. Exit status was $return_value.\n";
+        return 0;
+    }
+}
+
+
+
+1;

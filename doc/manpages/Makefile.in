@@ -1,0 +1,17 @@
+all: install_glue
+
+install_glue:
+	docbook2man daemon.8.sgml
+	docbook2man install_glue.1.sgml
+	docbook2man vdd_generator.1.sgml
+	docbook2man merge.1.sgml
+
+clean:
+	-rm install_glue.1.sgml @DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl.1
+	-rm vdd_generator.1.sgml @DEVEL_PRODUCT_NAME_LOWER@_vdd_generator.pl.1
+	-rm merge.1.sgml @DEVEL_PRODUCT_NAME_LOWER@_merge.pl.1
+	-rm daemon.8.sgml @DEVEL_PRODUCT_NAME_LOWER@_daemon.pl.8
+	-rm manpage.refs manpage.links
+
+distclean: clean
+	-rm Makefile

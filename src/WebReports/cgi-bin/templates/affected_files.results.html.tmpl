@@ -1,0 +1,69 @@
+[% SET title = 'Affected Files For ' _ bugids %]
+[% INCLUDE templates/header.html.tmpl %]
+
+[% MACRO html_link_for_file(filename, revision) BLOCK %]
+
+    [%# First check to see if we are just going to print plain text #%]
+    [% IF fileLinks == "ViewVC" %]
+    	[% SET urlString = '<A HREF="' _ viewvcPath _ filename %]
+    	[%IF revision == "0" || revision == "" %]
+    		[% SET urlString = urlString _ '?view=log">' _ filename %]
+	[% ELSE %]
+    		[% SET urlString = urlString _ '?view=markup&rev=' _ revision _ '">' _ revision %]
+	[% END %]
+	[% urlString %]</A>
+    [% ELSIF fileLinks == "WebSVN" %]
+    	[% SET urlString = '<A HREF="' _ websvnPath _ filename %]
+    	[%IF revision == "0" || revision == "" %]
+    		[% SET urlString = urlString _ '?op=log">' _ filename %]
+	[% ELSE %]
+    		[% SET urlString = urlString _ '?rev=' _ revision _ '">' _ revision %]
+	[% END %]
+	[% urlString %]</A>
+    [% ELSE %]
+    	[%IF revision == "0" || revision == "" %]
+    		[% filename %]
+    	[% ELSE %]
+    		[% revision %]
+    	[% END %]
+    [% END %]
+[% END %]
+
+
+<H2>[% title %]</H2>
+
+<TABLE width=90%>
+<TR><TD><B>Filename</B></TD><TD><B>Revision Changes</B></TD></TR>
+
+
+[% FOREACH changeset IN changeList %]
+	<TR><TD>
+	[% html_link_for_file(changeset.file) %]
+        </TD><TD>
+
+	[%# Now loop the list of revisions #%]
+	[% SET loop = 0 %]
+	
+	[% FOREACH rev IN changeset.revisions %]
+	    [% IF rev == "0" %]
+	    	<I>created</I>
+	    [% ELSIF rev == "-1" %]
+    	        <I>deleted</I>
+    	    [% ELSE %]
+    	    	[% html_link_for_file(changeset.file, rev) %]
+	    [% END %]
+ 
+            [% IF (loop % 2) != 0 %]
+            	&nbsp;&nbsp;
+            [% ELSE %]
+	        --&gt;
+	    [% END %]
+	    [% SET loop = loop + 1 %]	
+	[% END %]
+    	</TD></TR>
+[% END %]
+
+</TABLE>
+
+
+

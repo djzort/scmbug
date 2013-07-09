@@ -1,0 +1,130 @@
+ #!/bin/sh
+
+#
+# Prepares distribution for Windows
+#
+DRIVE="@DEVEL_CONFIG_WINDOWS_DRIVE@"
+PREFIX="@DEVEL_CONFIG_WINDOWS_PREFIX@"
+PERL_BINARY="@DEVEL_CONFIG_WINDOWS_PERL@"
+
+# Configure and build for Windows
+cd @devel_top_dir@/packaging/windows
+
+# Copy the source 
+SOURCE="../../../@DEVEL_PRODUCT_RELEASE_TAG@.tar.gz"
+if [ ! -e "$SOURCE" ]; then
+    echo Source distribution file $SOURCE is missing. Cannot package.
+    exit -1
+fi
+rm -rf build
+mkdir build
+cp $SOURCE build
+cd build
+
+# Build
+tar -zxvf @DEVEL_PRODUCT_RELEASE_TAG@.tar.gz
+cd @DEVEL_PRODUCT_RELEASE_TAG@
+./regen.sh && ./configure --with-windows --with-perl-binary="$PERL_BINARY" "--prefix=${PREFIX}" --with-temp-dir="C:\TEMP"; make
+
+
+
+# ---------------------------------------------------------
+#
+# Package the -common
+#
+# Install only the -common
+make install-common
+# Package
+rm -f @DEVEL_PRODUCT_NAME_LOWER@-common-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip
+zip -r -z @DEVEL_PRODUCT_NAME_LOWER@-common-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip $DRIVE <<EOF
+Version: @DEVEL_PRODUCT_VERSION@
+@DEVEL_PRODUCT_PACKAGE_COMMON_DESCRIPTION_SHORT@
+
+@DEVEL_PRODUCT_PACKAGE_COMMON_DESCRIPTION_LONG@
+EOF
+mv @DEVEL_PRODUCT_NAME_LOWER@-common-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip @devel_top_dir@/..
+rm -rf $DRIVE
+#make uninstall-common
+  
+
+
+# ---------------------------------------------------------
+#
+# Package the -server
+#
+# Install only the -server
+make install-server
+# Package
+rm -f @DEVEL_PRODUCT_NAME_LOWER@-server-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip
+zip -r -z @DEVEL_PRODUCT_NAME_LOWER@-server-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip $DRIVE <<EOF
+Version: @DEVEL_PRODUCT_VERSION@
+@DEVEL_PRODUCT_PACKAGE_SERVER_DESCRIPTION_SHORT@
+
+@DEVEL_PRODUCT_PACKAGE_SERVER_DESCRIPTION_LONG@
+EOF
+mv @DEVEL_PRODUCT_NAME_LOWER@-server-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip @devel_top_dir@/..
+rm -rf $DRIVE
+#make uninstall-server
+  
+
+
+# ---------------------------------------------------------
+#
+# Package the -tools
+#
+# Install only the -tools
+make install-tools
+# Package
+rm -f @DEVEL_PRODUCT_NAME_LOWER@-tools-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip
+zip -r -z @DEVEL_PRODUCT_NAME_LOWER@-tools-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip $DRIVE <<EOF
+Version: @DEVEL_PRODUCT_VERSION@
+@DEVEL_PRODUCT_PACKAGE_TOOLS_DESCRIPTION_SHORT@
+
+@DEVEL_PRODUCT_PACKAGE_TOOLS_DESCRIPTION_LONG@
+EOF
+mv @DEVEL_PRODUCT_NAME_LOWER@-tools-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip @devel_top_dir@/..
+rm -rf $DRIVE
+#make uninstall-tools
+
+
+
+# ---------------------------------------------------------
+#
+# Package the -doc
+#
+# Install only the -doc
+make install-doc install-doc-scm install-doc-changelogs
+# Package
+rm -f @DEVEL_PRODUCT_NAME_LOWER@-doc-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip
+zip -r -z @DEVEL_PRODUCT_NAME_LOWER@-doc-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip $DRIVE <<EOF
+Version: @DEVEL_PRODUCT_VERSION@
+@DEVEL_PRODUCT_PACKAGE_DOC_DESCRIPTION_SHORT@
+
+@DEVEL_PRODUCT_PACKAGE_DOC_DESCRIPTION_LONG@
+EOF
+mv @DEVEL_PRODUCT_NAME_LOWER@-doc-@DEVEL_PRODUCT_PACKAGE_VERSION@.zip @devel_top_dir@/..
+rm -rf $DRIVE
+#make uninstall-doc uninstall-doc-scm uninstall-doc-changelogs
+
+
+
+# ---------------------------------------------------------
+#
+# Package everything
+#
+#
+# Install everything
+make install-common install-doc install-doc-scm install-doc-changelogs install-tools install-server
+# Package
+rm -f @DEVEL_PRODUCT_RELEASE_TAG@.zip
+zip -r -z @DEVEL_PRODUCT_RELEASE_TAG@.zip $DRIVE <<EOF
+Version: @DEVEL_PRODUCT_PACKAGE_VERSION@
+
+@DEVEL_PRODUCT_DESCRIPTION_SHORT@
+
+@DEVEL_PRODUCT_DESCRIPTION_LONG@
+EOF
+mv @DEVEL_PRODUCT_RELEASE_TAG@.zip @devel_top_dir@/..
+rm -rf $DRIVE
+#make uninstall-common uninstall-doc uninstall-doc-scm uninstall-doc-changelogs uninstall-tools uninstall-server
+cd ../..

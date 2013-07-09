@@ -1,0 +1,1321 @@
+<chapter>
+  <title>Features</title>
+  
+  <section id="integration-actions">
+    <title>
+      Integration Actions
+    </title>
+    
+    <para> For every SCM event, multiple corresponding integration
+      actions may be issued from the glue to the daemon. The list of
+      possible integration actions is:
+    </para>
+    
+    <itemizedlist spacing="compact">
+      <listitem>
+	<para>
+	  <filename>&devel-config-activity-verify;</filename>: An
+	  <filename>&devel-config-activity-commit;</filename>
+	  integration action will soon follow, and data collected from
+	  the corresponding SCM event must be verified first.
+      </para>
+      </listitem>
+      <listitem>
+	<para>
+	  <filename>&devel-config-activity-commit;</filename>: A
+	  software change has already been committed in the SCM
+	  system, and this event must be integrated with
+	  bug-tracking. This action usually follows an
+	  <filename>&devel-config-activity-verify;</filename>
+	  integration action.
+	</para>
+      </listitem>
+      <listitem>
+	<para>
+	  <filename>&devel-config-activity-tag;</filename>: A software
+	  labeling operation is issued in the SCM system, and this
+	  event must be integrated with bug-tracking.
+	</para>
+      </listitem>
+      <listitem>
+	<para>
+	  <filename>&devel-config-activity-get-vdd;</filename>: A VDD
+	  will be produced by the <xref linkend="vdd"
+	  endterm="vdd-short">.
+	</para>
+      </listitem>
+      <listitem>
+	<para>
+	  <filename>&devel-config-activity-get-bugs;</filename>: The
+	  information of a list of bugs is returned for processing by
+	  the <xref linkend="merger" endterm="merger-short">.
+	</para>
+      </listitem>
+    </itemizedlist>
+
+  </section>
+
+
+
+  <section id="log-messages">
+    <title>
+      Integration Of SCM Log Messages
+    </title>
+    <para>
+      When a software change occurs in the SCM system, a log message
+      may be manually supplied by a user to describe the change. Using
+      an <filename>&devel-config-activity-commit</filename>
+      integration request, this log message is automatically inserted
+      in the bug-tracking system against the specified bug
+      id. Additional changeset information are automatically detected,
+      such as the branch name that hosted the change and the list of
+      files affected by the changeset. This information complements
+      the users original log message when added in the bug-tracker, as
+      shown in <xref linkend="fig-log-messages">.
+
+
+      <figure id="fig-log-messages">
+      <title>Example of Integrated Log Message.</title>
+	<programlisting>
+Added a glossary, and a document conventions section, just
+like the Bugzilla Guide uses. Began linking names of systems/tools to
+the glossary, and using a url to their webpage there. This will
+unclutter the pdf version of the document from url links inlined with
+content.
+
+
+Branch:         HEAD
+Affected files:
+---------------
+1.7 --> 1.8 &devel-product-name;:system/doc/manual/about.sgml
+1.7 --> 1.8 &devel-product-name;:system/doc/manual/bugtracking-backends.sgml
+NONE --> 1.1 &devel-product-name;:system/doc/manual/conventions.sgml
+NONE --> 1.1 &devel-product-name;:system/doc/manual/glossary.sgml
+1.12 --> 1.13 &devel-product-name;:system/doc/manual/manual.sgml.in
+1.8 --> 1.9 &devel-product-name;:system/doc/manual/scm-frontends.sgml
+1.9 --> 1.10 &devel-product-name;:system/doc/manual/tools.sgml
+	</programlisting>
+      </figure>
+
+    </para>
+  </section>
+
+
+
+  <section id="tags">
+    <title>
+      Integration Of SCM Labeling Operations
+    </title>
+    <para>
+      When a tag or branch operation is issued in the SCM system, a
+      name is used to describe this software labeling operation. Using
+      an <filename>&devel-config-activity-tag;</filename> integration
+      request, this label is inserted in the list of possible versions
+      of the product in the bug-tracking system.
+    </para>
+
+    <para>
+      <xref linkend="fig-apply-label"> shows an example applying a
+      label in Subversion. The label name is autodetected and does not
+      need to be specified in the log message.
+
+      <figure id="fig-apply-label">
+      <title>Example applying a label in Subversion.</title>
+	<programlisting>
+$ svn copy trunk tags/MYPROGRAM_RELEASE_4-6-1
+$ svn commit -m "bug 30541: Tagged the version that fixes the \
+  backwards compatibility problems in the communication \
+  protocol." tags/MYPROGRAM_RELEASE_4-6-1
+	</programlisting>
+      </figure>
+
+    </para>
+  </section>
+
+
+
+  <section id="verification-checks">
+    <title>
+      Verification Checks
+    </title>
+
+    <para>
+      When various SCM events occur, verification checks are performed
+      before the SCM event is allowed to proceed. Some checks are
+      performed by the glue on the client side, the machine the SCM
+      repository resides. Other checks are performed on the server
+      side, the machine hosting the &devel-product-name daemon.
+    </para>
+
+      <section id="verification-checks-enabled-integration">
+        <title>
+          Enabled Integration
+        </title>
+
+	  <para>
+	    SCM events will be integrated with bug-tracking only if
+	    the integration glue is enabled. This can be controlled in
+	    the glue configuration file using the
+	    <filename>enabled</filename> variable, as shown in <xref
+	    linkend="fig-enabled">.
+
+	    <figure id="fig-enabled">
+	      <title>Glue enabling variable.</title>
+	      <programlisting>
+#
+# Flags whether the glue is active
+#
+enabled => 1,
+	      </programlisting>
+	    </figure>
+
+	  </para>
+	</section>
+
+
+      <section id="verification-checks-supported-version">
+        <title>
+          Supported SCM version
+        </title>
+
+	  <para>
+	    SCM tools may work considerably different between separate
+	    versions. For example, CVS changed during the 1.12.x
+	    series the format of command-line arguments supplied to
+	    integration hooks. Appropriate support is needed to handle
+	    their idiosynchracies. The SCM tool's version is detected
+	    at runtime, and interaction with the tool is handled
+	    accordingly.
+	  </para>
+          <para>
+            One of the problems with some SCM systems is that they may
+	    unset the <filename>PATH</filename> variable
+	    (e.g. Subversion in 1.2.x). The list of paths to the
+	    tool's binaries must be supplied in the glue configuration
+	    file using the <filename>binary_paths</filename> variable,
+	    as shown in <xref linkend="fig-binary-paths">. It is
+	    verified at runtime that each binary needed by an SCM tool
+	    is present in only one path from the list supplied, to
+	    avoid accidentally invoking the wrong version of the tool
+	    due to an incomplete installation of the SCM tool.
+
+	    <figure id="fig-binary-paths">
+	      <title>Paths to the SCM tool's binaries.</title>
+	      <programlisting>
+# Comma(,)-separated list of paths to any binaries the SCM
+# tool may need to use
+binary_paths => '/usr/local/bin,/usr/bin,/bin',
+	      </programlisting>
+	    </figure>
+
+	  </para>
+	</section>
+
+
+        <section id="verification-checks-use-of-log-message-template">
+          <title>
+            Use Of A Log Message Template
+          </title>
+
+	  <para>
+	    The log message supplied to the SCM system when committing
+	    a software change is verified to match a log template
+	    expected by &devel-product-name;. Two regular expressions
+	    describe how the bug id and log comment will be
+	    identified. These are defined as part of the
+	    <filename>log_template</filename> policy variable as shown
+	    in <xref linkend="fig-log-template">, through the
+	    variables <filename>log_bugid_regex</filename> and
+	    <filename>log_body_regex</filename>.
+          </para>
+          <para>
+            A way to split a list of multiple bug ids into separate
+	    ids is also described with a regular expression through
+	    the variable <filename>log_bugid_split_regex</filename>. This
+	    is needed in order to permit special characters to preceed
+	    a bug number. For example, instead of separating bug ids
+	    using a whitespace or comma, one may want to also prefix a
+	    bug id with a '#'. Bug-trackers may then autolinkify in
+	    their comments a bug id that is prefixed by a '#'
+	    (e.g. Bugzilla). An example log message accepted by these
+	    expressions is shown in <xref
+	    linkend="fig-log-template-example">.
+	  </para>
+ 
+	  <figure id="fig-log-template">
+	    <title>Regular expressions describing the bug id, the
+	    split of bug ids and the log message body.</title>
+	    <programlisting>
+log_template =>  {
+    # The log_bugid_regex is a regular expression that must
+    # set the unnamed variable $1 to the bug number, or list
+    # of bug numbers. It is checked for a match as: m/$regex/s
+    log_bugid_regex => '&devel-config-log-template-bugid-regex;',
+    # The log_bugid_split_regex is a regular expression
+    # describing how a list of bug ids will be split in
+    # individual bug numbers. It is split as: /$regex/
+    log_bugid_split_regex => '&devel-config-log-template-bugid-split-regex;',
+    # The log_body_regex is a regular expression that must set
+    # the unnamed variable $1 to the log comment. It is
+    # checked for a match as: m/$regex/s
+    log_body_regex => '&devel-config-log-template-body-regex;'
+    },
+	    </programlisting>
+	  </figure>
+
+          <para>
+            This template can be customized when the
+            &devel-product-name; codebase is configured, prior to
+            installation. The arguments
+            <filename>--with-log-template-bugid-regex=&lt;regular_expression&gt</filename>,
+            <filename>--with-log-template-bugid-split-regex=&lt;regular_expression&gt</filename>,
+            and
+            <filename>--with-log-template-body-regex=&lt;regular_expression&gt</filename>
+            can be passed to <filename>configure</filename>, shown in
+            <xref linkend="fig-source-installation">.
+          </para>
+
+	  <figure id="fig-log-template-example">
+	    <title>Example log message accepted.</title>
+	    <programlisting>
+&devel-config-log-template-bugid-token-prefix;441&devel-config-log-template-bugid-token-postfix;Improved the documentation of policy log_template by adding
+an example log message.
+	    </programlisting>
+	  </figure>
+
+        </section>
+
+
+        <section id="verification-checks-presence-of-distinct-bug-ids">
+          <title>
+            Presence Of Distinct Bug Ids
+          </title>
+
+	  <para>The log message supplied to the SCM system when
+	    committing a software change is verified to include only
+	    distinct bug ids.
+	  </para>
+	</section>
+
+
+        <section id="verification-checks-valid-log-message-size">
+          <title>
+            Valid Log Message Size
+          </title>
+
+	  <para>
+	    It is verified that the log message supplied to the SCM
+	    system system meets a configurable minimum log message
+	    size limit. This behavior is defined in the glue
+	    configuration file using the
+	    <filename>minimum_log_message_size</filename> policy
+	    variable, as shown in <xref
+	    linkend="fig-policy-minimum-log-message-size">.
+	  </para>
+
+	  <figure id="fig-policy-minimum-log-message-size">
+	    <title>Minimum log message size policy.</title>
+	    <programlisting>
+# Minimum number of characters log message.
+minimum_log_message_size => {
+    enabled => 1,
+    size => 50
+	    },
+	    </programlisting>
+	  </figure>
+
+	</section>
+
+
+        <section id="verification-checks-convention-based-labeling">
+          <title>
+            Convention-based Labeling
+          </title>
+
+	  <para>
+	    It is verified that the names used in labeling operations,
+	    such as creation of tags or branches, match a configurable
+	    label naming convention. This behavior is defined in the
+	    glue configuration file using the
+	    <filename>label_name</filename> policy variable, as shown
+	    in <xref linkend="fig-policy-label-naming-convention">.
+	  </para>
+
+	  <figure id="fig-policy-label-naming-convention">
+	    <title>Label naming convention policy.</title>
+	    <programlisting>
+# Format of label names (tag or branch names) defined as
+# regular expressions.
+label_name => {
+    enabled => 1,
+    names => [
+	      # Convention for official releases.
+	      # For example:
+	      # &devel-product-name-caps;_RELEASE_0-2-7
+	      '^.+?_RELEASE_[0-9]+-[0-9]+-[0-9]+$',
+
+	      # Convention for development builds.
+	      # For example:
+	      # &devel-product-name-caps;_BUILD_28_added_a_policies_mechanism
+	      '^.+?_BUILD_[0-9]+_.+$',
+
+	      # Convention for branches.
+	      # For example:
+	      # b_experimenting_with_policies_on_glue_side
+	      '^b_.+$',
+
+	      # Convention for private developer tags. Uses
+	      # the developer's initials (either 2 or 3).
+	      # For example:
+	      # p_kpm_prior_to_bug353_stabilization_fixes
+	      '^p_[a-zA-Z][a-zA-Z]?[a-zA-Z]_.+$'
+	      ]
+	  }
+	    </programlisting>
+	  </figure>
+
+	  <para>
+            Labels for official releases can correspond to versions of
+            the software that will be made public to users, and are
+            applied by release managers.
+	  </para>
+
+	  <para>
+            Developments builds can be helpful in development
+            environments that produce weekly builds, as a checkpoint
+            of a stable codebase. They are applied by release
+            managers. They can also correspond to development
+            milestones that will incorporate specific features, even
+            though the codebase is not ready for an official release.
+	  </para>
+
+	  <para>
+            Branches can be created when maintaining a previous,
+            already released, version of a software. For example, to
+            correct critical bugs or apply security fixes. They are
+            applied by release managers. They can also be created when
+            a feature may require a considerable amount of time to
+            implement while disrupting the main codebase drastically
+            (e.g. a core API change). A branch is created, the feature
+            is implemented, and when it is deemed stable it is merged
+            in the main codebase.
+	  </para>
+
+	  <para>
+            Private developer tags are very similar to development
+            builds. They can be applied directly by developers,
+            instead of strictly release managers, and should be
+            thought of as personal, developer milestones applied at
+            stable points. The developers may be working on features
+            of increased complexity, or features that will require a
+            significant amount of time to complete. Incrementally
+            applying private developer tags that match distinct
+            progress steps can help a developer debug a regression in
+            his implementation.  As another example, assume a
+            developer implements a feature using a specific
+            algorithm. Later, software requirements change, and the
+            developer is tasked to reimplement this feature using a
+            different algorithm. The developer can first apply a
+            private tag, and then reimplement the feature using the
+            new algorithm. If it is later determined that the feature
+            should revert back to using the original algorithm, the
+            developer can retrieve the original implementation using
+            the private developer tag he had applied. In a sense,
+            private developer tags can be applied at a finer
+            granularity than group development builds.
+	  </para>
+
+	</section>
+
+
+
+        <section id="verification-checks-presence-of-bug-ids">
+          <title>
+            Presence Of Bug Ids
+          </title>
+
+	  <para>
+	    The log message supplied to the SCM system when committing
+	    a software change may be required to include at least one
+	    bug id. This is determined using the
+	    <filename>presence_of_bug_ids</filename> policy variable,
+	    as shown in <xref
+	    linkend="fig-policy-presence-of-bug-ids">.
+	  </para>
+
+	  <figure id="fig-policy-presence-of-bug-ids">
+	    <title>Presence of bug ids policy.</title>
+	    <programlisting>
+#
+# Presence of bug ids. There are 3 options:
+#
+# - 'required'. A bug id must be specified during each
+#   activity. Activities without a bug id will not be permitted.
+#
+# - 'optional'. If a bug id is supplied, the activity will be
+#   integrated. If not the activity will be permitted to go
+#   through in the SCM system, but without bug-tracking
+#   integration.
+#
+# - 'none'. Never integrate activities regardless. This is
+#   different than flagging the glue inactive. The remaining
+#   policies are still enforced were applicable.
+#   (e.g. policy minimum_log_message_size).
+#
+# This policy is ALWAYS enabled
+presence_of_bug_ids =>  {
+    value => 'required'
+    },
+	    </programlisting>
+	  </figure>
+        </section>
+
+
+        <section id="verification-checks-valid-username-mapping">
+          <title>
+            Valid SCM To Bug-tracking Username Mapping
+          </title>
+
+	  <para>
+
+	    All integration requests must include the SCM username of
+	    the user issuing an integration request. This username
+	    must be mapped to the username of the user in the
+	    bug-tracking system. Bug-tracking systems that do not
+	    support SCM usernames are accomodated through a username
+	    mapping list defined in the daemon configuration file
+	    using the <filename>userlist</filename> variable. Three
+	    mapping mechanisms are available:
+          </para>
+
+          <itemizedlist spacing="compact">
+            <listitem>
+	      <para>
+                 <emphasis role="bold">LDAP</emphasis>. An LDAP
+                 directory is accessed to map the SCM username, as one
+                 LDAP attribute, into the bug-tracking username
+                 defined by another LDAP attribute. This can be
+                 configured in the daemon configuration file using the
+                 <filename>mapping_ldap</filename> variable, as shown
+                 in <xref linkend="fig-mapping-ldap">.
+
+	      <figure id="fig-mapping-ldap">
+	        <title>SCM to bug-tracking username mapping based on <filename>mapping_ldap</filename>.</title>
+	        <programlisting>
+# This is a mapping based on LDAP. ldap_scm_username_attribute
+# defines the LDAP attribute that will be used to match the
+# SCM username. The SCM username will be mapped into the
+# bug-tracking username defined by
+# ldap_bugtracking_username_attribute.
+mapping_ldap => {
+    enabled => 0,
+    ldap_server => '127.0.0.1',
+    ldap_port => '389',
+    # A binddn (e.g. cn=default) that has access to read all
+    # attributes
+    ldap_binddn => 'replace_with_binddn',
+    # The password of the binddn that has access to read all
+    # attributes
+    ldap_binddn_password => 'replace_with_binddn_password',
+    # The BaseDN in which to search for the
+    # ldap_scm_username_attribute (e.g. "ou=People,o=Company")
+    ldap_basedn => 'replace_with_basedn',
+    # The name of the attribute containing the user's SCM
+    # username
+    ldap_scm_username_attribute => 'uid',
+    # The name of the attribute containing the user's
+    # bug-tracking username
+    ldap_bugtracking_username_attribute => 'mail',
+    # LDAP filter to AND with the ldap_scm_username_attribute
+    # for filtering the list of valid SCM users.
+    ldap_filter => ''
+},
+	        </programlisting>
+	      </figure>
+	      </para>
+            </listitem>
+            <listitem>
+	      <para>
+                 <emphasis role="bold">List of regular
+	    expressions</emphasis>. A list of regular expressions
+	    describe how the SCM username will be matched and how it
+	    will be transformed into a bug-tracking username using the
+	    <filename>mapping_regexes</filename> variable. This can be
+	    configured in the daemon configuration file as shown in
+	    <xref linkend="fig-mapping-regexes">.
+	      <figure id="fig-mapping-regexes">
+	        <title>SCM to bug-tracking username mapping based on <filename>mapping_regexes</filename>.</title>
+	        <programlisting>
+# This is a mapping based on regular expressions. The first
+# expression defines how the SCM username will be matched. The
+# second defines how it will be transformed, and uses the
+# unnamed variable $1 that was described by the first
+# expression. The mapping is checked for a match as:
+# m/$first_regex/
+# and is applied as: s/$first_regex/$second_regex/
+mapping_regexes => {
+    enabled => 0,
+    values => {
+    # This is an example of mapping a Windows Domain user
+    # from 'DOMAIN\user' to 'user@EMAIL_DOMAIN.com'
+    '^DOMAIN\\\\(\w+)$' => '$1\@EMAIL_DOMAIN.com',
+    # This is an example of mapping a UNIX user from
+    # 'example_user' to 'example_user@exampledomain.com'
+    '^(\w+)$' => '$1\@exampledomain.com'
+    }
+},
+	        </programlisting>
+	      </figure>
+	      </para>
+            </listitem>
+            <listitem>
+	      <para>
+                 <emphasis role="bold">Direct</emphasis>.  A direct
+	    one-to-one mapping of an SCM username to a bug-tracking
+	    username using the <filename>mapping_values</filename>
+	    variable. This can be configured in the daemon
+	    configuration file as shown in <xref
+	    linkend="fig-mapping-values">.
+	      <figure id="fig-mapping-values">
+	        <title>SCM to bug-tracking username mapping based on <filename>mapping_values</filename>.</title>
+	        <programlisting>
+# This is a one-to-one mapping of SCM usernames to bugtracking
+# usernames. Mappings in this list override mappings from
+# mapping_regexes.
+mapping_values => {
+    enabled => 0,
+    values => {
+    'DOMAIN\\example_user' => 'example_user@DOMAIN.com',
+    'example_user2' => 'example_user2@exampledomain.com'
+    }
+},
+	        </programlisting>
+	      </figure>
+	      </para>
+            </listitem>
+          </itemizedlist>
+
+	  <para>
+            If the SCM username already matches the bug-tracking
+	    username, these mappings can be disabled in the daemon
+	    configuration file as shown in <xref
+	    linkend="fig-mappings-disabled">. If any of these mappings
+	    are enabled, they are executed in the order presented
+	    here. Mappings based on <filename>mapping_ldap</filename>
+	    are appiled first. Mappings based on
+	    <filename>mapping_regexes</filename> are applied second
+	    and can override a mapping based on
+	    <filename>mapping_ldap</filename>. Mappings based on
+	    <filename>mapping_values</filename> are applied last and
+	    can override all other mappings.
+
+	    <figure id="fig-mappings-disabled">
+              <title>Disabling SCM to bug-tracking username mappings.</title>
+	        <programlisting>
+mappings => {
+    # Enable SCM username translation. This flag must be
+    # turned on for any of the mappings that follow to apply.
+    enabled => 0,
+	        </programlisting>
+	      </figure>
+
+	  </para>
+
+	  <para>
+            The username verification is applied case sensitive. This
+            can be configured in the daemon configuration file as
+            shown in <xref
+            linkend="fig-case-sensitive-username-verification">. For
+            example, Microsoft Active Directory tends to capitalize
+            the first letter of each word in the email address. The
+            email address returned does not match the email address
+            reported by the bug-tracker in lowercase, and needs
+            <filename>case_sensitive_username_verification</filename>
+            to be disabled.
+
+	    <figure id="fig-case-sensitive-username-verification">
+              <title>Disabling case sensitive SCM to bug-tracking username verification.</title>
+	        <programlisting>
+# Apply a case sensitive username verification.
+case_sensitive_username_verification => 0,
+	        </programlisting>
+	      </figure>
+	  </para>
+
+        </section>
+
+
+        <section id="verification-checks-valid-product-name">
+          <title>
+            Valid Product Name
+          </title>
+          <titleabbrev id="verification-checks-valid-product-name-short">Valid product name</titleabbrev>
+
+	  <para>
+	    An <filename>&devel-config-activity-verify</filename>
+	    integration request must refer to bug ids filed against
+	    the SCM system's associated product name in the
+	    bug-tracking system. Similarly, an
+	    <filename>activity_tag</filename> needs to know the
+	    product name in which the tag will be inserted as a
+	    version. This behavior is optional and can be configured
+	    in the glue configuration file using the
+	    <filename>valid_product_name</filename> policy variable,
+	    as shown in <xref
+	    linkend="fig-policy-valid-product-name">.
+          </para>
+
+	  <figure id="fig-policy-valid-product-name">
+	   <title>Valid product name policy.</title>
+	      <programlisting>
+# The bug against which an activity is issued must be filed
+# against a valid product name.
+valid_product_name => {
+    enabled => 1
+    },
+	      </programlisting>
+          </figure>
+
+          <para>
+            Regardless of the configuration of the
+	    <filename>valid_product_name</filename> policy, the
+	    product name is required by other parts of the
+	    integration. For example, it is needed to detect labeling
+	    operations in Subversion, as shown in <xref
+	    linkend="fig-label-directories">, for <xref
+	    linkend="additional-features-mail-notification"
+	    endterm="additional-features-mail-notification-short"> and
+	    for <xref linkend="additional-features-autolinkification"
+	    endterm="additional-features-autolinkification-short">. It
+	    can be specified in the glue configuration file using the
+	    <filename>product_name_definition</filename> policy
+	    variable in two ways:
+          </para>
+
+          <itemizedlist spacing="compact">
+            <listitem>
+	      <para>
+               <emphasis role="bold">Manually defined</emphasis>. All
+               SCM activity in the repository will be integrated
+               against a single product name in the bug-tracker. This
+               requires setting in the
+               <filename>product_name_definition</filename> policy's
+               <filename>values</filename> the entry of the special
+               regular expression <filename>(.*)</filename> to the
+               desired product name, as shown in <xref
+               linkend="fig-product-name-definition-manual">.
+              </para>
+
+	      <figure id="fig-product-name-definition-manual">
+	      <title>Manually defined product name.</title>
+	      <programlisting>
+# Product name definition.
+#
+# NOTE: The regular expression '(.*)' is special and means
+#       replace with exactly this value. It is meant to be used
+#       with SCM systems that do not provide the list of
+#       affected files during verification (e.g. CVS 1.11.x)
+#
+# This policy is ALWAYS enabled
+product_name_definition => {
+    type => 'manual',
+    values => { '(.*)' => 'TestProduct' }
+    },
+	      </programlisting>
+	      </figure>
+            </listitem>
+            <listitem>
+              <para>
+               <emphasis role="bold">Automatically
+               defined</emphasis>. Some organizations may follow a
+               development model that permits multiple products to be
+               hosted under the same SCM repository. For example,
+               multiple product names in the bug-tracking system may
+               correspond to multiple branches in the SCM
+               system. &devel-product-name; can autodetect the
+               appropriate product name by consulting a list of
+               regular expressions that describe how to identify and
+               map the product name from a path in a repository.
+              </para>
+              <para>
+               <xref linkend="fig-product-name-definition-auto"> shows
+               a configuration example that can autodetect from the
+               repository structure of <xref
+               linkend="fig-product-name-definition-auto-scm-structure">
+               the list of product names in <xref
+               linkend="fig-product-name-definition-auto-product-names">. When
+               a file from one of the directories shown in <xref
+               linkend="fig-product-name-definition-auto-scm-structure">
+               is commited, the appropriate product name shown in
+               <xref
+               linkend="fig-product-name-definition-auto-product-names">
+               will be defined.
+              </para>
+	      <figure id="fig-product-name-definition-auto">
+	      <title>Automatically defined product name.</title>
+	      <programlisting>
+# Product name definition.
+#
+# The product name is autodefined based on regular
+# expressions. The first expression defines how each commited
+# filename will be matched. The second defines how it will be
+# transformed, and uses the unnamed variables (e.g. $1 $2)
+# that were described by the first expression. The mapping is
+# checked for a match as:
+# m/$match_regex/
+# and is applied as: s/$match_regex/$replace_regex/
+#
+# This policy is ALWAYS enabled
+product_name_definition => {
+    type => 'auto',
+    values => { 'dir/prefix1/productMain_(.+?)/' => '$1',
+                'dir2/(.+?)/' => '$1',
+                'dir3/(?:trunk|tags|branches)/(.+?)/' => '$1',
+                'dir4/productLine_(.*)/subproducts/(.*)/' => '$2_$1'
+              }
+    },
+	      </programlisting>
+              </figure>
+	      <figure id="fig-product-name-definition-auto-scm-structure">
+	      <title>Repository structure with product names that can be automatically defined.</title>
+	      <programlisting>
+dir/prefix1/productMain_subproductA/trunk
+dir/prefix1/productMain_subproductA/tags
+dir/prefix1/productMain_subproductA/branches
+dir/prefix1/productMain_subproductB/trunk
+dir/prefix1/productMain_subproductB/tags
+dir/prefix1/productMain_subproductB/branches
+dir2/productA_3-1/trunk
+dir2/productA_3-1/tags
+dir2/productA_3-1/branches
+dir2/productB
+dir2/productB_multiuser
+dir3/trunk/productC
+dir3/tags/productC
+dir3/branches/productC
+dir4/productLine_2009/subproducts/subproductC
+	      </programlisting>
+              </figure>
+	      <figure id="fig-product-name-definition-auto-product-names">
+	      <title>Automatically mapped product names from <xref
+	      linkend="fig-product-name-definition-auto-scm-structure">.</title>
+	      <programlisting>
+subproductA
+subproductB
+productA_3-1
+productB
+productB_multiuser
+productC
+subproductC_2009
+	      </programlisting>
+             </figure>
+
+             <para>
+               Another example where multiple products may be required
+               would be a contracting company maintaining all their
+               contracts in the same SCM repository but using separate
+               product names in the bug-tracking tool.
+             </para>
+
+             <note>
+	       <para>
+                 We must note that, from an SCM perspective, hosting
+                 multiple products that share a common codebase in the
+                 same SCM system may not be the ideal way to
+                 go. Organizations that follow this development model
+                 may want to consider developing their common codebase
+                 in it's own SCM repository, as a separate
+                 product. They can then import the common code as a
+                 vendor branch in multiple SCM repositories, each
+                 corresponding to a single product name they wish to
+                 publicly release. More information on vendor branches
+                 can be found in the <ulink
+                 url="https://www.cvshome.org/docs/manual/cvs-1.12.9/cvs_13.html#SEC104">CVS</ulink>
+                 and <ulink
+                 url="http://svnbook.red-bean.com/svnbook/ch07s04.html">Subversion</ulink>
+                 manuals.
+	      </para>
+            </note>
+
+             <note>
+	       <para>
+                 Automatically defined product names are not supported
+                 <ulink
+                 url="http://bugzilla.mkgnu.net/show_bug.cgi?id=746">
+                 for CVS 1.11.x</ulink> or <ulink
+                 url="http://bugzilla.mkgnu.net/show_bug.cgi?id=994">
+                 for Git, yet</ulink>.
+	      </para>
+            </note>
+
+           </listitem>
+          </itemizedlist>
+
+	</section>
+
+
+        <section id="verification-checks-valid-bug-owner">
+          <title>
+            Valid Bug Owner
+          </title>
+
+	  <para>
+	    It is verified that the SCM user issuing an
+	    <filename>&devel-config-activity-verify</filename>
+	    integration request is the owner or one of the owners of
+	    the bug against which subsequent integration requests will
+	    be issued. This behavior is optional and can be configured
+	    in the glue configuration file using the
+	    <filename>valid_bug_owner</filename> policy variable, as
+	    shown in <xref linkend="fig-policy-valid-bug-owner">.
+	  </para>
+
+	  <figure id="fig-policy-valid-bug-owner">
+	    <title>Valid bug owner policy.</title>
+	    <programlisting>
+# The SCM user issuing an activity must be the user to which
+# the bug is assigned
+valid_bug_owner => {
+    enabled => 1,
+},
+	    </programlisting>
+          </figure>
+
+	</section>
+
+
+
+
+        <section id="verification-checks-anonymous-scm-username">
+          <title>
+            Anonymous SCM Username
+          </title>
+
+	  <para>
+	    It is always verified that the SCM system supplied a
+	    username when generating activity. However, some SCM
+	    systems may not always supply an SCM username. One example
+	    is Subversion running an <filename>svnserve</filename>
+	    daemon granting anonymous access. The username of the SCM
+	    user under which activity should be generated can be
+	    optionally configured in the glue configuration file using
+	    the <filename>anonymous_scm_username</filename> policy
+	    variable, as shown in <xref
+	    linkend="fig-policy-anonymous-scm-username">.
+	  </para>
+
+	  <figure id="fig-policy-anonymous-scm-username">
+	    <title>Anonymous SCM username policy.</title>
+	    <programlisting>
+# All integration activity must originate from a specific SCM
+# user. If the SCM system does not provide the SCM user
+# information (e.g Subversion running an svnserve daemon with
+# anonymous access), assume the activity originated from a
+# specific SCM user
+anonymous_scm_username => {
+    enabled => 0,
+    value => 'anonymous_scm_user'
+    },
+	    </programlisting>
+          </figure>
+
+	</section>
+
+
+
+        <section id="verification-checks-open-bug-state">
+          <title>
+            Open Bug State
+          </title>
+
+	  <para>
+	    It is verified that the bug against which an
+	    <filename>&devel-config-activity-verify</filename>
+	    integration request is issued must is in an open, active
+	    state in the bug-tracking system. This behavior is
+	    optional and can be configured in the glue configuration
+	    file using the <filename>open_bug_state</filename> policy
+	    variable, as shown in <xref
+	    linkend="fig-policy-open-bug-state">.
+	  </para>
+
+	  <figure id="fig-policy-open-bug-state">
+	    <title>Open bug state policy.</title>
+	    <programlisting>
+# The bug against which an activity is issued must be in an
+# open state
+open_bug_state => {
+    enabled => 1
+    },
+	    </programlisting>
+          </figure>
+
+	</section>
+      
+  </section>
+
+
+
+  <section id="additional-features">
+    <title>
+      Additional Features
+    </title>
+
+        <section id="additional-features-mail-notification">
+          <title>
+            Mail Notification
+          </title>
+          <titleabbrev id="additional-features-mail-notification-short">Mail notification</titleabbrev>
+
+	  <para>
+            An email can be sent when an integration activity, either
+	    commiting or labeling, is accepted. This is defined in the
+	    glue configuration file using the
+	    <filename>mail_on_success</filename> policy variable, as
+	    shown in <xref linkend="fig-mail-notification">. Emails
+	    can also be sent after a failed commit activity if the SCM
+	    system overshadows and does not report the error message
+	    using the <filename>mail_on_failure</filename> policy
+	    variable.
+
+
+            <warning>
+              <para>
+                For example, Subversion does not report error messages
+	        of its
+	        <filename>&devel-config-svnhook-postcommit;</filename>
+	        hook.
+              </para>
+            </warning>
+
+	    <figure id="fig-mail-notification">
+	      <title>Mail notification policy.</title>
+	      <programlisting>
+#
+# Send email notifications after integration activity
+#
+mail_notification => {
+	# Send an email after a successful activity (both
+        # verifying and labeling)
+	mail_on_success => 0,
+	# Send an email after a failed commit activity that the
+	# SCM system may overshadow and not report
+	# (e.g. Subversion does not report error messages of its
+	# post-commit hook.) .
+	mail_on_failure => 1,
+	mail_settings => {
+	    # Must be a valid email address. Can remain empty if
+	    # other users should be notified.
+	    To => 'replace_with_commit_mailing_list_email@exampledomain.com',
+	    # Must be a valid email address. Can remain empty if
+	    # mail_also_appears_from_scm_user is enabled.
+	    From => '&devel-product-name; &lt;replace_with_mailing_list_owner_email@exampledomain.com&gt;',
+	    # Defaults to localhost if left empty
+	    Smtp => 'replace_with_mail_server.exampledomain.com'
+	},
+	# Sending email when a tag is moved or deleted in CVS can
+	# be annoying, since multiple emails are sent per
+	# directory (but not when a tag is added). mail_on_label
+	# can disable that behavior.
+	mail_on_label => 1,
+	mail_recipients => {
+		# Make the email also appear to have been sent by the
+		# SCM user.
+		mail_also_appears_from_scm_user => 1,
+		# List of users that will be notified
+		mail_scm_user => 1,
+		mail_bug_owner => 1,
+		mail_bug_reporter => 1,
+		mail_bug_monitors => 1,
+		mail_product_owners => 1
+	}
+}
+	      </programlisting>
+	    </figure>
+
+	  </para>
+
+	</section>
+
+
+        <section id="additional-features-bug-resolution">
+          <title>
+            Bug Resolution
+          </title>
+          <titleabbrev id="additional-features-bug-resolution-short">Bug resolution</titleabbrev>
+
+	  <para>
+            It is possible to automatically change the resolution
+            status of a bug at the time a software change is
+            committed. It is verified that the requested resolution
+            status is a valid resolution state in the bug-tracker and
+            that the requested change does not violate the workflow of
+            the bug-tracker. For example, changing a bug resolution in
+            Bugzilla from <filename>REOPENED</filename> to
+            <filename>UNCONFIRMED</filename> is an invalid status
+            change.
+	  </para>
+
+	  <para>
+            Changing resolution status is accomplished if a resolution
+            template expected by &devel-product-name; is identified in
+            the log message. The resolution does not need to apply to
+            the same bug the software change is applied against. It
+            could be applied to a different bug, multiple bugs, or
+            multiple different resolutions could be applied to
+            multiple different bugs. The resolution template must be
+            specified on a separate line on its own and is completely
+            removed before the log message is identified.
+          </para>
+
+          <para>
+            Four regular expressions describe how the bug id, the new
+            status, the status resolution, and the status resolution
+            data will be identified. These are defined as part of the
+            <filename>resolution_template</filename> policy variable
+            as shown in <xref linkend="fig-resolution-template">,
+            through the variables
+            <filename>resolution_bugid_regex</filename>,
+            <filename>resolution_status_regex</filename>,
+            <filename>resolution_status_resolution_regex</filename>,
+            and
+            <filename>resolution_status_resolution_data_regex</filename>.
+	  </para>
+
+          <para>
+            A way to split a list of multiple bug ids into separate
+	    ids is also described with a regular expression through
+	    the variable
+	    <filename>resolution_bugid_split_regex</filename>.  An
+	    example log message accepted by these expressions is shown
+	    in <xref linkend="fig-resolution-template-example">.
+	  </para>
+
+	  <figure id="fig-resolution-template">
+	    <title>Regular expressions describing the bug id, the
+	    split of bug ids and the resolution status.</title>
+	    <programlisting>
+# Resolution template.
+#
+# Regular expressions that describe how a resolution status
+# for a list of bug ids can be identified
+resolution_template => {
+    enabled => 1,
+    # The resolution_bugid_regex is a regular expression that
+    # must set the unnamed variable $1 to the bug number, or
+    # list of bug numbers. It is checked for a match as:
+    # m/$regex/s
+    resolution_bugid_regex => '&devel-config-resolution-template-bugid-regex;',
+    # The resolution_bugid_split_regex is a regular expression
+    # describing how a list of bug ids will be split in
+    # individual bug numbers. It is split as: /$regex/
+    resolution_bugid_split_regex => '&devel-config-resolution-template-bugid-split-regex;',
+    # The resolution_status_regex is a regular expression that
+    # must set the unnamed variable $1 to the requested
+    # status. It is checked for a match as: m/$regex/s
+    #
+    # For example, if one issued in the log message the
+    # resolution command:
+    #
+    # &devel-config-resolution-template-bugid-token-prefix;547&devel-config-resolution-template-bugid-token-postfix; reopened
+    #
+    # Then the resolution_status_regex is expected to match
+    # "reopened"
+    resolution_status_regex => '&devel-config-resolution-template-status-regex;',
+    # The resolution_status_resolution_regex is a regular
+    # expression that must set the unnamed variable $1 to the
+    # requested resolution. It is checked for a match as:
+    # m/$regex/s
+    #
+    # For example, if one issued in the log message the
+    # resolution command:
+    #
+    # &devel-config-resolution-template-bugid-token-prefix;547&devel-config-resolution-template-bugid-token-postfix; resolved fixed
+    #
+    # Then the resolution_status_resolution_regex is expected
+    # to match "fixed"
+    resolution_status_resolution_regex => '&devel-config-resolution-template-status-resolution-regex;'
+    # The resolution_status_resolution_data_regex is a regular
+    # expression that must set the unnamed variable $1 to the
+    # additional data supplied by the resolution status. It is
+    # checked for a match as:
+    # m/$regex/s
+    #
+    # For example, if one issued in the log message the
+    # resolution command:
+    #
+    # &devel-config-resolution-template-bugid-token-prefix;548&devel-config-resolution-template-bugid-token-postfix; resolved duplicate 547
+    #
+    # Then the resolution_status_resolution_data_regex is
+    # expected to match "547"
+    resolution_status_resolution_data_regex => '&devel-config-resolution-template-status-resolution-data-regex;',
+    },
+	    </programlisting>
+	  </figure>
+
+          <para>
+             Some bug-trackers may report resolution-related
+             information with a token that contains spaces. For
+             example, Mantis 1.0.0 offers the resolution "unable to
+             reproduce". This would make it difficult to develop
+             regular expressions that will correctly identify the new
+             status and resolution.  This resolution could instead be
+             written in a log message by the user as
+             "unable_to_reproduce" and have &devel-product-name;
+             configured to replace all underscores ("_") with spaces
+             (" ") using the
+             <filename>resolution_status_convert</filename> policy, as
+             shown in <xref linkend="fig-resolution-status-convert">.
+          </para>
+
+	  <figure id="fig-resolution-status-convert">
+	    <title>Regular expressions defining a resolution status
+	    character conversion.</title>
+	    <programlisting>
+    # The resolution_status_* information can have all of the
+    # following characters converted according to a regular
+    # expression. This is useful in addressing the limitation
+    # of some bug-trackers that report a resolution-related
+    # information with a token that contains spaces. For
+    # example:
+    #
+    # "unable to reproduce" in Mantis.
+resolution_template => {
+    resolution_status_convert => {
+	enabled => 0,
+	# Regular expressions that will be applied to convert
+	# the characters of all resolution_status_*
+	# information. It is applied for substitution as:
+	#
+	# s/$convert_from/$convert_to/g
+	resolution_status_convert_from => '&devel-config-resolution-template-status-convert-from-regex;',
+	resolution_status_convert_to => '&devel-config-resolution-template-status-convert-to-regex;'
+	},
+}
+	    </programlisting>
+	  </figure>
+
+          <para>
+            This template can be customized when the
+            &devel-product-name; codebase is configured, prior to
+            installation. The arguments
+            <filename>--with-resolution-template-bugid-regex=&lt;regular_expression&gt</filename>,
+            <filename>--with-resolution-template-bugid-split-regex=&lt;regular_expression&gt</filename>,
+            <filename>--with-resolution-template-status-regex=&lt;regular_expression&gt</filename>,
+            <filename>--with-resolution-template-status-resolution-regex=&lt;regular_expression&gt</filename>,
+            <filename>--with-resolution-template-status-resolution-data-regex=&lt;regular_expression&gt</filename>,
+            <filename>--with-resolution-template-status-convert-from-regex=&lt;regular_expression&gt</filename>,
+            and
+            <filename>--with-resolution-template-status-convert-to-regex=&lt;regular_expression&gt</filename>
+            can be passed to <filename>configure</filename>, shown in
+            <xref linkend="fig-source-installation">.
+          </para>
+
+	  <figure id="fig-resolution-template-example">
+	    <title>Example log message that changes the resolution status of multiple bugs.</title>
+	    <programlisting>
+&devel-config-resolution-template-bugid-token-prefix;548,622&devel-config-resolution-template-bugid-token-postfix; reopened
+&devel-config-resolution-template-bugid-token-prefix;755&devel-config-resolution-template-bugid-token-postfix; resolved worksforme
+&devel-config-log-template-bugid-token-prefix;547&devel-config-log-template-bugid-token-postfix;Implemented automatic status resolution as a new policy. This seems
+to work but will need improvements in the testsuite.
+&devel-config-resolution-template-bugid-token-prefix;547&devel-config-resolution-template-bugid-token-postfix; REsolved fIXED
+&devel-config-resolution-template-bugid-token-prefix;548&devel-config-resolution-template-bugid-token-postfix; RESOLVED duplicate 547
+&devel-config-resolution-template-bugid-token-prefix;647&devel-config-resolution-template-bugid-token-postfix; assigned unassigned@mkgnu.net
+	    </programlisting>
+	  </figure>
+
+          <note>
+             <para>
+                <xref linkend="fig-resolution-template-example"> does
+                not show multiple examples. It shows <emphasis
+                role="bold">one</emphasis> example of <emphasis
+                role="bold">one</emphasis> log message.
+             </para>
+          </note>
+
+          <para>
+            The resolution status and resolution descriptions are
+            verified case insensitive by default, as shown in <xref
+            linkend="fig-resolution-template-example">. This can be
+            controlled using the
+            <filename>resolution_status_case_sensitive_verification</filename>
+            variable, as shown in <xref
+            linkend="fig-resolution-case-sensitive-verification">.
+          </para>
+
+	  <figure id="fig-resolution-case-sensitive-verification">
+	    <title>Case sensitive resolution verification variable.</title>
+	    <programlisting>
+    # Apply a case sensitive resolution and resolution status verification
+    resolution_status_case_sensitive_verification => 0,
+	    </programlisting>
+	  </figure>
+
+          <para>
+            A resolution description must refer to bug ids filed
+	    against the SCM system's associated product name in the
+	    bug-tracking system. This behavior is optional and can be
+	    configured in the glue configuration file using the
+	    <filename>resolution_valid_product_name</filename> policy
+	    variable, as shown in <xref
+	    linkend="fig-resolution-template-valid-product-name">.
+          </para>
+
+	  <figure id="fig-resolution-template-valid-product-name">
+	   <title>Valid product name policy in reference to bug resolution.</title>
+	      <programlisting>
+resolution_template => {
+    # The bugs whose resolution status will be changed must be
+    # filed against a valid product name.
+    resolution_valid_product_name => 1,
+},
+	      </programlisting>
+          </figure>
+
+
+	  <para>
+	    The SCM user issuing a bug resolution must be the owner of
+	    the bug against which subsequent integration requests will
+	    be issued. This behavior is optional and can be configured
+	    in the glue configuration file using the
+	    <filename>resolution_valid_bug_owner</filename> policy
+	    variable, as shown in <xref
+	    linkend="fig-resolution-template-valid-bug-owner">.
+	  </para>
+
+
+	  <figure id="fig-resolution-template-valid-bug-owner">
+	   <title>Valid bug owner policy in reference to bug resolution.</title>
+	      <programlisting>
+resolution_template => {
+    # The SCM user must be the user to which the bugs whose
+    # resolution status will be changed are assigned
+    resolution_valid_bug_owner => 1
+},
+	      </programlisting>
+          </figure>
+
+
+	</section>
+
+
+        <section id="additional-features-autolinkification">
+          <title>
+            Autolinkification
+          </title>
+          <titleabbrev id="additional-features-autolinkification-short">Autolinkification</titleabbrev>
+
+	  <para>
+            There are <ulink
+            url="http://bugzilla.mkgnu.net/show_bug.cgi?id=266">plans</ulink>
+            to support autolinkification.
+	  </para>
+
+	</section>
+
+
+  </section>
+
+
+
+</chapter>

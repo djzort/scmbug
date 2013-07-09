@@ -1,0 +1,535 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERC# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+package @DEVEL_PRODUCT_NAME@::Daemon::RequestTracker;
+
+@ISA = qw(@DEVEL_PRODUCT_NAME@::Daemon::Bugtracker);
+
+use strict;
+use Data::Dumper;
+use @DEVEL_PRODUCT_NAME@::Daemon::Bugtracker;
+use @DEVEL_PRODUCT_NAME@::Common;
+    
+use vars qw (
+  $BUG_STATUS_INVALID_STRING
+);
+
+use constant LIB_DIR       => "/lib";
+use constant LOCAL_LIB_DIR => "/local/lib";
+
+
+
+# Loads the Request Tracker configuration file
+sub init_specific {
+    my $self = shift;
+    my $data = shift;
+
+    my $install_dir = $self->installation_directory();
+    chdir $install_dir;
+    
+    open( DIR_HANDLE, $install_dir );
+    unless ( -e DIR_HANDLE ) {
+        return ( 1,
+            "Installation directory '" . $install_dir . "' not found.\n" );    
+    }
+
+    unshift @INC, $install_dir . LIB_DIR;
+    unshift @INC, $install_dir . LOCAL_LIB_DIR;
+    
+    my $package_name = "RT::Interface::CLI";
+    if ( package_exists($package_name) == 0 ) {
+        return ( 2,
+                "Package '" . $package_name . "' not found.\n" . 
+                package_installation_instructions($package_name) );
+    }
+    
+    RT::Interface::CLI::CleanEnv();
+    RT::LoadConfig();
+    close(DIR_HANDLE);
+
+    return 0;
+}
+
+
+
+# -----------------------------------------------------------------------------
+# These functions are required by the Bugtracker interface
+# -----------------------------------------------------------------------------
+
+
+
+# Checks whether version is supported
+sub set_version_type {
+    my $self    = shift;
+    my $version = $self->version();
+
+    if ( $version =~ m/(\d+)\.(\d+)\.(\d+)/ ) {
+        my $major = $1;
+        my $minor = $2;
+        my $patch = $3;
+        if ( ( $major == 3 && ($minor == 4 ||
+			       $minor == 6) ) ) {
+            $self->{version_type} = $BUGTRACKER_VERSION_LATEST;
+        } else {
+            $self->{version_type} = $BUGTRACKER_VERSION_NOT_SUPPORTED;
+        }
+    } else {
+        $self->{version_type} = $BUGTRACKER_VERSION_WRONG_FORMAT;
+    }
+}
+
+
+
+# -----------------------------------------------------------------------------
+# These functions are required by the Integration interface
+# -----------------------------------------------------------------------------
+
+
+
+# Connects to the bug-tracker database
+sub integration_connect_database {
+    my $self = shift;
+
+    # Initializes the Request Tracker API
+    RT::Init();
+}
+
+
+
+# Disconnects from the bug-tracker database
+sub integration_disconnect_database {
+    my $self = shift;
+}
+
+
+
+# Enters an SCM check-in comment, originating from the bug-tracking
+# username of the SCM user, against a bug
+#
+# PARAMETERS:
+# $1 - Bug id
+# $2 - Bug-tracker username of SCM user that will enter a comment
+# $3 - Comment to be entered
+#
+# RETURNS:
+# - 0 on success
+# - 1,<a string describing the error> on failure
+sub integration_add_comment {
+    my $self = shift;
+    my ( $bugid, $username, $comment ) = (@_);
+    
+    my $user = new RT::CurrentUser();
+    $user->LoadByName($username);
+    my $ticket = RT::Ticket->new($user);
+    $ticket->Load($bugid);
+    $ticket->Comment(Content => $comment);
+
+    return 0;
+}
+
+
+
+# Changes a bug resolution originating from the bug-tracking username
+# of the SCM user
+#
+# PARAMETERS:
+# $1 - Bug id
+# $2 - Bug-tracker username of SCM user that will change the resolution
+# $3 - New bug status
+# $4 - Possible bug resolution
+# $5 - Possible bug resolution data
+#
+# RETURNS:
+# - 0 on success
+# - 1,<a string describing the error> on failure
+sub integration_change_bug_resolution {
+    my $self = shift;
+    my ( $bugid, $username, $status, $resolution, $resolution_data ) = ( @_ );
+
+    return ( 1, "Changing bug resolution is not yet implemented in this version of Request Tracker.\n");
+}
+
+
+
+# Checks if the bug resolution change is valid
+#
+# PARAMETERS:
+# $1 - The bug id
+# $2 - The proposed new status
+# $3 - The proposed resolution for the new status
+# $4 - Apply case sensitive verification
+#
+# RETURNS:
+# <return_code, current_bug_status> where return_code is:
+# - 0 if the check is valid
+# - 1 if the proposed new status is invalid
+# - 2 if the proposed new resolution is invalid
+sub integration_bug_resolution_change_is_valid {
+    my $self = shift;
+    my ( $bugid, $proposed_status, $proposed_resolution, $case_sensitive_verification ) = ( @_ );
+
+    my $bug_status = $self->integration_get_bug_status( $bugid );
+
+    return 1, "__BUG_RESOLUTION_CHANGE_VALID_NOT_IMPLEMENTED_IN_REQUEST_TRACKER__";
+}
+
+
+
+# Returns a string that reports the list of valid resolution states for
+# a given bug status
+sub integration_valid_resolution_states_list {
+    my $self = shift;
+    my ( $bug_status_string ) = ( @_ );
+
+    return "__RESOLUTION_STATES_LIST_NOT_IMPLEMENTED_IN_REQUEST_TRACKER__";
+}
+
+
+
+# Returns a string that reports the list of valid resolutions in the
+# bug-tracker
+#
+# PARAMETERS:
+# $1 - The bug status string for which the valid resolutions list
+#      should be reported
+# $2 - Apply case sensitive verification
+sub integration_valid_resolutions_list {
+    my $self = shift;
+    my ( $bug_status_string, $case_sensitive_verification ) = ( @_ );
+
+    return "__RESOLUTIONS_LIST_NOT_IMPLEMENTED_IN_REQUEST_TRACKER__";
+}
+
+
+
+# Given a bug id, returns the name of the product to which the bug
+# belongs
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_product_name {
+    my $self  = shift;
+    my $bugid = shift;
+    my $bug_product_name;
+
+    my $ticket = RT::Ticket->new(RT::SystemUser());
+    $ticket->Load($bugid);
+    my $queue = $ticket->QueueObj();
+    $bug_product_name = $queue->Name;
+
+    return $bug_product_name;
+}
+
+
+
+# Given a bug id, returns an array with the bug-tracking usernames of
+# the users to which the bug is assigned
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_owners {
+    my $self  = shift;
+    my $bugid = shift;
+    my $bug_owner;
+
+    my $ticket = RT::Ticket->new(RT::SystemUser());
+    $ticket->Load($bugid);
+    $bug_owner = $ticket->OwnerObj()->Name;
+
+    my @bug_owners = ( $bug_owner );
+    return @bug_owners;
+}
+
+
+
+# Given a bug id, returns the bug-tracking email address of the user to
+# which that reported the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_reporter_email {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_reporter_email;
+
+    # NOT SUPPORTED
+    return $bug_reporter_email;
+}
+
+
+
+# Given a username, returns the user's email address
+#
+# PARAMETERS:
+# $1 - Username
+sub integration_get_user_email {
+    my $self = shift;
+    my $username = shift;
+
+    # NOT SUPPORTED
+    return $username;
+}
+
+
+
+# Given a bug id, returns the email addresses of the users monitoring
+# the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_monitors_email_list {
+    my $self = shift;
+    my $bugid = shift;
+
+    # NOT SUPPORTED
+    return undef;
+}
+
+
+
+
+# Given a project_name, returns the email addresses of all the
+# managers of the project.
+#
+# For Bugzilla, this is not applicable
+#
+# PARAMETERS:
+# $1 - Project name
+sub integration_get_managers_email_list {
+    my $self = shift;
+    my $project_name = shift;
+
+    # NOT SUPPORTED
+    return undef;
+}
+
+
+
+
+# Given a bug id, returns the status of the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_status {
+    my $self  = shift;
+    my $bugid = shift;
+    my $bug_status;
+
+    my $ticket = RT::Ticket->new(RT::SystemUser());
+    $ticket->Load($bugid);
+    $bug_status = $ticket->Status;
+    
+    return $bug_status;
+}
+
+
+
+# Given a bug id, returns 1 if the bug is in a state considered
+# active, or 0 otherwise. Active bug state examples would be
+# "assigned" and "reopened". A bug can accept checkins in this
+# state. However, "new" and "confirmed" are not active since in this
+# state the bug has not been assigned to a developer. "resolved" is
+# obviously not active.
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_bug_in_active_state {
+    my $self       = shift;
+    my $bugid      = shift;
+    my $bug_status = $self->integration_get_bug_status($bugid);
+
+    my $ticket = RT::Ticket->new(RT::SystemUser());
+    $ticket->Load($bugid);
+    my $queue = $ticket->QueueObj();
+    if ( $queue->IsActiveStatus( $ticket->Status ) ) {
+       return ( 1, $bug_status );
+    }
+
+    return ( 0, $bug_status );
+}
+
+
+
+# Returns a string that reports the list of active states in the
+# bug-tracker
+sub integration_active_states_list {
+    my $self  = shift;
+    my $count = 0;
+    my $list  = "";
+
+    foreach my $status ( RT::Queue->ActiveStatusArray() ) {
+        $count++;
+        if ( $count > 1 ) {
+            $list .= " or ";
+        }
+        $list .= "'" . $status . "'";
+    }
+
+    if ( $count == 0 ) {
+        $list .= $BUG_STATUS_INVALID_STRING . " state";
+    } elsif ( $count == 1 ) {
+        $list .= " state";
+    } else {
+        $list .= " states";
+    }
+
+    return $list;
+}
+
+
+
+# Given a bug id, returns the subject/summary line of the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_subject {
+    my $self  = shift;
+    my $bugid = shift;
+    my $bug_subject;
+
+    my $ticket = RT::Ticket->new(RT::SystemUser());
+    $ticket->Load($bugid);
+    $bug_subject = $ticket->Subject;
+
+    return $bug_subject;
+}
+
+
+
+# Given a product name and a tag name, checks if the tag exists in the
+# list of available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+#
+# RETURNS:
+# - 0 the tag does not exist
+# - 1 the tag exists
+# - 2 the product name does not exist
+sub integration_tag_exists {
+    my $self = shift;
+    my ( $product_name, $tag_name ) = ( @_ );
+
+    # NOT SUPPORTED
+    return 0;
+}
+
+
+
+# Given a product name and a tag name, adds the tag in the list of
+# available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+# $3 - Description of the tag
+#
+# RETURNS:
+# - 0 on success
+# - 1 if the product name does not exist
+sub integration_add_tag {
+    my $self = shift;
+    my ( $product_name, $tag_name, $description ) = ( @_ );
+
+    # NOT IMPLEMENTED BY RequestTracker
+    return 1;
+}
+
+
+
+# Given a product name and a tag name, deletes the tag from the list
+# of available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+#
+# RETURNS:
+# - 0 on success
+# - 1 if the product name does not exist
+# - 2 if the tag name does not exist
+sub integration_delete_tag {
+    my $self = shift;
+    my ( $product_name, $tag_name ) = ( @_ );
+
+    # NOT IMPLEMENTED BY RequestTracker
+    return 1;
+}
+
+
+
+# Runs a get bugs query
+#
+# PARAMETERS:
+# $1 - Name of product in which bugs will be queried
+# $2 - List of bug ids that should be queried
+# $3 - Hash table describing which types of metadata must be
+#      retrieved.
+#
+# RETURNS:
+# - A @DEVEL_PRODUCT_NAME@::Bug_Information object
+# - An integer ret_val that if set to 1 indicates that an error
+#   occured.
+# - A text message that should be reported to the client if an error
+#   occurred.
+sub integration_get_bugs {
+    my $self = shift;
+    my ( $product_name, $ids, $must_retrieve ) = ( @_ );
+    my $mergelist = Scmbug::MergeList->new();
+    my $ret_val = 0;
+    my $ret_message = "";
+
+    # NOT IMPLEMENTED BY RequestTracker
+    return $mergelist, $ret_val, $ret_message;
+}
+
+
+
+#
+# Runs a VDD Query
+#
+sub integration_get_vdd {
+    my $self = shift;
+    my ( $product_name, $from_version, $to_version, $from_label_date, $to_label_date ) = ( @_ );
+    my $vdd = @DEVEL_PRODUCT_NAME@::VDD->new();
+
+    return $vdd;
+}
+
+
+# Given a bug id, returns if it is locked or not
+# return 1 if bug lock is available
+# return 0 if bug lock not available
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_bug_lock_available {
+    my $self = shift;
+    my $bugid = shift;
+
+    # Lock always available
+    return 1;
+}
+
+
+
+1;

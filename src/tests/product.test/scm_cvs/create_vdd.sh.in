@@ -1,0 +1,28 @@
+#!/bin/sh
+
+. ../lib/common.inc
+
+
+
+# Apply the first tag
+TAG_NAME_FIRST="p_kpm_tag1"
+cd $REPOSITORY_CHECKOUT
+$SCM_BIN_PATH/cvs tag $TAG_NAME_FIRST || exit 1
+
+# Commit some more files
+echo "This is a test file created for the VDD test" > test_file7.txt
+$SCM_BIN_PATH/cvs add test_file7.txt
+$SCM_BIN_PATH/cvs commit -m "${LOG_TEMPLATE_ID_PREFIX}${TESTSUITE_BUG_VALID_BUG_OWNER}${LOG_TEMPLATE_ID_POSTFIX} $TESTSUITE_COMMON_NOTE Testing creation of a
+VDD. Commiting test_file7.txt on a bug id with a valid bug owner." test_file7.txt || exit 1
+
+# Modify an older file
+echo "Modifying an older file for VDD" >> test_file1.txt
+$SCM_BIN_PATH/cvs commit -m "${LOG_TEMPLATE_ID_PREFIX}${TESTSUITE_BUG_VALID_BUG_OWNER}${LOG_TEMPLATE_ID_POSTFIX} $TESTSUITE_COMMON_NOTE Testing creation of a
+VDD. Modifying test_file1.txt on a bug id with a valid bug owner." test_file1.txt || exit 1
+
+# Apply the second tag
+TAG_NAME_SECOND="p_kpm_tag2"
+$SCM_BIN_PATH/cvs tag $TAG_NAME_SECOND || exit 1
+
+# Create the VDD
+@DEVEL_PRODUCT_NAME_LOWER@_vdd_generator.pl --scm=CVS --product=$TESTSUITE_BUGTRACKER_PRODUCT --repository=$REPOSITORY_ROOT --from=$TAG_NAME_FIRST --to=$TAG_NAME_SECOND && echo PASSED

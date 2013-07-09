@@ -1,0 +1,162 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Bug;
+
+use strict;
+use @DEVEL_PRODUCT_NAME@::BugComment;
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+    return bless $self, $type;
+}
+
+
+
+sub id {
+   my $self = shift;
+   my $data = shift;
+
+   if ( $data ) {
+       $self->{ bug_id } = $data;
+   } else {
+       return $self->{ bug_id };
+   }
+}
+
+
+
+sub summary {
+   my $self = shift;
+   my $data = shift;
+
+   if ( $data ) {
+       $self->{ summary } = $data;
+   } else {
+       return $self->{ summary };
+   }
+}
+
+
+
+sub status {
+   my $self = shift;
+   my $data = shift;
+
+   if ( $data ) {
+       $self->{ status } = $data;
+   } else {
+       return $self->{ status };
+   }
+}
+
+
+
+sub active {
+   my $self = shift;
+   my $data = shift;
+
+   if ( $data ) {
+       $self->{ active } = $data;
+   } else {
+       return $self->{ active };
+   }
+}
+
+
+
+sub owners {
+   my $self = shift;
+   my @data = ( @_ );
+
+   if ( @data ) {
+       $self->{ owners } = \@data;
+   } else {
+       return $self->{ owners };
+   }
+}
+
+
+
+sub resolution {
+   my $self = shift;
+   my $data = shift;
+
+   if ( $data ) {
+       $self->{ resolution } = $data;
+   } else {
+       return $self->{ resolution };
+   }
+}
+
+
+
+sub severity {
+   my $self = shift;
+   my $data = shift;
+
+   if ( $data ) {
+       $self->{ severity } = $data;
+   } else {
+       return $self->{ severity };
+   }
+}
+
+
+
+sub priority {
+   my $self = shift;
+   my $data = shift;
+
+   if ( $data ) {
+       $self->{ priority } = $data;
+   } else {
+       return $self->{ priority };
+   }
+}
+
+
+
+sub comment {
+   my $self = shift;
+   my $commentid = shift;
+
+   if ( !defined( $self->{ comments }->{ $commentid } ) ) {
+       $self->{ comments }->{ $commentid }->{ data } = @DEVEL_PRODUCT_NAME@::BugComment->new();
+       $self->{ comments }->{ $commentid }->{ data }->id( $commentid );
+   }
+   
+   return $self->{ comments }->{ $commentid }->{ data };
+}
+
+
+
+sub comments {
+    my $self = shift;
+
+    if ( defined ( $self->{ comments } ) ) {
+	return $self->{ comments };
+    } else {
+	return {};
+    }
+}
+
+
+
+1;

@@ -1,0 +1,15 @@
+#!/bin/sh
+
+. ../lib/common.inc
+
+
+# Press Enter 3 times, as needed by the installation script to proceed.
+echo "
+
+
+
+" | @DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl --scm=CVS --product=$TESTSUITE_BUGTRACKER_PRODUCT --repository=$REPOSITORY_ROOT --bug=$TESTSUITE_BUG_GLUE_INSTALL --binary-paths=$SCM_BIN_PATH,$SCM_GENERAL_BIN_PATH,$SCM_BIN_PATH_INVALID --daemon=$TESTSUITE_INTEGRATION_DAEMON && cd $REPOSITORY_CHECKOUT && $SCM_BIN_PATH/cvs up && echo PASSED
+
+# We also updated the contents of CVSROOT
+
+

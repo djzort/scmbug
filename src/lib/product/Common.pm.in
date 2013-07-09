@@ -1,0 +1,560 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+package @DEVEL_PRODUCT_NAME@::Common;
+
+use Env qw( USER USERNAME );
+use Data::Dumper;
+use Log::Log4perl qw(get_logger :levels);
+require Exporter;
+
+@ISA = qw(Exporter);
+@EXPORT = qw(
+	     log_fatal_error
+	     log_daemon_warn
+	     log_daemon_info
+	     log_daemon_debug
+	     log_daemon_error
+	     file_content
+	     array_ref_is_in_set
+	     package_exists
+	     package_installation_instructions
+	     execute_command
+	     check_tools
+	     get_isodate
+	     get_username
+
+	     $PRODUCT_MSG_PREFIX
+	     $PRODUCT_ON_WINDOWS
+	     $PRODUCT_VERSION
+	     $PRODUCT_PROTOCOL_NUMBER
+	     $PRODUCT_BRANCH_NAME_TOKEN
+	     $PRODUCT_BRANCH_NAME_SPACE_TOKEN
+	     $PRODUCT_AFFECTED_FILES_TOKEN
+	     $PRODUCT_AFFECTED_FILES_PRODUCT_FILE_TOKEN
+	     $PRODUCT_AFFECTED_FILES_END_TOKEN
+	     $PRODUCT_VDD_QUERY_END_TOKEN
+	     $PRODUCT_GET_BUGS_QUERY_END_TOKEN
+	     $PRODUCT_END_TOKEN
+	     $PRODUCT_VDD_RESULT_END_BUG_TOKEN
+	     $PRODUCT_VDD_RESULT_END_COMMENT_TOKEN
+	     $PRODUCT_VDD_RESULT_END_TOKEN
+	     $PRODUCT_RESOLUTIONS_END_TOKEN
+
+	     $DAEMON_REQUEST_RESULT_ACCEPTED
+	     $DAEMON_REQUEST_RESULT_DENIED
+
+	     $OLD_VERSION_TO_NEW_VERSION_TOKEN
+	     $NEW_VERSION_TO_FILENAME_TOKEN
+
+	     $ACTIVITY_OK
+	     $ACTIVITY_COMMIT
+	     $ACTIVITY_VERIFY
+	     $ACTIVITY_TAG
+	     $ACTIVITY_GET_VDD
+	     $ACTIVITY_GET_BUGS
+
+	     $TAG_OPERATION_ADD
+	     $TAG_OPERATION_DELETE
+	     $TAG_OPERATION_MOVE
+
+             get_logger
+             $logger
+             set_logger
+	     );
+
+use vars qw (
+	     $PRODUCT_MSG_PREFIX
+	     $PRODUCT_ON_WINDOWS
+	     $PRODUCT_VERSION
+	     $PRODUCT_PROTOCOL_NUMBER
+	     $PRODUCT_BRANCH_NAME_TOKEN
+	     $PRODUCT_BRANCH_NAME_SPACE_TOKEN
+	     $PRODUCT_AFFECTED_FILES_TOKEN
+	     $PRODUCT_AFFECTED_FILES_PRODUCT_FILE_TOKEN
+	     $PRODUCT_AFFECTED_FILES_END_TOKEN
+	     $PRODUCT_VDD_QUERY_END_TOKEN
+	     $PRODUCT_GET_BUGS_QUERY_END_TOKEN
+	     $PRODUCT_VDD_RESULT_END_BUG_TOKEN
+	     $PRODUCT_VDD_RESULT_END_COMMENT_TOKEN
+	     $PRODUCT_VDD_RESULT_END_TOKEN
+	     $PRODUCT_END_TOKEN
+	     $PRODUCT_RESOLUTIONS_END_TOKEN
+
+	     $DAEMON_REQUEST_RESULT_ACCEPTED
+	     $DAEMON_REQUEST_RESULT_DENIED
+
+	     $OLD_VERSION_TO_NEW_VERSION_TOKEN
+	     $NEW_VERSION_TO_FILENAME_TOKEN
+
+	     $ACTIVITY_OK
+	     $ACTIVITY_COMMIT
+	     $ACTIVITY_VERIFY
+	     $ACTIVITY_TAG
+	     $ACTIVITY_GET_VDD
+	     $ACTIVITY_GET_BUGS
+
+	     $TAG_OPERATION_ADD
+	     $TAG_OPERATION_DELETE
+	     $TAG_OPERATION_MOVE
+
+             $logger
+	     );
+
+use strict;
+use @DEVEL_PRODUCT_NAME@::Error;
+
+
+# Protocol 1 is used in version 0-0-8
+# Protocol 2 is used in versions 0-1-0 .. 0-1-3
+# Protocol 3 is used in versions 0-2-0 .. 0-2-8
+# Protocol 4 is used in versions 0-3-0 .. 0-3-4
+# Protocol 5 is used in versions 0-4-0 .. 0-4-1; due to a bug in this
+# versions, protocol value 4 remained hardcoded, even though the
+# protocol had changed.
+# Protocol 6 is used in versions 0-5-x .. 0-5-3
+# Protocol 7 is used in version 0-6-0
+# Protocol 8 is used in versions 0-7-0 .. 0-7-2
+# Protocol 9 is used in versions 0-8-0 .. 0-8-24
+# Protocol 10 is used in versions 0-9-0 .. 0-9-1
+# Protocol 11 is used in versions 0-10-0 .. 0-10-1
+# Protocol 12 is used in version 0-11-0
+# Protocol 13 is used in versions 0-12-0 .. 0-12-1
+# Protocol 14 is used in version 0-13-0
+# Protocol 15 is used in versions 0-14-0 .. 0-14-2
+# Protocol 16 is used in versions 0-15-0 .. 0-15-8
+# Protocol 17 is used in version 0-16-0
+# Protocol 18 is used in versions 0-17-0 .. 0-17-1
+# Protocol 19 is used in versions 0-18-0 .. 0-18-4
+# Protocol 20 is used in versions 0-19-0 .. 0-19-20
+# Protocol 21 is used in version 0-20-0
+# Protocol 22 is used in version 0-21-0
+# Protocol 23 is used in versions 0-22-0 .. 0-22-2
+# Protocol 24 is used in versions 0-23-0 .. 0-23-5
+# Protocol 25 is used in versions 0-24-0 .. 0-24-2
+# Protocol 26 is used in versions 0-25-0 .. 0-25-3
+# Protocol 27 is used in versions 0-26-0 .. 
+$PRODUCT_PROTOCOL_NUMBER = 27;
+# Dynamically check if the product is deployed in Windows
+if ( "@DEVEL_CONFIG_WINDOWS@" eq "yes" ) {
+    $PRODUCT_ON_WINDOWS = 1;
+} else {
+    $PRODUCT_ON_WINDOWS = 0;
+}
+$PRODUCT_VERSION = "@DEVEL_PRODUCT_VERSION@";
+$PRODUCT_MSG_PREFIX = "@DEVEL_PRODUCT_NAME@ ";
+$PRODUCT_BRANCH_NAME_TOKEN =   "Branch:";
+$PRODUCT_BRANCH_NAME_SPACE_TOKEN = "        ";
+$PRODUCT_AFFECTED_FILES_TOKEN = "Affected files:\n---------------\n";
+$PRODUCT_AFFECTED_FILES_PRODUCT_FILE_TOKEN = ":";
+$PRODUCT_AFFECTED_FILES_END_TOKEN = "PRODUCT_AFFECTED_FILES_END_TOKEN";
+$PRODUCT_END_TOKEN = "PRODUCT_END_TOKEN";
+$PRODUCT_VDD_QUERY_END_TOKEN = "PRODUCT_VDD_QUERY_END_TOKEN";
+$PRODUCT_GET_BUGS_QUERY_END_TOKEN = "PRODUCT_GET_BUGS_QUERY_END_TOKEN";
+$PRODUCT_VDD_RESULT_END_BUG_TOKEN = "PRODUCT_VDD_RESULT_END_BUG_TOKEN";
+$PRODUCT_VDD_RESULT_END_COMMENT_TOKEN = "PRODUCT_VDD_RESULT_END_COMMENT_TOKEN";
+$PRODUCT_VDD_RESULT_END_TOKEN = "PRODUCT_VDD_RESULT_END_TOKEN";
+$PRODUCT_RESOLUTIONS_END_TOKEN = "PRODUCT_RESOLUTIONS_END_TOKEN";
+
+# Names of response tokens
+$DAEMON_REQUEST_RESULT_ACCEPTED = "accepted";
+$DAEMON_REQUEST_RESULT_DENIED = "denied";
+
+# Token used to indicate transition from older to newer version of a
+# file
+$OLD_VERSION_TO_NEW_VERSION_TOKEN = " --> ";
+
+# Token used to separate between the new version and the filename
+$NEW_VERSION_TO_FILENAME_TOKEN = " ";
+
+# Names of integration activities
+$ACTIVITY_OK = "@DEVEL_CONFIG_ACTIVITY_OK@";
+$ACTIVITY_COMMIT = "@DEVEL_CONFIG_ACTIVITY_COMMIT@";
+$ACTIVITY_VERIFY = "@DEVEL_CONFIG_ACTIVITY_VERIFY@";
+$ACTIVITY_TAG = "@DEVEL_CONFIG_ACTIVITY_TAG@";
+$ACTIVITY_GET_VDD = "@DEVEL_CONFIG_ACTIVITY_GET_VDD@";
+$ACTIVITY_GET_BUGS = "@DEVEL_CONFIG_ACTIVITY_GET_BUGS@";
+
+# Names of tag operations
+$TAG_OPERATION_ADD = "tag_add";
+$TAG_OPERATION_DELETE = "tag_delete";
+$TAG_OPERATION_MOVE = "tag_move";
+
+
+# Will be used for logging
+my $logger;
+
+
+sub set_logger {
+    $logger = shift;
+}
+
+
+
+#
+# Logs an error message produced by the glue
+#
+sub log_fatal_error {
+    my ( $error_value, $error ) = ( @_ );
+
+    my $error_string = "\n";
+    $error_string .= "*******************************************\n";
+    $error_string .=  "**\n";
+    $error_string .=  "**\n";
+    $error_string .=  "** " . $PRODUCT_MSG_PREFIX . "error " . $error_value . ": " . $error;
+    $error_string .=  "**\n";
+    $error_string .=  "**\n";
+    $error_string .=  "*******************************************\n";
+
+    $Log::Log4perl::caller_depth++;
+    $logger->error( $error_string );
+    $Log::Log4perl::caller_depth--;
+
+    exit $error_value;
+}
+
+
+
+sub log_daemon_info {
+    my ( $request, $message ) = ( @_ );
+
+    $Log::Log4perl::caller_depth++;
+    $logger->info ( prepare_daemon_error_string( $request, $message ) );
+    $Log::Log4perl::caller_depth--;
+}
+
+sub log_daemon_warn {
+    my ( $request, $message ) = ( @_ );
+
+    $Log::Log4perl::caller_depth++;
+    $logger->warn ( prepare_daemon_error_string( $request, $message ) );
+    $Log::Log4perl::caller_depth--;
+}
+
+sub log_daemon_debug {
+    my ( $request, $message ) = ( @_ );
+
+    $Log::Log4perl::caller_depth++;
+    $logger->debug ( prepare_daemon_error_string( $request, $message ) );
+    $Log::Log4perl::caller_depth--;
+
+}
+
+#
+# Prepares an error message produced by the daemon
+#
+sub prepare_daemon_error_string {
+    my ( $request, $message ) = ( @_ );
+    my $error_string = "";
+
+    # If the daemon fails to start, no request has been received yet.
+    if ( defined( $request ) ) {
+        if ( defined( $request->{ connection }->{ ip_address } ) &&
+	     defined( $request->{ connection }->{ port } ) ) {
+	    $error_string .= $request->{ connection }->{ ip_address } . ":" .
+	        $request->{ connection }->{ port } . " " . $message;
+        }
+    } else {
+        $error_string = $message;
+    }
+
+    return $error_string;
+}
+
+
+
+#
+# Returns the contents of a file
+#
+# PARAMETERS:
+# $1 - Name of file whose contents will be read
+#
+# RETURNS:
+# Contents of file
+sub file_content {
+    my ( $filename ) = ( @_ );
+    my $line;
+    my $contents = "";
+
+    open ( FILE_CONTENT, "$filename" ) || die "File \"$filename\" cannot be opened\n";
+    while ( $line = <FILE_CONTENT> ) {
+	$contents .= $line;
+    }
+    close ( FILE_CONTENT );
+
+    return $contents;
+}
+
+
+
+#
+# Returns true if symbol is in set symbol_set
+#
+# PARAMETERS:
+# $1 - A string representation of the symbol to check
+# $2 - A reference to an array of string symbols against which the
+#      symbol from $1 will be checked to determine if it is in the set
+# RETURNS:
+# 1 if the symbol is in the symbol set
+# 0 otherwise
+sub array_ref_is_in_set
+{
+    my ( $symbol, $symbol_set ) = ( @_ );
+
+    foreach my $sym ( @$symbol_set ) {
+	if ( $sym eq $symbol) {
+	    return 1;
+	}
+    }
+
+    return 0;
+}
+
+
+
+#
+# Checks if a package exists. This code was retrieved from Bugzilla's
+# checksetup.pl
+#
+sub package_exists {
+    my ( $package_name, $minimum_package_version ) = ( @_ );
+    my $cmd;
+
+    if ( $package_name =~ /\.pl$/ ) {
+	# .pl files need "" quotes on require
+	$cmd .= "require \"" . $package_name . "\";";
+    } else {
+	# .pm files don't need quotes on require
+	$cmd .= "require " . $package_name . ";";
+    }
+
+    # Modules may change $SIG{__DIE__} and $SIG{__WARN__}. Localise
+    # them here so that later errors display 'normally'
+    local $::SIG{__DIE__};
+    local $::SIG{__WARN__};
+
+    if ( !eval ( $cmd ) ) {
+	return 0, "";
+    } else {
+
+	if ( defined ( $minimum_package_version ) ) {
+	    my $version;
+
+	    # A specific package version is requested. Check if this
+	    # version exists.
+	    no strict 'refs';
+	    $version = ${"${package_name}::VERSION"} || ${"${package_name}::Version"} || 0;
+	    $version = ${"${package_name}::VERSION"} || ${"${package_name}::Version"} || 0;
+	    $version = -1 if $@;
+	    if (package_version_compare($version, $minimum_package_version) > -1) {
+		# The requested package version was found.
+		return 1;
+	    } else {
+		return 0, "$version";
+	    }
+
+	}
+
+	return 1;
+    }
+}
+
+
+
+# This code was retrieved from Bugzilla's checksetup.pl.
+#
+# vers_cmp is adapted from Sort::Versions 1.3 1996/07/11 13:37:00 kjahds,
+# which is not included with Perl by default, hence the need to copy it here.
+# Seems silly to require it when this is the only place we need it...
+sub package_version_compare {
+    if (@_ < 2) { die "not enough parameters for package_version_compare" }
+    if (@_ > 2) { die "too many parameters for package_version_compare" }
+    my ($a, $b) = @_;
+    my (@A) = ($a =~ /(\.|\d+|[^\.\d]+)/g);
+    my (@B) = ($b =~ /(\.|\d+|[^\.\d]+)/g);
+    my ($A,$B);
+    while (@A and @B) {
+        $A = shift @A;
+        $B = shift @B;
+        if ($A eq "." and $B eq ".") {
+            next;
+        } elsif ( $A eq "." ) {
+            return -1;
+        } elsif ( $B eq "." ) {
+            return 1;
+        } elsif ($A =~ /^\d+$/ and $B =~ /^\d+$/) {
+            return $A <=> $B if $A <=> $B;
+        } else {
+            $A = uc $A;
+            $B = uc $B;
+            return $A cmp $B if $A cmp $B;
+        }
+    }
+    @A <=> @B;
+}
+
+
+
+#
+# Returns a string indicating how a package can be installed
+#
+sub package_installation_instructions {
+    my ( $package_name ) = ( @_ );
+    my $package_name_windows = $package_name;
+    $package_name_windows =~ s/::/-/g;
+
+    my $retval = "On a UNIX system, this package can be installed by running:
+perl -MCPAN -e 'install $package_name';
+
+On a Windows system, this package can be installed by running:
+C:\> ppm
+ppm> install $package_name_windows
+";
+
+    return $retval;
+}
+
+
+
+#
+# Executes a command and returns the output
+#
+sub execute_command {
+    my ( $command ) = ( @_ );
+    my $command_output = "";
+    my $line;
+
+    open ( COMMAND_OUTPUT, $command . "|" );
+    while ( $line = <COMMAND_OUTPUT> ) {
+	$command_output .= $line;
+    }
+    close ( COMMAND_OUTPUT );
+
+    return $command_output;
+}
+
+
+
+#
+# Given a hash of required tools, and an array of binary paths, checks
+# whether each tool can be found in one of the supplied paths
+#
+sub check_tools {
+    my ( $required_tools, $binary_paths_string ) = ( @_ );
+    my $some_tools_missing = 0;
+    my $some_tools_in_multiple_paths = 0;
+    my $missing_list;
+    my $multiple_table;
+    my @binary_paths = split( ",", $binary_paths_string );
+
+    # Check for each tool, if it can be found in one of the supplied
+    # paths.
+    foreach my $tool ( keys %{ $required_tools } ) {
+	my $tool_found = 0;
+
+	foreach my $path ( @binary_paths ) {
+	    my $check_full_path = $path . '/' . $tool;
+
+	    if ( -e $check_full_path ) {
+		$tool_found = 1;
+		push @{ $multiple_table->{ $tool }->{ paths } }, $path;
+	    }
+
+	}
+
+	# Also check if the tool was specified with a full path
+	if ( -e $tool ) {
+	    $tool_found = 1;
+	}
+
+	if ( $tool_found == 0) {
+	    $some_tools_missing = 1;
+	    push @$missing_list, $tool;	    
+	}
+    }
+
+
+    if ( $some_tools_missing == 1) {
+	my $tools_list = join ( ' ', @$missing_list);
+	my $number_of_missing_tools = scalar @$missing_list;
+	my $error_string = "The following tool";
+
+	if ($number_of_missing_tools > 1) {
+	    $error_string .= "s";
+	}
+	$error_string .= " could not be found in the list of supplied paths: " . $tools_list . "\n. The paths were:" . $binary_paths_string . "\n";
+
+	log_fatal_error( $GLUE_ERROR_TOOLS_MISSING, $error_string );
+    }
+
+    # Some tools might have been found in multiple paths. This could
+    # result in picking up the wrong version at runtime.
+    my $multiple_paths_found_error_string = "";
+    my $multiple_paths_found_tools_counter = 0;
+    foreach my $tool ( keys %{ $multiple_table } ) {
+	my $number_of_found_paths = scalar @{ $multiple_table->{ $tool }->{ paths } };
+	if ($number_of_found_paths > 1) {
+	    my $multiple_paths = join( ' ', @{ $multiple_table->{ $tool }->{ paths } } );
+	    $multiple_paths_found_tools_counter++;
+	    $multiple_paths_found_error_string .= $tool . " in " . $multiple_paths . "\n";
+	}
+    }
+
+    if ($multiple_paths_found_tools_counter > 0) {
+	my $error_string = "The following tool";
+	if ($multiple_paths_found_tools_counter > 1) {
+	    $error_string .= "s were";
+	} else {
+	    $error_string .= " was";
+	}
+	$error_string .= " found in multiple paths:\n" . $multiple_paths_found_error_string . "The one from the first path was used.\n";
+        $logger->warn( $error_string );	
+    }
+
+    # Reset the PATH. Subversion hooks clear-up their environment
+    # before they run, which makes it impossible to execute its tools
+    # to extract more information (e.g. svn --version, svnlook)
+    my $new_path = "";
+    my $paths_count = 0;
+    foreach my $path ( @binary_paths ) {
+	if ( $paths_count > 0 ) {
+	    $new_path .= "@DEVEL_CONFIG_PATH_SEP_TOKEN@";
+	}
+	$new_path .= $path;
+	$paths_count++;
+    }
+    $ENV{'PATH'} = $new_path;
+}
+
+
+
+sub get_isodate {
+    my $date;
+    my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime( time );
+    $date = sprintf( "%4d-%02d-%02d %02d:%02d:%02d", $year+1900, $mon+1, $mday, $hour, $min, $sec );
+
+    return $date;
+}
+
+sub get_username {
+    if ( $PRODUCT_ON_WINDOWS == 1) {
+	# Windows does not have a USER environment variable. It has a
+	# USERNAME variable.
+	return $USERNAME;
+    } else {
+	return $USER;
+    }
+}
+
+1;

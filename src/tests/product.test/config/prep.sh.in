@@ -1,0 +1,41 @@
+#!/bin/sh
+
+#
+# Prepares the test environment to run the tests
+#
+
+usage()
+{
+    echo "$0 <bug-tracker> <tester_user>"
+    echo "Available bug-trackers are: bugzilla mantis"
+    echo "e.g. $0 bugzilla mkgnu"
+    exit -1
+}
+
+if [ $# -ne 2 ]; then
+    usage
+fi
+
+BUGTRACKER=$1
+TESTER=$2
+
+# Must have root access in order to set the daemon configuration file
+# and restart the daemon
+if [ `id -u` != 0 ]; then
+    echo "Must have root access to run the prepare script"
+    exit -1
+fi
+
+@sysconfdir@/init.d/@DEVEL_PRODUCT_NAME_LOWER@-server stop
+cp testers/$TESTER/daemon.conf.$BUGTRACKER @sysconfdir@/@DEVEL_PRODUCT_NAME_LOWER@/daemon.conf
+@sysconfdir@/init.d/@DEVEL_PRODUCT_NAME_LOWER@-server start
+
+# Write in a file the name of the bugtracker that has been
+# prepared. The testsuite will pick this up
+BUGTRACKER_NAME_FILE=tested_bugtracker_name
+echo -n $BUGTRACKER > $BUGTRACKER_NAME_FILE
+chmod ugo+rw $BUGTRACKER_NAME_FILE
+
+TESTER_NAME_FILE=tested_tester_name
+echo -n $TESTER > $TESTER_NAME_FILE
+chmod ugo+rw $TESTER_NAME_FILE

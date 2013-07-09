@@ -1,0 +1,74 @@
+#
+# This is a template configuration file for the
+# @DEVEL_PRODUCT_NAME_LOWER@-server daemon Test Director settings
+#
+$testdirector_configuration = {
+
+    # The following section lists the Test Director specific
+    # configuration settings
+    testdirector_config => {
+
+	# The list of the active and inactive states
+	td_bug_status_map => {
+    	    "Open"		=> { name => "Open",
+				     active => 1,
+				     accepts_data_as_resolution => 0,
+				     possible_resolution_states => [ "Allocated",
+                                                                     "Closed",
+                                                                     "Fixed" ],
+				     possible_resolutions => [] },
+    	    "Allocated"		=> { name => "Allocated",
+				     active => 1,
+				     accepts_data_as_resolution => 0,
+				     possible_resolution_states => [ "Closed",
+                                                                     "Fixed" ],
+				     possible_resolutions => [] },
+    	    "Fixed" 		=> { name => "Fixed",
+				     active => 0,
+				     accepts_data_as_resolution => 0,
+				     possible_resolution_states => [ "Closed" ],
+				     possible_resolutions => [] },
+    	    "Closed" 		=> { name => "Closed",
+				     active => 0,
+				     accepts_data_as_resolution => 0,
+				     possible_resolution_states => [],
+				     possible_resolutions => [] },
+    	    "Passed" 		=> { name => "Passed",
+				     active => 0,
+				     accepts_data_as_resolution => 0,
+				     possible_resolution_states => [],
+				     possible_resolutions => [] },
+    	    "Return to QA" 	=> { name => "Return to QA",
+				     active => 0,
+				     accepts_data_as_resolution => 0,
+				     possible_resolution_states => [],
+				     possible_resolutions => [] }
+        },
+
+	#
+	# Fields in Test Director that store the required information
+	#
+	td_bug_summary  => 'BG_SUMMARY',
+	# The field that holds the user that raised the bug originally
+	td_bug_reporter => 'BG_DETECTED_BY',
+
+	# The field tag of where the product name is stored.
+	td_product_name => 'BG_USER_10',
+        # The field tag of where the person the fault is assigned to
+        # is stored.
+	td_bug_owner    => 'BG_USER_20',
+	# The field tag of where the status is stored.  This contains
+	# the possible values defined by tdc_bug_status_map
+	td_bug_status   => 'BG_USER_15',
+	# The memo field that is used to store the files list.
+	td_bug_comment  => 'BG_USER_31',
+
+        # The following are required if you wish to use the merge
+        # feature. Leave them blank if you do not have an appropriate
+        # field
+	td_bug_severity     => 'BG_USER_14',
+	td_bug_resolution   => '',
+	td_bug_priority     => ''
+    }
+
+};

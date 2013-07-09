@@ -1,0 +1,13 @@
+#!/bin/sh
+
+
+linkchecker output.html/*.html > output.html/linkchecker.output
+ERRORS=`cat output.html/linkchecker.output |tail -2|grep -i error | @AWK@ '{ print $3 }'`
+# 0 errors should be found by linkchecker
+
+if [ $ERRORS != 0 ]; then
+    cat output.html/linkchecker.output
+    exit $ERRORS
+fi
+
+

@@ -1,0 +1,19 @@
+#!/bin/sh
+
+. ../lib/common.inc
+
+
+# Press Enter 3 times, as needed by the installation script to proceed.
+echo "
+
+
+
+" | @DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl --scm=Git --product=$TESTSUITE_BUGTRACKER_PRODUCT --repository=$REPOSITORY_CHECKOUT --bug=$TESTSUITE_BUG_GLUE_INSTALL --binary-paths=$SCM_BIN_PATH,$SCM_GENERAL_BIN_PATH,$SCM_BIN_PATH_INVALID --daemon=$TESTSUITE_INTEGRATION_DAEMON
+
+# Attempt to commit a file that will fail. This should still execute
+# the additional hook logic from set_hook_more_logic.sh
+./commit_file_fail.sh
+if [ -e "$TEMP_DIR/new_hook" ]; then
+    rm $TEMP_DIR/new_hook
+    echo PASSED
+fi

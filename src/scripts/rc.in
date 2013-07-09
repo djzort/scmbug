@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+# This script manages the @DEVEL_PRODUCT_NAME@ daemon.
+
+# chkconfig: 35 85 15
+# description: @DEVEL_PRODUCT_DESCRIPTION_SHORT@
+# pidfile: @DEVEL_CONFIG_PID_FILE@
+# config: /etc/@DEVEL_PRODUCT_NAME_LOWER@/daemon.conf
+
+# Basic support for the Linux Standard Base Specification 1.0.0
+### BEGIN INIT INFO
+# Provides: @DEVEL_PRODUCT_NAME@
+# Required-Start: $network
+# Required-Stop:
+# Default-Start: 3 5
+# Default-Stop:
+# Description: @DEVEL_PRODUCT_DESCRIPTION_SHORT@
+### END INIT INFO
+
+PID_FILE=`cat @sysconfdir@/@DEVEL_PRODUCT_NAME_LOWER@/daemon.conf | grep -i daemon_pidfile | sed -e 's/.*=> "//g' | sed -e 's/".*//'`
+
+if ! [ -x @sbindir@/@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl ]; then
+    echo "Daemon file is missing"
+    exit 0
+fi
+
+case "$1" in
+    start)
+	echo -n "Starting SCM to bug-tracking integration daemon:"
+	echo -n " @DEVEL_PRODUCT_NAME_LOWER@_daemon"; @sbindir@/@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl @sysconfdir@/@DEVEL_PRODUCT_NAME_LOWER@/daemon.conf
+	echo "."
+	;;
+    stop)
+	echo -n "Stopping SCM to bug-tracking integration daemon:"
+	echo -n " @DEVEL_PRODUCT_NAME_LOWER@_daemon"; kill -KILL `cat ${PID_FILE}` && rm ${PID_FILE}
+	echo "."
+	;;
+    restart|force-reload)
+	$0 stop
+	$0 start
+	echo "."
+	;;
+    *)
+	echo "Usage: /etc/init.d/@DEVEL_PRODUCT_NAME_LOWER@-server {start|stop|restart|force-reload}"
+	exit 1
+	;;
+esac
+
+exit 0
+

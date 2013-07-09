@@ -1,0 +1,15 @@
+Document: @DEVEL_PRODUCT_NAME_LOWER@
+Title: @DEVEL_PRODUCT_NAME@ manual
+Author: Kristis Makris
+Abstract: This is the manual of @DEVEL_PRODUCT_NAME@, a system that
+ integrates software configuration management with bug-tracking.
+Section: Apps/Programming
+
+Format: pdf
+Files: /usr/share/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/manual.pdf.gz
+     
+Format: HTML
+Index: /usr/share/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/html-single/index.html
+Files: /usr/share/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/html-single/*.html
+Index: /usr/share/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/html-multi/index.html
+Files: /usr/share/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual/html-multi/*.html

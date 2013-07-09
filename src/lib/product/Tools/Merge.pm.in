@@ -1,0 +1,273 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Tools::Merge;
+
+use strict;
+use Getopt::Long;
+use Data::Dumper;
+use Cwd;
+use @DEVEL_PRODUCT_NAME@::Activity;
+use @DEVEL_PRODUCT_NAME@::Error;
+use @DEVEL_PRODUCT_NAME@::Glue::Glue;
+use @DEVEL_PRODUCT_NAME@::Tools::SCM_Functions;
+use @DEVEL_PRODUCT_NAME@::Tools::SCM_Description;
+use @DEVEL_PRODUCT_NAME@::VDD;
+use @DEVEL_PRODUCT_NAME@::Common;
+use @DEVEL_PRODUCT_NAME@::Connection;
+
+
+my $merge_configuration;
+my $glue_configuration;
+my $arguments;
+
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+
+    bless $self, $type;
+
+    $arguments->{ scm_name } = "";
+    $arguments->{ repository_path } = "";
+    $arguments->{ product_name } = "";
+    $arguments->{ merge_bugs } = "";
+    $arguments->{ commit_bugs } = "";
+    $arguments->{ base_label } = "";
+    $arguments->{ new_label } = "";
+    $arguments->{ user } = get_username();
+
+    return $self;
+}
+
+
+
+#
+# Processes a Merge request
+#
+sub process {
+    my $self = shift;
+    my ( @args ) = ( @_ );
+    my $original_dir = getcwd();
+
+    parse_arguments();
+    check_arguments();
+
+    @DEVEL_PRODUCT_NAME@::Tools::SCM_Functions::checkout_repository( $merge_configuration->{ scm_description } );
+
+    my $glue_configuration_file = @DEVEL_PRODUCT_NAME@::Tools::SCM_Functions::glue_configuration_file( $merge_configuration->{ scm_description } );
+    my $local_repository_directory = @DEVEL_PRODUCT_NAME@::Tools::SCM_Functions::local_repository_directory( $merge_configuration->{ scm_description } );
+
+    my $glue = @DEVEL_PRODUCT_NAME@::Glue::Glue->new();
+    $glue->read_configuration( $local_repository_directory . "/" . $glue_configuration_file );
+    $glue->check_configuration();
+
+    @DEVEL_PRODUCT_NAME@::Tools::SCM_Functions::release_repository();
+    chdir $original_dir;
+
+    merge( $glue->policies() );
+}
+
+
+
+sub parse_arguments {
+    GetOptions( "from=s" => \$arguments->{ from_version },
+	        "to=s" => \$arguments->{ to_version },
+		"scm=s" => \$arguments->{ scm_name },
+		"commit-bugs=s" => \$arguments->{ commit_bugs },
+		"merge-bugs=s" => \$arguments->{ merge_bugs },
+		"base-label=s" => \$arguments->{ base_label },
+		"new-label=s" => \$arguments->{ new_label },
+		"repository=s" => \$arguments->{ repository_path },
+		"product=s" => \$arguments->{ product_name },
+	        "help" => \&show_usage_and_exit,
+	        "version" => \&show_version_and_exit,
+	        "<>", \&parse_arguments_no_such_option
+		);
+}
+
+
+
+#
+# Shows the usage instructions and exits
+#
+sub show_usage_and_exit {    
+    usage();
+    exit 0;
+}
+
+
+
+#
+# Prints the version of this tool
+#
+sub show_version_and_exit {
+    print "@DEVEL_PRODUCT_NAME@ $PRODUCT_VERSION\n";
+    exit 0;
+}
+
+
+
+#
+# Handles the case where an invalid command-line argument is parsed
+#
+sub parse_arguments_no_such_option {
+    my ( $argument_name ) = ( @_ );
+
+    print "Command-line argument \"$argument_name\" is invalid.\n";
+    usage();
+    exit -1;
+}
+
+
+#
+# Parses the command-line arguments
+#
+sub check_arguments {
+    my $errors = 0;
+
+    if ( $arguments->{ commit_bugs } eq "" ) {
+	print "Missing required argument --commit-bugs=<bug_list>\n";
+	$errors = 1;
+    }
+
+    if ( $arguments->{ merge_bugs } eq "" ) {
+	print "Missing required argument --merge-bugs=<bug_list>\n";
+	$errors = 1;
+    }
+
+    if ( $arguments->{ base_label } eq "" ) {
+	print "Missing required argument --base-label=<label_name>\n";
+	$errors = 1;
+    }
+
+    if ( $arguments->{ scm_name } eq "" ) {
+	print "Missing required argument --scm=<scm_name>\n";
+	$errors = 1;
+    }
+
+    if ( $arguments->{ repository_path } eq "" ) {
+	print "Missing required argument --repository=<path>\n";
+	$errors = 1;
+    }
+
+    if ( $arguments->{ product_name } eq "" ) {
+	print "Missing required argument --product=<product_name>\n";
+	$errors = 1;
+    }
+
+    if ( $errors == 1) {
+	usage();
+	exit -2;
+    } else {
+        #
+        # Setup logging as soon as possible
+        #
+        use Log::Log4perl qw(:easy);
+        # Setup a really basic logger
+        Log::Log4perl::easy_init( $WARN );
+        $logger = get_logger( "Merger" );
+        @DEVEL_PRODUCT_NAME@::Common::set_logger( $logger );
+
+	$merge_configuration->{ scm_description } = @DEVEL_PRODUCT_NAME@::Tools::SCM_Description->new();
+	$merge_configuration->{ scm_description }->repository_path( $arguments->{ repository_path } );
+	$merge_configuration->{ scm_description }->name( $arguments->{ scm_name } );
+	$merge_configuration->{ scm_description }->product_name( $arguments->{ product_name } );
+    }
+}
+
+
+
+#
+# Prints a usage message
+#
+sub usage {
+    print "
+Usage: @DEVEL_PRODUCT_NAME_LOWER@_merge [arguments]
+  --scm=<scm_name>          Name of the SCM system. The supported tools are
+                            'CVS', 'Subversion'
+  --product=<product_name>  Name of the product in the bugtracking system
+  --repository=<path>       The CVSROOT equivalent. MUST use a file://
+                            prefix for Subversion
+  --commit-bugs=<bug_list>  Comma separated list of bug ids against which 
+                            the merge will be recorded in the bugtracker
+  --merge-bugs=<bug_list>   Comma separated list of bug ids whose activity
+                            will be merged
+  --base-label=<label_name> Base label name against which the bug activity
+                            will be applied
+  --new-label=<label_name>  New label name that will hold the applied bug
+                            activity (optional)
+  --help                    This help message
+  --version                 Print version
+";
+}
+
+
+
+#
+# Retrieves the date a label was applied
+#
+sub retrieve_label_date {
+    my ( $label ) = shift;
+    my $date;
+
+    $date = @DEVEL_PRODUCT_NAME@::Tools::SCM_Functions::get_label_date( $label );
+
+    return $date;
+}
+
+
+
+#
+# Retrieve the data needed, and apply the merge
+#
+sub merge {
+    my ( $policies ) = ( @_ );
+    my $activity = @DEVEL_PRODUCT_NAME@::Activity->new();
+
+    # A username is always specified
+    $activity->user( $arguments-> { user } );
+
+    # A product name is always specified
+    $activity->product_name( $arguments->{ product_name } );
+
+    # Setup a merge query activity
+    $activity->name( $ACTIVITY_GET_BUGS );
+    $activity->{ bugs } = $arguments->{ merge_bugs };
+
+    # The log message is discarded by the daemon, but providing one is
+    # required by the protocol. It might be useful one day, too
+    $activity->log_message( "Requesting merge for " .
+			    $arguments->{ product_name } . 
+			    " on base label '" . $arguments->{ base_label } . "'"  .
+			    " applied to new label '" . $arguments->{ new_label } . "'" .
+			    " for bug list " . $arguments->{ merge_bugs } . "." ) ;
+
+    my $connection = @DEVEL_PRODUCT_NAME@::Connection->new();
+    my $merge_data = $connection->process_activity( $activity, $policies, 1 );
+
+    use XML::Simple;
+    my $xml = new XML::Simple(NoAttr=>1);
+    my $merge_object = $xml->XMLin($merge_data);
+
+    print Dumper( $merge_object );
+}
+
+
+
+1;

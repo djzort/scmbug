@@ -1,0 +1,244 @@
+#!/usr/bin/perl -w 
+# Program to generate the second page in a bug web report
+
+use lib "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/lib";
+
+use strict;
+use CGI qw(:standard);
+use WebReportUtilities;
+use Template;
+
+# Make sure text isn't buffered
+$|=1;
+
+my $web_utils = WebReportUtilities->new();
+$web_utils->update();
+my $webreports_config = $web_utils->webreports_config();
+
+
+sub main {
+    my $revision_start = param("revision_start");
+    my $revision_end   = param("revision_end");
+    my $repository     = param("repository");
+
+    # Get all of the Bugs 
+    my @bug_list   = ();
+
+    foreach my $bugTag ( param ) {
+        if( $bugTag =~ /^bug/ ) {
+            my $bug_details;
+            $bug_details->{ bugid } = param($bugTag);
+
+            my $summaryTag = "summary" . $bug_details->{ bugid };
+            $bug_details->{ summary } = param($summaryTag);
+            
+            my $reviews = "reviewed" . $bug_details->{ bugid };
+            $bug_details->{ reviews } = param($reviews);
+            
+            push @bug_list, $bug_details;
+        }
+    }
+
+    print_impact_doc_form( $repository, $revision_start, $revision_end, \@bug_list );
+}
+
+#
+# Displays the impact document form
+#
+sub print_impact_doc_form {
+    my ( $repository, $revision_start, $revision_end, $bug_list ) = ( @_ );
+
+    my $OSs_html      = html_multi_select_list( $webreports_config->{ report_form_data }->{ OSs }, "os" );
+    my $versions_html = html_drop_down_list( $webreports_config->{ report_form_data }->{ versions }, "versions" );
+    my $stages_html   = html_drop_down_list( $webreports_config->{ report_form_data }->{ stages }, "stages" );
+    my $dbtypes_html  = html_multi_select_list( $webreports_config->{ report_form_data }->{ dbtypes }, "dbtypes" );
+    my $managers_html = html_drop_down_list( $webreports_config->{ report_form_data }->{ managers }, "project_manager" );
+
+    $web_utils->standard_header("Impact Document Generation");
+
+    print "<form action=/@DEVEL_PRODUCT_NAME_LOWER@-cgi/bug_report_document.pl>";
+
+    print "<BLOCKQUOTE>";
+    print "<TABLE BOARDER=0>\n";
+    print "<TR><TD COLSPAN=5>\n";
+    print h3("Project Information");
+    print "</TD></TR>";
+    print "<TR><TD WIDTH=250>Implemented Platforms:</TD><TD>" . $OSs_html . "</TD></TR>\n";
+    print "<TR><TD>Product:</TD><TD><textarea type=text name=product rows=5 cols=45></textarea></TD></TR>\n";
+    print "<TR><TD>Implemented Version:</TD><TD>" . $versions_html . "</TD></TR>\n";
+    print "<TR><TD>Implemented Stage:</TD><TD>" . $stages_html . "</TD></TR>\n";
+    
+    print "<TR><TD>Project Code:</TD><TD>POD/ <select size=1 name=project_type>";
+    print "<option selected value=STR>STR</option><option value=SUP>SUP</option><option value=CUS>CUS</option></select>";
+    print " / <input type=text name=project_num size=4 maxlength=5 value=\"XXXXX\"> - ";
+    print "<input type=text name=project_desc size=32 value=\"Project Description\"></TD></TR>\n";
+        
+    print "<TR><TD>Reason For Release:</TD><TD><input type=text name=reason_for_release size=60></TD></TR>\n";
+    print "<TR><TD>Project Manager:</TD><TD>" . $managers_html . "</TD></TR>\n";
+    print "<TR><TD>Produced By:</TD><TD><input type=text name=produced_by size=60></TD></TR>\n";
+    print "<TR><TD>Date:</TD><TD><input type=text name=date size=60></TD></TR>\n";
+
+    print "<TR><TD COLSPAN=5>\n";
+    print h3("Build Information");
+    print "</TD></TR>";
+    print "<TR><TD>Start Revision Number:</TD><TD>" . $revision_start . "</TD></TR>\n";
+    print "<TR><TD>End Revision Number:</TD><TD>" . $revision_end . "</TD></TR>\n";
+    print "<TR><TD>Repository Path:</TD><TD>" . $repository . "</TD></TR>\n";
+
+    print "<input type=hidden name=revision_start size=0 value=\"" . $revision_start . "\">";
+    print "<input type=hidden name=revision_end size=0 value=\"" . $revision_end . "\">";
+    print "<input type=hidden name=repository size=0 value=\"" . $repository . "\">";
+
+    print "<TR><TD>Compiler Version:</TD><TD><input type=text name=compiler size=60></TD></TR>\n";
+    print "<TR><TD>OS Build & Test:</TD><TD><input type=text name=os_build_test size=60 value=\"See Sanity Test Documentation\"></TD></TR>\n";
+    print "<TR><TD>Install Shield Version:</TD><TD><input type=text name=is_ver size=60 value=\"N/A\"></TD></TR>\n";
+    print "<TR><TD>Database Type:</TD><TD>" . $dbtypes_html . "</TD></TR>\n";
+
+    my $bug_comments_html = html_bug_comment_list( $bug_list );
+
+    print "<TR><TD COLSPAN=5>\n";
+    print h3("Fault Details");
+    print "</TD></TR>";
+    print $bug_comments_html;
+
+    print "<TR><TD COLSPAN=5>\n";
+    print h3("Restrictions");
+    print "</TD></TR>";
+    print "<TR><TD></TD><TD COLSPAN=100>Note: Only restrictions new to this release should be entered. ";
+    print "<BR>Fault # should be stated where applicable.</TD></TR>";
+    print "<TR><TD></TD><TD COLSPAN=100><textarea type=text name=restrictions rows=5 cols=45></textarea></TD></TR>\n";
+
+    print "<TR><TD COLSPAN=5>\n";
+    print h3("Checklist");
+    print "</TD></TR>";
+    print "<TR><TD>Code Review Performed:</TD>";
+    print "<TD><select size=1 name=code_rev><option value=\"N/A\">N/A</option>";
+    print "<option value=\"Yes\">Yes</option>";
+    print "<option value=\"No\">No</option></select> ";
+    print "<input type=text name=code_rev_comment size=50></TD></TR>\n";
+
+    print "<TR><TD>Update Release Map:</TD>";
+    print "<TD><select size=1 name=rel_map><option value=\"N/A\">N/A</option>";
+    print "<option value=\"Yes\">Yes</option>";
+    print "<option value=\"No\">No</option></select> ";
+    print "<input type=text name=rel_map_comment size=50></TD></TR>\n";
+
+    print "<TR><TD>Language Translations:</TD>";
+    print "<TD><TABLE border=0><TR>";
+    print "<TD><select size=1 name=lang_trans><option value=\"N/A\">N/A</option>";
+    print "<option value=\"Required\">Required</option>";
+    print "<option value=\"Complete\">Complete</option></select>";
+    print "</TD><TD>";
+    print "<textarea type=text name=lang_details rows=5 cols=33></textarea></TD></TR>\n";
+    print "</TABLE></TD></TR>\n";
+
+    print "<TR><TD COLSPAN=5>\n";
+    print h3("Product Assurance Testing Information");
+    print "</TD></TR>";
+    print "<TR><TD>Recommended Test Level:</TD>";
+    print "<TD><select size=1 name=test_level><option value=\"Full_Product\">Full Product</option>";
+    print "<option value=\"CR/Regression\">CR/Regression</option>";
+    print "<option value=\"Confidence\">Confidence</option></select></TD></TR>\n";
+    print "<TR><TD>Features/Test Areas:</TD><TD><textarea type=text name=test_area rows=5 cols=45></textarea></TD></TR>\n";
+    print "<TR><TD>Test Notes:</TD><TD><textarea type=text name=test_notes rows=5 cols=45></textarea></TD></TR>\n";
+
+    print "<TR><TD COLSPAN=5>\n";
+    print h3("Team Leader / Project Manager Sign-off");
+    print "</TD></TR>";
+    print "<TR><TD>Confirm Faults Fixed:</TD>";
+    print "<TD><select size=1 name=confirm_bugs_closed><option value=\"No\">No</option>";
+    print "<option value=\"Yes\">Yes</option></select></TD></TR>";
+    print "<TR><TD>Risk Analysis:</TD><TD><input type=text name=risk_analysis size=60></TD></TR>\n";
+    print "<TR><TD>Comments:</TD><TD><textarea type=text name=sign_comments rows=5 cols=45></textarea></TD></TR>\n";
+    print "<TR><TD>Signed:</TD><TD><input type=text name=signed size=60></TD></TR>\n";
+    print "<TR><TD>Date:</TD><TD><input type=text name=signed_date size=60></TD></TR>\n";
+
+    print "</TABLE></BLOCKQUOTE>";
+
+    if( $bug_comments_html ne "" ) {
+	print hr();
+	print "<BR><CENTER>E-mail Impact Document to: ";
+	print "<input type=text name=send_email_to size=60 value=\"\">";
+
+	print "<P><input type=submit value=\"Generate Impact Document\"></CENTER>";
+    }
+    
+    print "</FORM>";
+    print end_html();
+}
+
+#
+# Creates an html drop down list
+#
+sub html_drop_down_list {
+    my $list_data = shift;
+    my $list_name = shift;
+
+    my $html_data = "<select size=1 name=" . $list_name . ">\n";
+
+    foreach my $element ( @{ $list_data } ) {
+    	if( $element ne "" && $element ne "\n" ) {
+	    $html_data .= "<option ";
+	    	
+	    # If there is an N/A field, make it the default
+	    if ( $element eq "N/A" ) {
+	        $html_data .= "selected ";
+	    }
+	    	
+	    $html_data .= "value=\"";
+	    $html_data .= $element;
+	    $html_data .= "\">";
+	    $html_data .= $element;
+	    $html_data .= "</option>\n";	
+	}
+    }
+
+    $html_data .= "</select>\n"
+}
+
+
+#
+# Creates an html multi-select list
+#
+sub html_multi_select_list {
+    my $list_data = shift;
+    my $list_name = shift;
+
+    my $html_data = "<select multiple size=5 name=" . $list_name . ">\n";
+
+    foreach my $element ( @{ $list_data } ) {
+    	if( $element ne "" && $element ne "\n" ) {
+    	    $html_data .= "<option value=\"";
+	    $html_data .= $element;
+	    $html_data .= "\">";
+	    $html_data .= $element;
+	    $html_data .= "</option>\n";
+	}
+    }
+    
+    $html_data .= "</select>\n"
+}
+
+
+#
+# Creates an html bug comment list
+#
+sub html_bug_comment_list {
+    my $bug_list = shift;
+    my $html_data = "";
+
+    foreach my $bugid ( @{ $bug_list } ) {
+    	if( $bugid ne "" ) {
+    	    my $html_bugid = $bugid;
+    	    if( defined($webreports_config->{bug_tracker_url}) && ($webreports_config->{bug_tracker_url} ne "") ) {
+    	        $html_bugid = "<A HREF=\"" . $webreports_config->{bug_tracker_url} . $bugid . "\">";
+    	        $html_bugid .= $bugid . "</A>";
+    	    }
+    
+    	    $html_data .= "<TR><TD ALIGN=center>" . $html_bugid;
+    	    $html_data .= "</TD><TD><input type=text name=bug" . $bugid . " size=60></TD></TR>\n";
+	}
+    }
+
+    return $html_data;
+}

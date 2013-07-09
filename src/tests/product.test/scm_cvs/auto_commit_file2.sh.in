@@ -1,0 +1,33 @@
+#!/bin/sh
+
+. ../lib/common.inc
+
+
+
+
+COMMIT_FILE=wb/TestProduct/test_file1.txt
+cd $REPOSITORY_CHECKOUT
+echo "This is a test file" > $COMMIT_FILE
+$SCM_BIN_PATH/cvs add $COMMIT_FILE
+$SCM_BIN_PATH/cvs commit -m "${LOG_TEMPLATE_ID_PREFIX}${TESTSUITE_BUG_VALID_BUG_OWNER}${LOG_TEMPLATE_ID_POSTFIX}$TESTSUITE_COMMON_NOTE
+Testing a commit of $COMMIT_FILE on a bug id with a valid bug owner, when the product name will be autodetected." $COMMIT_FILE && echo PASSED
+
+
+
+if [ "$SCM_VERSION" = "1_11_x" ]; then
+    #
+    # CVS 1.11.x does not support autodetection of product names
+    #
+    OUTPUT=`$SCM_BIN_PATH/cvs commit -m "${LOG_TEMPLATE_ID_PREFIX}${TESTSUITE_BUG_VALID_BUG_OWNER}${LOG_TEMPLATE_ID_POSTFIX}$TESTSUITE_COMMON_NOTE
+Testing a commit of $COMMIT_FILE on a bug id with a valid bug owner, when the product name will be autodetected." $COMMIT_FILE 2>&1 | grep -i "has no product_name." |wc -l | @AWK@ '{ print $1 }'`
+    if [ "$OUTPUT" = "1" ]; then
+        $SCM_BIN_PATH/cvs remove -f $COMMIT_FILE
+        echo PASSED
+    fi
+else
+    #
+    # CVS 1.12.x supports autodetection of product names
+    #
+    $SCM_BIN_PATH/cvs commit -m "${LOG_TEMPLATE_ID_PREFIX}${TESTSUITE_BUG_VALID_BUG_OWNER}${LOG_TEMPLATE_ID_POSTFIX}$TESTSUITE_COMMON_NOTE
+Testing a commit of $COMMIT_FILE on a bug id with a valid bug owner, when the product name will be autodetected." $COMMIT_FILE && echo PASSED
+fi

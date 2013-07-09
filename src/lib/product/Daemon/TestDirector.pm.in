@@ -1,0 +1,945 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+
+##################################################################
+# There is a problem with using Win32::OLE from a forked process
+# this means that we have to run it in a completely different
+# environment which is why we exec another perl process
+# http://bugs.activestate.com/show_bug.cgi?id=38968
+##################################################################
+
+
+package @DEVEL_PRODUCT_NAME@::Daemon::TestDirector;
+
+@ISA = qw( @DEVEL_PRODUCT_NAME@::Daemon::Bugtracker );
+
+use strict;
+use Data::Dumper;
+use @DEVEL_PRODUCT_NAME@::Daemon::Bugtracker;
+use @DEVEL_PRODUCT_NAME@::Common;
+use @DEVEL_PRODUCT_NAME@::VDD;
+
+
+
+my $separator = ";";
+
+
+#
+# The Test Director tags for given fields
+#
+sub td_bug_summary_tag {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ td_bug_summary_tag } = $data;
+    } else {
+	return $self->{ td_bug_summary_tag };
+    }
+}
+
+
+
+sub td_product_name_tag {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ td_product_name_tag } = $data;
+    } else {
+	return $self->{ td_product_name_tag };
+    }
+}
+
+
+
+sub td_bug_owner_tag {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ td_bug_owner_tag } = $data;
+    } else {
+	return $self->{ td_bug_owner_tag };
+    }
+}
+
+
+
+sub td_bug_status_tag {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ td_bug_status_tag } = $data;
+    } else {
+	return $self->{ td_bug_status_tag };
+    }
+}
+
+
+
+sub td_bug_comment_tag {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ td_bug_comment_tag } = $data;
+    } else {
+	return $self->{ td_bug_comment_tag };
+    }
+}
+
+
+
+sub td_bug_severity_tag {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ td_bug_severity_tag } = $data;
+    } else {
+	return $self->{ td_bug_severity_tag };
+    }
+}
+
+
+
+sub td_bug_resolution_tag {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ td_bug_resolution_tag } = $data;
+    } else {
+	return $self->{ td_bug_resolution_tag };
+    }
+}
+
+
+
+sub td_bug_priority_tag {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ td_bug_priority_tag } = $data;
+    } else {
+	return $self->{ td_bug_priority_tag };
+    }
+}
+
+
+
+sub td_bug_reporter_tag {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ td_bug_reporter_tag } = $data;
+    } else {
+	return $self->{ td_bug_reporter_tag };
+    }
+}
+
+
+
+sub td_bug_status_map {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ td_bug_status_map } = $data;
+    } else {
+	return $self->{ td_bug_status_map };
+    }
+}
+
+
+
+# Given a bug id, returns the the value from Test Director
+#
+# PARAMETERS:
+# $1 - Bug id
+sub td_get_bug_value {
+    my $self = shift;
+    my ( $bugid, $key_word, $tag_name ) = ( @_ );
+    my $line;
+    my $bug_value = "";
+
+    if( "$tag_name" eq "" ) {
+	  return "";
+    }
+
+    my $cmd_line = $self->build_command_line( $bugid, $key_word, $tag_name );
+
+    # Make the Test Director request
+    open( TD_COMMAND, $cmd_line . " |" );
+    # Cygwin has a problem with newlines
+    binmode( TD_COMMAND, ":crlf" );
+
+    # Read the return to get the data
+    while ( $line = <TD_COMMAND> ) {
+	$bug_value .= $line;
+    }
+
+    close ( TD_COMMAND );
+
+    return $bug_value;
+}
+
+
+
+sub td_get_bug_comments {
+    my $self = shift;
+    my $bugid = shift;
+    return $self->td_get_bug_value( $bugid, "get_bug_value", $self->td_bug_comment_tag() );
+}
+
+
+
+# Gets the used and date from the given comment text
+#
+# PARAMETERS:
+# $1 - Comment
+sub td_get_data_from_comment {
+    my $self = shift;
+    my ( $comment ) = ( @_ );
+
+    # Get the first line of the comment
+    my @comment_lines = split( "\n", $comment );
+
+    my @comment_words = split( " ", $comment_lines[0] );
+
+    # First value is the username entering the comment
+    my $username = $comment_words[0];
+
+    @comment_words = split( '\(', $comment_lines[0] );
+    @comment_lines = split( '\)', $comment_words[1] );
+    my $date = $comment_lines[0];
+
+    return $username, $date;
+}
+
+
+
+
+sub td_get_bug_severity {
+    my $self = shift;
+    my $bugid = shift;
+    return $self->td_get_bug_value( $bugid, "get_bug_value", $self->td_bug_severity_tag() );
+}
+
+
+
+sub td_get_bug_resolution {
+    my $self = shift;
+    my $bugid = shift;
+    return $self->td_get_bug_value( $bugid, "get_bug_value", $self->td_bug_resolution_tag() );
+}
+
+
+
+sub td_get_bug_priority {
+    my $self = shift;
+    my $bugid = shift;
+    return $self->td_get_bug_value( $bugid, "get_bug_value", $self->td_bug_priority_tag() );
+}
+
+
+
+#
+# Builds the command line required to make a test director call
+#
+sub build_command_line {
+    my $self = shift;
+    my $bugid = shift;
+    my $operation = shift;
+    my $tag_name = shift;
+
+    my $cmd_line = "\"@DEVEL_CONFIG_PERL_BINARY@\" -I \"";
+    $cmd_line .= "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/lib/";
+    $cmd_line .= "\" \"";
+    $cmd_line .= "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/lib/@DEVEL_PRODUCT_NAME@/Daemon/TestDirectorInterface.pl";
+    $cmd_line .= "\" ";
+
+    my $cmd_args = $operation;
+    $cmd_args .= " ";
+
+    # Now append the database connection information
+    $cmd_args .= $self->location();
+    $cmd_args .= " ";
+    $cmd_args .= $self->username();
+    $cmd_args .= " \"";
+    $cmd_args .= $self->password();
+    $cmd_args .= "\" ";
+    $cmd_args .= $self->database_vendor();
+    $cmd_args .= " ";
+    $cmd_args .= $self->database();
+    $cmd_args .= " ";
+
+    $cmd_args .= $bugid;
+    $cmd_args .= " ";
+    $cmd_args .= $tag_name;
+
+    return $cmd_line . $cmd_args;
+}
+
+
+
+#
+# Initialize configuration information specific to TestDirector
+#
+sub init_specific {
+    my $self = shift;
+    my $testdirector_configuration;
+
+    my $td_config_file = '@sysconfdir@/@DEVEL_PRODUCT_NAME_LOWER@/TestDirector.conf';
+
+    my $file_content = file_content( $td_config_file );
+    eval $file_content or die "Error parsing file '$td_config_file': $@";
+    $testdirector_configuration->{ configuration_file } = $td_config_file;
+
+    $self->td_bug_status_map( $testdirector_configuration->{ testdirector_config }->{ td_bug_status_map } );
+    $self->td_bug_summary_tag( $testdirector_configuration->{ testdirector_config }->{ td_bug_summary } );
+    $self->td_product_name_tag( $testdirector_configuration->{ testdirector_config }->{ td_product_name } );
+    $self->td_bug_owner_tag( $testdirector_configuration->{ testdirector_config }->{ td_bug_owner } );
+    $self->td_bug_status_tag( $testdirector_configuration->{ testdirector_config }->{ td_bug_status } );
+    $self->td_bug_comment_tag( $testdirector_configuration->{ testdirector_config }->{ td_bug_comment } );
+    $self->td_bug_reporter_tag( $testdirector_configuration->{ testdirector_config }->{ td_bug_reporter } );
+
+    $self->td_bug_severity_tag( $testdirector_configuration->{ testdirector_config }->{ td_bug_severity } );
+    $self->td_bug_resolution_tag( $testdirector_configuration->{ testdirector_config }->{ td_bug_resolution } );
+    $self->td_bug_priority_tag( $testdirector_configuration->{ testdirector_config }->{ td_bug_priority } );
+
+    return 0;
+}
+
+
+
+# -----------------------------------------------------------------------------
+# These functions are required by the Bugtracker interface
+# -----------------------------------------------------------------------------
+
+
+sub set_version_type {
+    my $self = shift;
+    my $version = $self->version();
+
+    if ( $version =~ m/(\d+)\.(\d+)\.(\d+)/ ) {
+	my $major = $1;
+	my $minor = $2;
+	my $patch = $3;
+	# Set default support to version 9 as that is what we have tested it on
+	if ( $major == 9 ) {
+	    $self->{ version_type } = $BUGTRACKER_VERSION_LATEST;
+	} else {
+	    $self->{ version_type } = $BUGTRACKER_VERSION_NOT_SUPPORTED;
+	}
+    } else {
+	$self->{ version_type } = $BUGTRACKER_VERSION_WRONG_FORMAT;
+    }
+}
+
+
+
+# -----------------------------------------------------------------------------
+# These functions are required by the Integration interface
+# -----------------------------------------------------------------------------
+
+
+
+# Connects to the bug-tracker database
+sub integration_connect_database {
+    my $self = shift;
+}
+
+
+
+# Disconnects from the bug-tracker database
+sub integration_disconnect_database {
+    my $self = shift;
+}
+
+
+
+# Enters an SCM check-in comment, originating from the bug-tracking
+# username of the SCM user, against a bug
+#
+# PARAMETERS:
+# $1 - Bug id
+# $2 - Bug-tracker username of SCM user that will enter a comment
+# $3 - Comment to be entered
+#
+# RETURNS:
+# - 0 on success
+# - 1 on failure
+# - 1,<a string describing the error> on failure
+sub integration_add_comment {
+    my $self = shift;
+    my ( $bugid, $username, $comment ) = ( @_ );
+
+    # Generate a comment to insert
+    my $full_comment = "\n\n";
+    $full_comment .= $username;
+    $full_comment .= " (";
+    $full_comment .= localtime;
+    $full_comment .= ") : ";
+    $full_comment .= $comment;
+
+    my $cmd_line = $self->build_command_line( $bugid, "append_to_value", $self->td_bug_comment_tag() );
+    $cmd_line .= " \"" . $full_comment . "\"";
+
+    # Make the Test Director request
+    open( TD_COMMAND, $cmd_line . " |" );
+
+    # Check if there was an error
+    my $error_message = <TD_COMMAND>;
+
+    close ( TD_COMMAND );
+
+    if( "$error_message" ne "" ) {
+	return 1, $error_message;
+    }
+    return 0;
+}
+
+
+
+# Changes a bug resolution originating from the bug-tracking username
+# of the SCM user
+#
+# PARAMETERS:
+# $1 - Bug id
+# $2 - Bug-tracker username of SCM user that will change the resolution
+# $3 - New bug status
+# $4 - Possible bug resolution
+# $5 - Possible bug resolution data
+#
+# RETURNS:
+# - 0 on success
+# - 1,<a string describing the error> on failure
+sub integration_change_bug_resolution {
+    my $self = shift;
+    my ( $bugid, $username, $status, $resolution, $resolution_data ) = ( @_ );
+        
+    my $tags = $self->td_bug_status_tag();
+        
+    my $cmd_line = $self->build_command_line( $bugid, "update_bug_details", $tags );
+        
+    $cmd_line .= " N Y \"" . $status . "\"";
+            
+    # Make the Test Director request
+    open( TD_COMMAND, $cmd_line . " |" );
+    # Cygwin has a problem with newlines
+    binmode( TD_COMMAND, ":crlf" );
+        
+    # Check if there was an error
+    my $error_message = <TD_COMMAND>;
+        
+    close ( TD_COMMAND );
+        
+    if( "$error_message" ne "" ) {
+	return 1, $error_message;
+    }
+
+    return 0;
+}
+
+
+
+# PARAMETERS:
+# $1 - The bug id
+# $2 - The proposed new status
+# $3 - The proposed resolution for the new status
+# $4 - Apply case sensitive verification
+#
+# RETURNS:
+# <return_code, current_bug_status> where return_code is:
+# - 0 if the check is valid
+# - 1 if the proposed new status is invalid
+# - 2 if the proposed new resolution is invalid
+sub integration_bug_resolution_change_is_valid {
+    my $self = shift;
+    my ( $bugid, $proposed_status, $proposed_resolution, $case_sensitive_verification ) = ( @_ );
+
+    my $bug_status = $self->integration_get_bug_status( $bugid );
+
+    return ( $self->resolution_change_check( $bug_status, $proposed_status, $proposed_resolution, $self->td_bug_status_map() ), $bug_status, $case_sensitive_verification );
+}
+
+
+
+# Returns a string that reports the list of valid resolution states in the
+# bug-tracker
+sub integration_valid_resolution_states_list {
+    my $self = shift;
+    my ( $bug_status_string ) = ( @_ );
+
+    return $self->valid_resolution_states_list( $bug_status_string, $self->td_bug_status_map() );
+}
+
+
+
+# Returns a string that reports the list of valid resolutions in the
+# bug-tracker
+#
+# PARAMETERS:
+# $1 - The bug status string for which the valid resolutions list
+#      should be reported
+# $2 - Apply case sensitive verification
+sub integration_valid_resolutions_list {
+    my $self = shift;
+    my ( $bug_status_string, $case_sensitive_verification ) = ( @_ );
+
+    return $self->valid_resolutions_list( $bug_status_string, $self->td_bug_status_map(), $case_sensitive_verification );
+}
+
+
+
+#
+# Set of wrappers to get values from Test Director
+#
+sub integration_get_product_name {
+    my $self = shift;
+    my $bugid = shift;
+    return $self->td_get_bug_value( $bugid, "get_bug_value", $self->td_product_name_tag() );
+}
+
+
+
+# Given a bug id, returns an array with the bug-tracking usernames of
+# the users to which the bug is assigned
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_owners {
+    my $self = shift;
+    my $bugid = shift;
+
+    my $bug_owner_list = $self->td_get_bug_value( $bugid, "get_bug_value", $self->td_bug_owner_tag() );
+    my @bug_owners = split ( $separator, $bug_owner_list );
+
+    return @bug_owners;
+}
+
+
+
+# Given a bug id, returns the bug-tracking email address of the user to
+# which that reported the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_reporter_email {
+    my $self = shift;
+    my $bugid = shift;
+
+    # Get the user that raised this bug
+    my $username = $self->td_get_bug_value( $bugid, "get_bug_values", $self->td_bug_reporter_tag() );
+
+    # now find and return the E-mail address of that user
+    return $self->integration_get_user_email( $username );
+}
+
+
+
+# Given a username, returns the user's email address
+#
+# PARAMETERS:
+# $1 - Username
+sub integration_get_user_email {
+    my $self = shift;
+    my $username = shift;
+
+    return $self->td_get_bug_value( $username, "get_users_email", "_" );
+}
+
+
+
+# Given a bug id, returns the email addresses of the users monitoring
+# the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_monitors_email_list {
+    my $self = shift;
+    my $bugid = shift;
+    my @bug_monitors_email_list;
+
+    # NOT IMPLEMENTED by Test Director
+    return undef;
+}
+
+
+
+# Given a project_name, returns the email addresses of all the
+# managers of the project.
+#
+# For TestDirector, this is not applicable
+#
+# PARAMETERS:
+# $1 - Project name
+sub integration_get_managers_email_list {
+    my $self = shift;
+    my $project_name = shift;
+
+    # NOT IMPLEMENTED by Test Director
+    return undef;
+}
+
+
+
+# Given a bug id, returns the status of the bug
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_get_bug_status {
+    my $self = shift;
+    my $bugid = shift;
+
+    return $self->td_get_bug_value( $bugid, "get_bug_value", $self->td_bug_status_tag() );
+}
+
+
+
+# Given a bug id, returns 1 if the bug is in a state considered
+# active, or 0 otherwise. Active bug state examples would be
+# "assigned" and "reopened". A bug can accept checkins in this
+# state. However, "new" and "confirmed" are not active since in this
+# state the bug has not been assigned to a developer. "resolved" is
+# obviously not active.
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_bug_in_active_state {
+    my $self = shift;
+    my $bugid = shift;
+    my $bug_status = $self->integration_get_bug_status( $bugid );
+    
+    # Verify that the bug is in the assigned or reopened state
+    if ( $self->td_bug_status_map()->{ $bug_status }->{ active } == 1 ) {
+	return (1, $bug_status);
+    } else {
+	return (0, $bug_status);
+    }
+}
+
+
+
+# Returns a string that reports the list of active states in the
+# bug-tracker
+sub integration_active_states_list {
+    my $self = shift;
+
+    return $self->active_states_list( $self->td_bug_status_map() );
+}
+
+
+
+sub integration_get_bug_subject {
+    my $self = shift;
+    my $bugid = shift;
+
+    return $self->td_get_bug_value( $bugid, "get_bug_value", $self->td_bug_summary_tag() );
+}
+
+
+
+# Given a product name and a tag name, adds the tag in the list of
+# available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+# $3 - Description of the tag
+#
+# RETURNS:
+# - 0 on success
+# - 1 if the product name does not exist
+sub integration_add_tag {
+    my $self = shift;
+    my ( $product_name, $tag_name, $description ) = ( @_ );
+
+    # NOT IMPLEMENTED by Test Director
+    return 0;
+}
+
+
+
+# Given a product name and a tag name, checks if the tag exists in the
+# list of available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+#
+# RETURNS:
+# - 0 the tag does not exist
+# - 1 the tag exists
+# - 2 the product name does not exist
+sub integration_tag_exists {
+    my $self = shift;
+    my ( $product_name, $tag_name ) = ( @_ );
+
+    # NOT IMPLEMENTED by Test Director
+    return 0;
+}
+
+
+
+# Given a product name and a tag name, deletes the tag from the list
+# of available versions of the product
+#
+# PARAMETERS:
+# $1 - Name of product on which a tag is added
+# $2 - Name of tag
+#
+# RETURNS:
+# - 0 on success
+# - 1 if the product name does not exist
+# - 2 if the tag name does not exist
+sub integration_delete_tag {
+    my $self = shift;
+    my ( $product_name, $tag_name ) = ( @_ );
+
+    # NOT IMPLEMENTED by Test Director
+    return 0;
+}
+
+
+
+# Runs a VDD Query
+#
+# PARAMETERS:
+# $1 - Name of product for which a VDD will be generated
+# $2 - Previous version name of the product
+# $3 - Newer version name of the product
+# $4 - Date the previous version name was applied in the SCM system for the product
+# $5 - Date the newer version name was applied in the SCM system for the product
+#
+# RETURNS:
+# - A @DEVEL_PRODUCT_NAME@::VDD object
+sub integration_get_vdd {
+    my $self = shift;
+    my ( $product_name, $from_version, $to_version, $from_label_date, $to_label_date ) = ( @_ );
+    my $vdd = @DEVEL_PRODUCT_NAME@::VDD->new();
+
+    # VDD is generated using a start and end date.  Unfortunately Test
+    # Director stores all the file history in one memo field and
+    # stores the date within this text in the format:
+    #   username (Wed Jul 18 17:20:17 2007) :
+    #
+    # This means to generate the VDD information it would be required
+    # to retrieve every bug, split the file history memo field up into
+    # commit segments and then parse each segment trying to match the
+    # date. (Note: the Test Director interface does not have direct
+    # access to the database)
+    #
+    # This will take a very long time even if there were a small
+    # number of bugs to process, and by the time you start getting
+    # into the thousands it will be unmanageable.
+    #
+    # It is for this reason that VDD has not been implemented for the
+    # Test Director system.
+
+    return $vdd;
+}
+
+
+
+# Runs a get bugs query
+#
+# PARAMETERS:
+# $1 - Name of product in which bugs will be queried
+# $2 - List of bug ids that should be queried
+# $3 - Hash table describing which types of metadata must be
+#      retrieved.
+#
+# RETURNS:
+# - A @DEVEL_PRODUCT_NAME@::Bug_Information object
+# - An integer ret_val that if set to 1 indicates that an error
+#   occured.
+# - A text message that should be reported to the client if an error
+#   occurred.
+sub integration_get_bugs {
+    my $self = shift;
+    my ( $product_name, $ids, $must_retrieve ) = ( @_ );
+    my $mergelist = Scmbug::MergeList->new();
+    my $ret_val = 0;
+    my $ret_message = "";
+
+    # Get the list of tags to retrieve
+    my @tag_array = ();
+
+    if( $must_retrieve->{ status } != 0 ) {
+	push @tag_array, $self->td_bug_status_tag( );
+    }
+    if( $must_retrieve->{ owners } != 0 ) {
+	push @tag_array, $self->td_bug_owner_tag( );
+    }
+    if( $must_retrieve->{ severity } != 0 ) {
+	push @tag_array, $self->td_bug_severity_tag( );
+    }
+    if( $must_retrieve->{ priority } != 0 ) {
+	push @tag_array, $self->td_bug_priority_tag( );
+    }
+    if( $must_retrieve->{ resolution } != 0 ) {
+	push @tag_array, $self->td_bug_resolution_tag( );
+    }
+    if( $must_retrieve->{ summary } != 0 ) {
+	push @tag_array, $self->td_bug_summary_tag( );
+    }
+
+    my $taglist = join($separator, @tag_array);
+    my @all_bug_data_array = ();
+    
+    # Support the case where only comments are required
+    if( $taglist eq "" ) {
+        @all_bug_data_array = @{ $ids };
+    } else {
+        my $idlist = join( $separator, @{ $ids } );
+        my $all_bug_data = $self->td_get_bug_value( $idlist, "get_bug_details", $taglist );
+	@all_bug_data_array = split( "\n", $all_bug_data );
+    }
+
+    foreach my $bug_data ( @all_bug_data_array ) {
+	my @bug_data_list = split( $separator, $bug_data );
+
+	my $id = shift @bug_data_list;
+
+	# Only retrieve the data requested because the performance
+	# overhead of retrieving additional, unnecessary, data is
+	# quite significant for Test Director
+        my $status = "";
+        my $active = 0;
+	if( $must_retrieve->{ status } != 0 ) {
+	    $status = shift @bug_data_list;
+    	    if ( $self->td_bug_status_map()->{ $status }->{ active } == 1 ) {
+		$active = 1;
+    	    }
+	}
+        my @owners = ();
+	if( $must_retrieve->{ owners } != 0 ) {
+	    @owners = split(",", shift @bug_data_list);
+	}
+	my $severity = "";
+	if( $must_retrieve->{ severity } != 0 ) {
+	    $severity = shift @bug_data_list;
+	}
+	my $priority = "";
+	if( $must_retrieve->{ priority } != 0 ) {
+	    $priority = shift @bug_data_list;
+	}
+	my $resolution = "";
+	if( $must_retrieve->{ resolution } != 0 ) {
+	    $resolution = shift @bug_data_list;
+	}
+	my $summary = "";
+	if( $must_retrieve->{ summary } != 0 ) {
+	    $summary = shift @bug_data_list;
+	}
+
+	# Get the complete set of comments
+	my $comment_set_counter = 0;
+	if( $must_retrieve->{ comments_data } != 0 ) {
+	    my $comments = $self->td_get_bug_comments( $id );
+
+	    # Split the comment up into the correct sections
+	    my @comment_sets = $self->split_comment_sections( $comments );
+	    my $number_of_comment_sets = scalar @comment_sets;
+	    while ( $comment_set_counter < $number_of_comment_sets ) {
+	        my ($is_an_integration_comment,
+		    $affected_files_description,
+		    $extracted_comment,
+		    $extracted_ret_val,
+		    $extracted_ret_message) = $self->extract_affected_files( $comment_sets[ $comment_set_counter ], $id, ($comment_set_counter + 1) );
+	    
+	        if ($is_an_integration_comment == 1) {
+		    if ($extracted_ret_val == 0) {
+		    
+		        my ($username, $date) = $self->td_get_data_from_comment( $comment_sets[ $comment_set_counter ] );
+
+		        $mergelist->add_bug_comment( $id,
+						     $summary,
+						     $status,
+                                                     $active,
+                                                     \@owners,
+						     $resolution,
+						     $severity,
+						     $priority,
+						     ($comment_set_counter + 1),
+						     $extracted_comment,
+						     $date,
+						     $username,
+						     "",
+						     "",
+						     $affected_files_description );
+		    
+		    } else {
+		        # There was an error message detected. Should report it.
+		        $ret_val = 1;
+		        $ret_message .= $extracted_ret_message;
+		    }
+	        } else {
+		    # This is just a user comment. Ignore it.
+	        }
+	        $comment_set_counter++;
+	    }
+	}
+	
+	# Check to see if the data has been added, if not add a single one now
+	# This is the case when there are no comments or comments were not requested
+	if( $comment_set_counter eq "0" ) {
+	    $mergelist->add_bug_comment( $id,
+					 $summary,
+					 $status,
+	                                 $active,
+	                                 \@owners,
+					 $resolution,
+					 $severity,
+					 $priority,
+					 0,
+					 "",
+					 "",
+					 "",
+					 "",
+					 "",
+					 "" );
+	}
+    }
+    
+    return $mergelist, $ret_val, $ret_message;
+}
+
+
+
+# Given a bug id, returns if it is locked or not
+# return 1 if bug lock is available
+# return 0 if bug lock not available
+#
+# PARAMETERS:
+# $1 - Bug id
+sub integration_bug_lock_available {
+    my $self = shift;
+    my $bugid = shift;
+
+    # Find if a bug is available to lock
+    return $self->td_get_bug_value( $bugid, "bug_lock_available", "-" );
+}
+
+
+
+1;

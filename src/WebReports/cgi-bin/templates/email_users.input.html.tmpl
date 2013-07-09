@@ -1,0 +1,43 @@
+[% SET title = 'E-mail Open Assignees' %]
+[% INCLUDE templates/header.html.tmpl %]
+
+<H2>[% title %]</H2>
+
+<form action=/scmbug-cgi/email_users.pl method=post>
+
+<BLOCKQUOTE>
+
+<TABLE BOARDER=0>
+<TR><TD COLSPAN=5><H3>Users To E-mail</H3></TD></TR>
+
+<TR><TD><B><I>E-mail Address</I></B></TD><TD><B><I>Fault List</I></B></TD></TR>
+
+[% FOREACH details IN email_details %]
+    <TR><TD><input type=text name="[% details.assignee %]" value="[% details.email %]" size=30></TD>
+    <TD><input type=text name="bugs_[% details.assignee %]" value="[% details.buglist %]" size=60></TD></TR>
+[% END %]
+
+<TR><TD>&nbsp;</TD></TR>
+<TR><TD COLSPAN=5><H3>Details</H3></TD></TR>
+    
+<TR><TD>From E-mail Address</TD><TD><input type=text name=from_email size=60></TD></TR>
+<TR><TD>CC E-mail Address</TD><TD><input type=text name=cc_email size=60></TD></TR>
+<TR><TD>E-mail Subject</TD>
+  <TD><input type=text name=subject value="Faults to close for Impact Document" size=60></TD></TR>
+<TR><TD>E-mail comments</TD><TD>
+<textarea type=text name=comments rows=7 cols=48>
+You are recieving this E-mail because you have an open fault (listed below) that
+is intended to be included in an Impact Document.  If the work under this fault is
+complete please can you close the fault(s) ASAP.
+</textarea></TD></TR>
+</TABLE></BLOCKQUOTE>
+
+[% FOREACH bug_summary IN bug_summaries %]
+    <input type=hidden name="summary[% bug_summary.bugid %]" value="[% bug_summary.summary %]">
+[% END %]
+
+
+<P><CENTER><input type=submit value="Send E-mails"></CENTER>
+</form>
+
+[% INCLUDE templates/footer.html.tmpl %]

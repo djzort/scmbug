@@ -1,0 +1,186 @@
+[% SET title = 'Impact Document Generation' %]
+[% INCLUDE templates/header.html.tmpl %]
+
+<H2>[% title %]</H2>
+
+<form action=/scmbug-cgi/bug_report_document.pl method=post>
+
+<BLOCKQUOTE>
+<TABLE BOARDER=0>
+<TR><TD COLSPAN=5><H3>Project Information</H3></TD></TR>
+
+<TR><TD WIDTH=250>Implemented Platforms:</TD>
+  <TD>
+  <select multiple size=5 name="os">
+  [% FOREACH an_os IN OSs_list %]
+    [% IF an_os != "" %]
+    	 <option value="[% an_os %]">[% an_os %]</option>
+    [% END %]
+  [% END %]
+  </select>
+  </TD></TR>
+
+<TR><TD>Product:</TD><TD><textarea type=text name=product rows=5 cols=45></textarea></TD></TR>
+
+<TR><TD>Implemented Version:</TD>
+  <TD>
+  <select size=1 name="versions">
+  [% FOREACH version IN versions_list %]
+    [% IF version != "" && version != "\n" %]
+  	<option 
+  	[% IF version == "N/A" %]
+  	    selected 
+  	[% END %]
+  	value="[% version %]">[% version %]</option>
+    [% END %]
+  [% END %]
+  </select>
+  </TD></TR>
+
+
+<TR><TD>Implemented Stage:</TD>
+  <TD>
+  <select size=1 name="stages">
+  [% FOREACH stage IN stages_list %]
+    [% IF stage != "" && stage != "\n" %]
+  	<option 
+  	[% IF stage == "N/A" %]
+  	    selected 
+  	[% END %]
+  	value="[% stage %]">[% stage %]</option>
+    [% END %]
+  [% END %]
+  </select>
+  </TD></TR>
+    
+<TR><TD>Project Code:</TD><TD>POD/ <select size=1 name=project_type>
+  <option selected value=STR>STR</option><option value=SUP>SUP</option><option value=CUS>CUS</option></select>
+   / <input type=text name=project_num size=4 maxlength=5 value="XXXXX"> - 
+  <input type=text name=project_desc size=32 value="Project Description"></TD></TR>
+        
+<TR><TD>Reason For Release:</TD><TD><input type=text name=reason_for_release size=60></TD></TR>
+<TR><TD>Project Manager:</TD><TD>
+  <select size=1 name="managers">
+  [% FOREACH manager IN managers_list %]
+    [% IF manager != "" && manager != "\n" %]
+  	<option 
+  	[% IF manager == "N/A" %]
+  	    selected 
+  	[% END %]
+  	value="[% manager %]">[% manager %]</option>
+    [% END %]
+  [% END %]
+  </select>
+  </TD></TR>
+
+<TR><TD>Produced By:</TD><TD><input type=text name=produced_by size=60></TD></TR>
+<TR><TD>Date:</TD><TD><input type=text name=date size=60></TD></TR>
+
+<TR><TD COLSPAN=5><H3>Build Information</H3></TD></TR>
+
+<TR><TD>Start Revision Number:</TD><TD>[% revision_start %]</TD></TR>
+<TR><TD>End Revision Number:</TD><TD>[% revision_end %]</TD></TR>
+<TR><TD>Repository Path:</TD><TD>[% repository %]</TD></TR>
+
+<input type=hidden name=revision_start size=0 value="[% revision_start %]">
+<input type=hidden name=revision_end size=0 value="[% revision_end %]">
+<input type=hidden name=repository size=0 value="[% repository %]">
+
+<TR><TD>Compiler Version:</TD><TD><input type=text name=compiler size=60></TD></TR>
+<TR><TD>OS Build & Test:</TD><TD><input type=text name=os_build_test size=60 value="See Sanity Test Documentation"></TD></TR>
+
+<TR><TD>Install Shield Version:</TD><TD><input type=text name=is_ver size=60 value="N/A"></TD></TR>
+<TR><TD>Database Type:</TD><TD>
+
+  <select multiple size=5 name="dbtypes">
+  [% FOREACH dbtype IN dbtypes_list %]
+    [% IF dbtype != "" %]
+    	 <option value="[% dbtype %]">[% dbtype %]</option>
+    [% END %]
+  [% END %]
+  </select>
+  </TD></TR>
+
+<TR><TD COLSPAN=5><H3>Fault Details</H3></TD></TR>
+<TR><TD COLSPAN=5>
+<TABLE WIDTH=100% BOARDER=0>
+
+[% FOREACH bugdetails IN bug_list %]
+    [% IF bugdetails.bugid != "" %]
+        <TR><TD WIDTH=190 ALIGN=center>
+	[% IF bug_tracker_url %]
+	    <A HREF="[% bug_tracker_url %][% bugdetails.bugid %]" title="[% bugdetails.summary %]">[% bugdetails.bugid %]</A>
+	[% ELSE %]
+	    <A title="[% bugdetails.summary %]">[% bugdetails.bugid %]</A>
+	[% END %]
+	</TD>
+	<TD ALIGN=center WIDTH=50>
+	[% FOREACH review IN bugdetails.reviews.split(',') %]
+	     [% IF review == 'Open' %]
+	    	<IMG src="/scmbug/images/rev-cross.png" title="Open Review" border=0>
+	     [% ELSIF review == 'Closed' %]
+		<IMG src="/scmbug/images/rev-tick.png" title="Closed Review" border=0>	     
+	     [% END %]
+	[% END %]
+	</TD>
+	<TD><input type=text name="bug[% bugdetails.bugid %]" size=60></TD></TR>
+    [% END %]
+[% END %]
+</TABLE>
+</TD></TR>
+<TR><TD COLSPAN=5><H3>Restrictions</H3></TD></TR>
+
+<TR><TD></TD><TD COLSPAN=100>Note: Only restrictions new to this release should be entered. 
+<BR>Fault # should be stated where applicable.</TD></TR>
+<TR><TD></TD><TD COLSPAN=100><textarea type=text name=restrictions rows=5 cols=45></textarea></TD></TR>
+
+<TR><TD COLSPAN=5><H3>Checklist</H3></TD></TR>
+
+<TR><TD>Code Review Performed:</TD>
+<TD><select size=1 name=code_rev><option value="N/A">N/A</option>
+<option value="Yes">Yes</option>
+<option value="No">No</option></select>
+<input type=text name=code_rev_comment size=50></TD></TR>
+
+<TR><TD>Update Release Map:</TD>
+<TD><select size=1 name=rel_map><option value="N/A">N/A</option>
+<option value="Yes">Yes</option>
+<option value="No">No</option></select>
+<input type=text name=rel_map_comment size=50></TD></TR>
+
+<TR><TD>Language Translations:</TD>
+<TD><TABLE border=0><TR>
+<TD><select size=1 name=lang_trans><option value="N/A">N/A</option>
+<option value="Required">Required</option>
+<option value="Complete">Complete</option></select>
+</TD><TD>
+<textarea type=text name=lang_details rows=5 cols=33></textarea></TD></TR>
+</TABLE></TD></TR>
+
+<TR><TD COLSPAN=5><H3>Product Assurance Testing Information</H3></TD></TR>
+<TR><TD>Recommended Test Level:</TD>
+<TD><select size=1 name=test_level><option value="Full_Product">Full Product</option>
+<option value="CR/Regression">CR/Regression</option>
+<option value="Confidence">Confidence</option></select></TD></TR>
+<TR><TD>Features/Test Areas:</TD><TD><textarea type=text name=test_area rows=5 cols=45></textarea></TD></TR>
+<TR><TD>Test Notes:</TD><TD><textarea type=text name=test_notes rows=5 cols=45></textarea></TD></TR>
+
+<TR><TD COLSPAN=5><H3>Team Leader / Project Manager Sign-off</H3></TD></TR>
+<TR><TD>Confirm Faults Fixed:</TD>
+<TD><select size=1 name=confirm_bugs_closed><option value="No">No</option>
+<option value="Yes">Yes</option></select></TD></TR>
+<TR><TD>Risk Analysis:</TD><TD><input type=text name=risk_analysis size=60></TD></TR>
+<TR><TD>Comments:</TD><TD><textarea type=text name=sign_comments rows=5 cols=45></textarea></TD></TR>
+<TR><TD>Signed:</TD><TD><input type=text name=signed size=60></TD></TR>
+<TR><TD>Date:</TD><TD><input type=text name=signed_date size=60></TD></TR>
+
+</TABLE></BLOCKQUOTE>
+
+<HR>
+<BR><CENTER>E-mail Impact Document to: 
+<input type=text name=send_email_to size=60 value="">
+<P><input type=submit value="Generate Impact Document"></CENTER>
+</FORM>
+
+
+[% INCLUDE templates/footer.html.tmpl %]

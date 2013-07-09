@@ -1,0 +1,41 @@
+TRASH=*~
+NAME=manual
+OUTPUT=output
+IMAGES=images
+
+.PHONY: images
+
+all: images dvi html-single html-multi pdf
+
+dvi:
+	docbook2dvi -o ${OUTPUT} content/${NAME}.sgml
+
+pdf:
+	(cd ${OUTPUT}; dvipdf ${NAME}.dvi ${NAME}.pdf)
+
+html-single: 
+	docbook2html -u -o ${OUTPUT}.single.html content/${NAME}.sgml
+
+html-multi: 
+	docbook2html -o ${OUTPUT}.multi.html content/${NAME}.sgml
+
+check:
+	./check_html.sh
+
+
+#
+# Create .pngs from the dia diagrams. Then feed them to ImageMagick for
+# further processing
+#
+images:
+	cd images; ./prep_images.sh
+
+clean:
+	-rm content/manual.sgml
+	-rm check_html.sh
+	-rm images/system_architecture.{fig,eps,jpg,png}
+	-rm ${TRASH} *.ps *.dvi
+	-rm -rf ${OUTPUT}* manual manual.junk
+
+distclean: clean
+	-rm Makefile

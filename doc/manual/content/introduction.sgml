@@ -1,0 +1,79 @@
+<chapter id="introduction">
+  <title>Introduction</title>
+
+  <section id="what-is-product">
+    <title>What Is It?</title>
+    <para>
+      &devel-product-name; is a system that integrates software
+      configuration management with bug-tracking. It is implemented in
+      Perl and has been successfully deployed on UNIX-like and Windows
+      systems. It is pronounced
+      <emphasis>&devel-product-name-pronounce</emphasis>.
+    </para>
+  </section>
+
+
+
+
+  <section id="why-scm">
+    <title>Why Use An SCM System?</title>
+
+    <para>
+      Those who do not use a software configuration management (SCM)
+      system do not maintain a history of modifications performed to
+      their software. When bugs creep in their software, they do not
+      have adequate information on how changes to source code came
+      about.
+    </para>
+
+    <para>
+      SCM systems, or even simple source code version control systems,
+      make sure that a record of all changes and enhancements to the
+      software is maintained. They provide a method of creating,
+      storing, and labeling software changes.
+    </para>
+
+
+  </section>
+
+  <section id="why-bugtracking">
+    <title>Why Use A Bug-tracking System?</title>
+                                                                                
+    <para>
+      Those who do not use a bug-tracking system tend to rely on
+      shared lists, email, spreadsheets and/or Post-It notes to
+      monitor the status of defects. This procedure is usually
+      error-prone and tends to cause those bugs judged least
+      significant by developers to be dropped or ignored.
+    </para>
+                                                                                
+    <para>
+      Integrated defect-tracking systems make sure that nothing gets
+      swept under the carpet; they provide a method of creating,
+      storing, arranging and processing defect reports and enhancement
+      requests.
+    </para>
+
+  </section>
+
+  <section id="why-scm-bugtracking-integration">
+    <title>Why Integrate SCM With Bug-tracking?</title>
+
+    <para>
+      SCM systems maintain software changes. Bug-tracking systems
+      maintain lists of software enhancements and defects. By
+      examining a log of software changes, it is uncertain
+      <emphasis>why</emphasis> the changes occurred. By examining a log
+      of defect reports, it is uncertain <emphasis>what</emphasis>
+      changed in software in response to the defects.
+    </para>
+
+    <para>
+      Integration of SCM with bug-tracking ties the reason
+      <emphasis>why</emphasis> a feature/defect was developed/fixed
+      with <emphasis>what</emphasis> software changes occurred in the
+      SCM system to accomplish this.
+    </para>
+
+ </section>
+ </chapter>

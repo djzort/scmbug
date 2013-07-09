@@ -1,0 +1,162 @@
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook V4.2//EN">
+
+<refentry id="install-glue">
+	<refmeta>
+		<refentrytitle>@DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl</refentrytitle>
+		<manvolnum>1</manvolnum>
+		<refmiscinfo class="date">@DEVEL_ISODATE@</refmiscinfo>
+	</refmeta>
+
+
+	<refnamediv>
+		<refname>@DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl</refname>
+		<refpurpose>Installs the @DEVEL_PRODUCT_NAME@ glue in an SCM system</refpurpose>
+	</refnamediv>
+
+
+	<refsynopsisdiv>
+		<cmdsynopsis>
+			<command>@DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl</command>
+				<arg choice="req">--scm=SCM_NAME</arg>
+				<arg choice="req">--repository=REPOSITORY_PATH</arg>
+				<arg choice="req">--product=PRODUCT_NAME</arg>
+				<arg choice="req">--bug=BUG_ID</arg>
+				<arg choice="req">--binary-paths=BINARY_PATHS</arg>
+				<arg choice="req">--daemon=DAEMON_IP</arg>
+		</cmdsynopsis>
+	</refsynopsisdiv>
+
+
+	<refsect1>
+		<title>DESCRIPTION</title>
+		<para>
+			Installs the @DEVEL_PRODUCT_NAME@ glue in an SCM system.
+		</para>
+	</refsect1>
+	
+	<refsect1>
+		<title>USAGE</title>
+		<para>
+			All the parameters are required. After invocation follow the interactive prompts.
+		</para>
+	</refsect1>
+	
+	<refsect1>
+		<title>OPTIONS</title>
+		<para>
+			The parameters are:
+		</para>
+		<variablelist>
+			<varlistentry>
+				<term>--scm=SCM_NAME</term>
+				<listitem>
+					<para>The name of the SCM system. Valid options are:</para>
+					<itemizedlist>
+						<listitem>
+							<para>
+								CVS
+							</para>
+						</listitem>
+						<listitem>
+							<para>
+								Subversion
+							</para>
+						</listitem>
+					</itemizedlist>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--repository=REPOSITORY_PATH</term>
+				<listitem>
+					<para>The path to the SCM repository.</para>
+					<para>When installing for CVS, this should be set to the contents of the CVSROOT variable.</para>
+					<para>When installing for Subversion, this should be prefixed with file://.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--product=PRODUCT_NAME</term>
+				<listitem>
+					<para>The name used in the bug-tracking system to track defects for the product developed under the SCM system.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--bug=BUG_ID</term>
+				<listitem>
+					<para>The bug id used to capture installation of the @DEVEL_PRODUCT_NAME@ glue in the SCM system.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--binary-paths=BINARY_PATHS</term>
+				<listitem>
+					<para>A comma(,) separated list of paths to the SCM tool's binaries.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--daemon=DAEMON_IP</term>
+				<listitem>
+					<para>The IP address at which the @DEVEL_PRODUCT_NAME@ integration daemon listens.</para>
+				</listitem>
+			</varlistentry>
+		</variablelist>
+	</refsect1>
+
+	
+	<refsect1>
+		<title>EXAMPLES</title>
+		<example>
+			<title>CVS</title>
+			<para>
+			@DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl --scm=CVS --product=TestProduct --repository=/tmp/testrepository --bug=1 --binary-paths=/usr/local/cvs-1.11.21/bin,/bin,/usr/bin --daemon=127.0.0.1
+			</para>
+		</example>
+		<example>
+			<title>Subversion</title>
+			<para>
+			@DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl --scm=Subversion --product=TestProduct --repository=/tmp/testrepository --bug=1 --binary-paths=/bin,/usr/bin --daemon=127.0.0.1
+			</para>
+		</example>
+	</refsect1>
+
+
+	<refsect1>
+		<title>VERSION</title>
+		<para>
+			@DEVEL_PRODUCT_VERSION@
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>BUGS</title>
+		<para>
+		  This tool needs improvement. The list of bugs
+                  is available at the project's <ulink
+url="@DEVEL_PRODUCT_BUGTRACKER@">bug-tracking system</ulink>, under
+                  the 'Tools' component.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>REPORTING_BUGS</title>
+		<para>
+			Please report bugs at the project's <ulink url="@DEVEL_PRODUCT_BUGTRACKER@">bug-tracking system</ulink>.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>SEE ALSO</title>
+		<para>
+			The <ulink url="@datadir@/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual">@DEVEL_PRODUCT_NAME@ manual</ulink>, provided by the package <filename>@DEVEL_PRODUCT_NAME_LOWER@-doc</filename>.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>AUTHOR</title>
+		<para>
+			The <ulink url="@DEVEL_PRODUCT_WEBPAGE@">@DEVEL_PRODUCT_NAME@ Team</ulink>.
+		</para>
+	</refsect1>
+</refentry>

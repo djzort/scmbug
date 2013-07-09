@@ -1,0 +1,945 @@
+dnl Process this file with autoconf to produce a configure script.
+AC_INIT()
+
+
+
+AC_DEFUN([AC_PRINT_ARGS],[
+echo prefix... ${prefix}
+echo exec_prefix... ${exec_prefix}
+echo bindir... ${bindir}
+echo sbindir... ${sbindir}
+echo libdir... ${libdir}
+echo mandir... ${mandir}
+echo datadir... ${datadir}
+echo datarootdir... ${datarootdir}
+echo localstatedir... ${localstatedir}
+echo sysconfdir... ${sysconfdir}
+])
+
+echo "Before processing arguments...."
+AC_PRINT_ARGS
+
+# Set some defaults 
+test "${prefix}" = "NONE" && test "${localstatedir}" = '${prefix}/var' && localstatedir='/var' && AC_SUBST(localstatedir)
+test "${prefix}" = "NONE" && test "${sysconfdir}" = '${prefix}/etc' && sysconfdir='/etc' && AC_SUBST(sysconfdir)
+test "${prefix}" = "NONE" && prefix='/usr' && AC_SUBST(prefix)
+
+
+# Enable expanding of shebang: get a usable BIN_PATH. Should include
+# auto-archive snippet here, instead of quoting it.
+AC_DEFUN([AC_DEFINE_DIR], [
+  test "$prefix" = "NONE" && prefix="$ac_default_prefix"
+  test "$exec_prefix" = "NONE" && exec_prefix='${prefix}'
+  ac_define_dir=`eval echo [$]$2`
+  ac_define_dir=`eval echo [$]ac_define_dir`
+  $1="$ac_define_dir"
+  AC_SUBST($1)
+])
+
+AC_DEFINE_DIR([prefix],[prefix])
+AC_DEFINE_DIR([exec_prefix],[exec_prefix])
+AC_DEFINE_DIR([bindir],[bindir])
+AC_DEFINE_DIR([sbindir],[sbindir])
+AC_DEFINE_DIR([libdir],[libdir])
+AC_DEFINE_DIR([mandir],[mandir])
+AC_DEFINE_DIR([datadir],[datadir])
+AC_DEFINE_DIR([datarootdir],[datarootdir])
+AC_DEFINE_DIR([sysconfdir],[sysconfdir])
+AC_DEFINE_DIR([localstatedir],[localstatedir])
+
+echo "After processing arguments...."
+AC_PRINT_ARGS
+
+dnl ----------------------------------------------
+dnl Global variables
+dnl ----------------------------------------------
+DEVEL_PRODUCT_NAME="Scmbug"
+AC_SUBST(DEVEL_PRODUCT_NAME)
+
+DEVEL_PRODUCT_NAME_CAPS="SCMBUG"
+AC_SUBST(DEVEL_PRODUCT_NAME_CAPS)
+
+DEVEL_PRODUCT_NAME_LOWER="scmbug"
+AC_SUBST(DEVEL_PRODUCT_NAME_LOWER)
+
+DEVEL_PRODUCT_NAME_PRONOUNCE="Skamm-bag"
+AC_SUBST(DEVEL_PRODUCT_NAME_PRONOUNCE)
+
+DEVEL_PRODUCT_VERSION="RELEASE_0-26-22"
+AC_SUBST(DEVEL_PRODUCT_VERSION)
+
+DEVEL_PRODUCT_WEBPAGE="http://freshmeat.net/projects/scmbug"
+AC_SUBST(DEVEL_PRODUCT_WEBPAGE)
+
+DEVEL_PRODUCT_BUGTRACKER="http://bugzilla.mkgnu.net"
+AC_SUBST(DEVEL_PRODUCT_BUGTRACKER)
+
+DEVEL_PRODUCT_MAILING_LIST_USERS_EMAIL="scmbug-users@lists.mkgnu.net"
+AC_SUBST(DEVEL_PRODUCT_MAILING_LIST_USERS_EMAIL)
+
+DEVEL_PRODUCT_VENDOR="${DEVEL_PRODUCT_NAME} Team <${DEVEL_PRODUCT_MAILING_LIST_USERS_EMAIL}>"
+AC_SUBST(DEVEL_PRODUCT_VENDOR)
+
+DEVEL_PRODUCT_MAINTAINER="Kristis Makris <kristis.makris@mkgnu.net>"
+AC_SUBST(DEVEL_PRODUCT_MAINTAINER)
+
+DEVEL_PRODUCT_MAILING_LIST_USERS_HTTP="http://lists.mkgnu.net/mailman/listinfo/scmbug-users"
+AC_SUBST(DEVEL_PRODUCT_MAILING_LIST_USERS_HTTP)
+
+DEVEL_PRODUCT_DEVELOPER_USER=${USER}
+AC_SUBST(DEVEL_PRODUCT_DEVELOPER_USER)
+
+# This variable converts a product version into a version string in
+# the format x.y.z, which is expected by most most packaging tools
+DEVEL_PRODUCT_PACKAGE_VERSION="`echo ${DEVEL_PRODUCT_VERSION}|sed -e 's/.*_//g' | sed -e 's/-/./g'`"
+AC_SUBST(DEVEL_PRODUCT_PACKAGE_VERSION)
+
+DEVEL_PRODUCT_RELEASE_TAG="${DEVEL_PRODUCT_NAME_CAPS}_${DEVEL_PRODUCT_VERSION}"
+AC_SUBST(DEVEL_PRODUCT_RELEASE_TAG)
+
+DEVEL_PRODUCT_DESCRIPTION_SHORT="Integration of Software Configuration Management with Bug-tracking."
+AC_SUBST(DEVEL_PRODUCT_DESCRIPTION_SHORT)
+
+DEVEL_PRODUCT_DESCRIPTION_LONG="${DEVEL_PRODUCT_NAME} is a system that integrates software configuration management (SCM) with bug-tracking.  It aims to solve the integration problem once and for all. It will glue any SCM system (such as CVS/CVSNT, Subversion, Git) with any bug-tracking system (such as Bugzilla, Mantis, Request Tracker, Test Director)."
+AC_SUBST(DEVEL_PRODUCT_DESCRIPTION_LONG)
+
+#
+#Package descriptions
+#
+DEVEL_PRODUCT_PACKAGE_COMMON_DESCRIPTION_SHORT="${DEVEL_PRODUCT_DESCRIPTION_SHORT} Common libraries."
+AC_SUBST(DEVEL_PRODUCT_PACKAGE_COMMON_DESCRIPTION_SHORT)
+
+DEVEL_PRODUCT_PACKAGE_COMMON_DESCRIPTION_LONG="Provides library functionality shared by ${DEVEL_PRODUCT_NAME_LOWER}-tools and ${DEVEL_PRODUCT_NAME_LOWER}-server."
+AC_SUBST(DEVEL_PRODUCT_PACKAGE_COMMON_DESCRIPTION_LONG)
+
+DEVEL_PRODUCT_PACKAGE_SERVER_DESCRIPTION_SHORT="${DEVEL_PRODUCT_DESCRIPTION_SHORT} Integration server."
+AC_SUBST(DEVEL_PRODUCT_PACKAGE_SERVER_DESCRIPTION_SHORT)
+
+DEVEL_PRODUCT_PACKAGE_SERVER_DESCRIPTION_LONG="Accepts integration requests from the ${DEVEL_PRODUCT_NAME} glue."
+AC_SUBST(DEVEL_PRODUCT_PACKAGE_SERVER_DESCRIPTION_LONG)
+
+DEVEL_PRODUCT_PACKAGE_TOOLS_DESCRIPTION_SHORT="${DEVEL_PRODUCT_DESCRIPTION_SHORT} Integration tools."
+AC_SUBST(DEVEL_PRODUCT_PACKAGE_TOOLS_DESCRIPTION_SHORT)
+
+DEVEL_PRODUCT_PACKAGE_TOOLS_DESCRIPTION_LONG="Collection of tools that can install the integration glue in an SCM repository and enhance the experience of integrating SCM with bug-tracking."
+AC_SUBST(DEVEL_PRODUCT_PACKAGE_TOOLS_DESCRIPTION_LONG)
+
+DEVEL_PRODUCT_PACKAGE_DOC_DESCRIPTION_SHORT="${DEVEL_PRODUCT_DESCRIPTION_SHORT} Documentation."
+AC_SUBST(DEVEL_PRODUCT_PACKAGE_DOC_DESCRIPTION_SHORT)
+
+DEVEL_PRODUCT_PACKAGE_DOC_DESCRIPTION_LONG="Provides the ${DEVEL_PRODUCT_NAME} manual."
+AC_SUBST(DEVEL_PRODUCT_PACKAGE_DOC_DESCRIPTION_LONG)
+
+DEVEL_ISODATE="`date +%Y-%m-%d`"
+AC_SUBST(DEVEL_ISODATE)
+
+DEVEL_ISOTIME="`date +%H:%M:%S`"
+AC_SUBST(DEVEL_ISOTIME)
+
+devel_top_dir=`pwd`
+AC_SUBST(devel_top_dir)
+
+devel_allsrc_dir=`pwd`/src
+AC_SUBST(devel_allsrc_dir)
+
+devel_alldoc_dir=`pwd`/doc
+AC_SUBST(devel_alldoc_dir)
+
+devel_alllib_dir=`pwd`/src/lib
+AC_SUBST(devel_alllib_dir)
+
+devel_devel_dir=${devel_allsrc_dir}/devel
+AC_SUBST(devel_devel_dir)
+
+devel_tests_dir=${devel_allsrc_dir}/tests
+AC_SUBST(devel_tests_dir)
+
+
+DEVEL_CONFIG_ACTIVITY_OK="activity_ok";
+AC_SUBST(DEVEL_CONFIG_ACTIVITY_OK)
+
+DEVEL_CONFIG_ACTIVITY_COMMIT="activity_commit";
+AC_SUBST(DEVEL_CONFIG_ACTIVITY_COMMIT)
+
+DEVEL_CONFIG_ACTIVITY_VERIFY="activity_verify";
+AC_SUBST(DEVEL_CONFIG_ACTIVITY_VERIFY)
+
+DEVEL_CONFIG_ACTIVITY_TAG="activity_tag";
+AC_SUBST(DEVEL_CONFIG_ACTIVITY_TAG)
+
+DEVEL_CONFIG_ACTIVITY_GET_VDD="activity_get_vdd";
+AC_SUBST(DEVEL_CONFIG_ACTIVITY_GET_VDD)
+
+DEVEL_CONFIG_ACTIVITY_GET_BUGS="activity_get_bugs";
+AC_SUBST(DEVEL_CONFIG_ACTIVITY_GET_BUGS)
+
+
+# Default configuration options for Windows installation
+DEVEL_CONFIG_WINDOWS_DRIVE="C:"
+AC_SUBST(DEVEL_CONFIG_WINDOWS_DRIVE)
+
+DEVEL_CONFIG_WINDOWS_PREFIX="${DEVEL_CONFIG_WINDOWS_DRIVE}/Program Files/${DEVEL_PRODUCT_NAME}"
+AC_SUBST(DEVEL_CONFIG_WINDOWS_PREFIX)
+
+DEVEL_CONFIG_WINDOWS_PERL="${DEVEL_CONFIG_WINDOWS_DRIVE}/Perl/bin/perl"
+AC_SUBST(DEVEL_CONFIG_WINDOWS_PERL)
+
+DEVEL_CONFIG_WINDOWS_TEMP_DIR="${DEVEL_CONFIG_WINDOWS_DRIVE}/Temp"
+AC_SUBST(DEVEL_CONFIG_WINDOWS_TEMP_DIR)
+
+
+dnl ----------------------------------------------
+dnl Global macros and functions
+dnl ----------------------------------------------
+#
+# Checks for a missing program.
+#
+# $1 = the value of a variable to check if it is set to "no"
+# $2 = the name of the program that is checked
+#
+check_missing()
+{
+if test [ "$1" = "no" ]; then
+   if test [ "$3" = "NEEDED_TO_BUILD_DOC" -a "${DEVEL_CONFIG_DOC}" = "yes"]; then
+      DEVEL_PROGRAMS_BUILD_MISSING=yes;
+      DEVEL_PROGRAMS_BUILD_MISSING_LIST="${DEVEL_PROGRAMS_BUILD_MISSING_LIST} $2"
+      print_acquire "$4"
+   elif test [ "$3" = "NEEDED_TO_BUILD" ]; then
+      DEVEL_PROGRAMS_BUILD_MISSING=yes;
+      DEVEL_PROGRAMS_BUILD_MISSING_LIST="${DEVEL_PROGRAMS_BUILD_MISSING_LIST} $2"
+      print_acquire "$4"
+   elif test [ "$3" = "NEEDED_TO_RELEASE" ]; then
+      DEVEL_PROGRAMS_RELEASE_MISSING=yes;
+      DEVEL_PROGRAMS_RELEASE_MISSING_LIST="${DEVEL_PROGRAMS_RELEASE_MISSING_LIST} $2"
+      print_acquire "$4"
+   fi
+fi
+}
+
+
+
+#
+# Prints the version of a program
+#
+# $1 = the name of the program that is checked
+# $2 = the arguments supplied to the program to print its version
+#
+print_version()
+{
+	echo "Running '$1 $2'"
+	$1 $2
+}
+
+#
+# Informational message that shows how a tool could be acquired
+#
+print_acquire()
+{
+  HOW=$1
+  if test [ -n "${HOW}" ]; then
+     echo " *** ${HOW} ***"
+  fi
+}
+
+
+
+#
+# Error message displayed when the product cannot be build
+#
+cannot_build()
+{
+echo ${DEVEL_PRODUCT_NAME} cannot be build.
+exit 1;
+}
+
+
+
+# This macro is used to check if a user accessible program is missing
+#
+# AC_DEVEL_PROGRAM_CHECK_MISSING(programname)
+# ----------------------------------------------
+define([AC_DEVEL_PROGRAM_CHECK_MISSING], [
+AC_CHECK_PROG(DEVEL_PROGRAM_$1, $1, yes, no, $PATH:/sbin:/usr/sbin)
+check_missing ${DEVEL_PROGRAM_$1} $1 $2 $3]
+)
+
+
+
+# This macro is used to print the version of a program
+#
+# AC_DEVEL_PROGRAM_PRINT_VERSION(programname)
+# ----------------------------------------------
+define([AC_DEVEL_PROGRAM_PRINT_VERSION], [
+echo "--------------------------------------------------------------------------"
+print_version $1 $2]
+)
+
+
+
+dnl ----------------------------------------------
+dnl create a config.h file (Automake will add -DHAVE_CONFIG_H)
+dnl ----------------------------------------------
+#AM_CONFIG_HEADER(config/config.h)
+
+
+
+dnl ----------------------------------------------
+dnl Checks for particular programs.
+dnl ----------------------------------------------
+
+
+
+
+dnl ----------------------------------------------
+dnl Checks for general programs.
+dnl ----------------------------------------------
+
+AC_ARG_WITH(doc,
+[  --without-doc           Do not build documentation],
+DEVEL_CONFIG_DOC=$withval,
+DEVEL_CONFIG_DOC="yes")
+AC_SUBST(DEVEL_CONFIG_DOC)
+
+
+#
+# All these are needed by the various Makefiles and scripts
+#
+AC_PROG_AWK
+AC_PROG_LN_S
+AC_DEVEL_PROGRAM_CHECK_MISSING(perl, "NEEDED_TO_RELEASE")
+AC_DEVEL_PROGRAM_CHECK_MISSING(sed, "NEEDED_TO_RELEASE")
+AC_DEVEL_PROGRAM_CHECK_MISSING($AWK, "NEEDED_TO_RELEASE")
+AC_DEVEL_PROGRAM_CHECK_MISSING(xargs, "NEEDED_TO_RELEASE", "This tool is provided by findutils")
+AC_DEVEL_PROGRAM_CHECK_MISSING(grep, "NEEDED_TO_RELEASE")
+
+
+
+#
+# All these are needed to produce documentation
+#
+AC_DEVEL_PROGRAM_CHECK_MISSING(cvs2cl, "NEEDED_TO_RELEASE")
+AC_DEVEL_PROGRAM_CHECK_MISSING(devel_product_release, "NEEDED_TO_RELEASE", "This tool is provided by sdvel")
+AC_DEVEL_PROGRAM_CHECK_MISSING(convert, "NEEDED_TO_BUILD_DOC", "This tool is provided by ImageMagick")
+AC_DEVEL_PROGRAM_CHECK_MISSING(fig2dev, "NEEDED_TO_BUILD_DOC", "This tool is provided by transfig")
+AC_DEVEL_PROGRAM_CHECK_MISSING(latex2html, "NOT_NEEDED_TO_BUILD")
+AC_DEVEL_PROGRAM_CHECK_MISSING(docbook2dvi, "NEEDED_TO_RELEASE", "This tool is provided by docbook-utils")
+AC_DEVEL_PROGRAM_CHECK_MISSING(docbook2pdf, "NEEDED_TO_RELEASE","This tool is provided by docbook-utils")
+AC_DEVEL_PROGRAM_CHECK_MISSING(docbook2html, "NEEDED_TO_RELEASE","This tool is provided by docbook-utils")
+AC_DEVEL_PROGRAM_CHECK_MISSING(docbook2man, "NEEDED_TO_RELEASE","This tool is provided by docbook-utils")
+AC_DEVEL_PROGRAM_CHECK_MISSING(linkchecker, "NOT_NEEDED_TO_BUILD",)
+AC_DEVEL_PROGRAM_CHECK_MISSING(zip, "NEEDED_TO_RELEASE")
+
+
+
+dnl ----------------------------------------------
+dnl Checks for libraries.
+dnl ----------------------------------------------
+
+
+
+dnl ----------------------------------------------
+dnl Checks for header files.
+dnl ----------------------------------------------
+
+
+
+dnl ----------------------------------------------
+dnl Checks for typedefs, structures, and compiler characteristics.
+dnl ----------------------------------------------
+
+
+
+dnl ----------------------------------------------
+dnl Checks for library functions.
+dnl ----------------------------------------------
+
+
+
+dnl ----------------------------------------------
+dnl optional arguments the product can be configured with
+dnl ----------------------------------------------
+
+
+
+dnl ----------------------------------------------
+dnl Bail out if any of the needed programs are missing
+dnl ----------------------------------------------
+if test [ "${DEVEL_PROGRAMS_BUILD_MISSING}" == "yes" ]; then
+   echo The following programs are necessary for building this project but are missing: ${DEVEL_PROGRAMS_BUILD_MISSING_LIST};
+   cannot_build;
+fi
+
+
+dnl ----------------------------------------------
+dnl Print the versions of all programs needed
+dnl ----------------------------------------------
+echo "=========================================================================="
+echo "The version of each current program on this system is:"
+AC_DEVEL_PROGRAM_PRINT_VERSION(perl, "--version")
+AC_DEVEL_PROGRAM_PRINT_VERSION(sed, "--version")
+AC_DEVEL_PROGRAM_PRINT_VERSION($AWK, "-W version")
+AC_DEVEL_PROGRAM_PRINT_VERSION(xargs, "--version")
+AC_DEVEL_PROGRAM_PRINT_VERSION(grep, "--version")
+AC_DEVEL_PROGRAM_PRINT_VERSION(cvs2cl, "--version")
+AC_DEVEL_PROGRAM_PRINT_VERSION(devel_product_release, "--version")
+AC_DEVEL_PROGRAM_PRINT_VERSION(convert, "-version")
+AC_DEVEL_PROGRAM_PRINT_VERSION(fig2dev, "-V")
+AC_DEVEL_PROGRAM_PRINT_VERSION(latex2html, "--version")
+AC_DEVEL_PROGRAM_PRINT_VERSION(docbook2dvi, "--version")
+AC_DEVEL_PROGRAM_PRINT_VERSION(linkchecker, "--version")
+AC_DEVEL_PROGRAM_PRINT_VERSION(zip, "-v")
+echo "=========================================================================="
+
+
+
+dnl ----------------------------------------------
+dnl Permit configuring the source with various options
+dnl ----------------------------------------------
+AC_ARG_WITH(port-number,
+[  --with-port-number=CONFIG_PORT_NUMBER
+                          Port number the daemon listens at and the glue
+			  connects to],
+DEVEL_CONFIG_PORT_NUMBER=$withval,
+DEVEL_CONFIG_PORT_NUMBER=3872)
+AC_SUBST(DEVEL_CONFIG_PORT_NUMBER)
+
+AC_ARG_WITH(pid-file,
+[  --with-pid-file=CONFIG_PID_FILE
+                          Path of pid file used by the daemon],
+DEVEL_CONFIG_PID_FILE=$withval,
+DEVEL_CONFIG_PID_FILE="${localstatedir}/run/${DEVEL_PRODUCT_NAME_LOWER}_daemon.pid")
+AC_SUBST(DEVEL_CONFIG_PID_FILE)
+
+
+# The prefix and postfix are used to define log messages in the
+# testsuite and will be put together as:
+# <prefix><bugnumber><postfix>
+AC_ARG_WITH(log-template-bugid-token-prefix,
+[  --with-log-template-bugid-token-prefix=CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX,
+                          Prefix of token indicating a bug id follows in a log
+			  message. Used in the testsuite.],
+DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX=$withval,
+DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX='bug ')
+AC_SUBST(DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX)
+
+AC_ARG_WITH(log-template-bugid-token-postfix,
+[  --with-log-template-bugid-token-postfix=CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX,
+                          Postfix of token indicating a bug id was just found in
+			  a log message. Used in the testsuite.],
+DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX=$withval,
+DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX=':')
+AC_SUBST(DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX)
+
+
+# The prefix and postfix are used to define status resolutions in the
+# testsuite and will be put together as:
+# <prefix><bugnumber><postfix>
+AC_ARG_WITH(resolution-template-bugid-token-prefix,
+[  --with-resolution-template-bugid-token-prefix=CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_PREFIX,
+                          Prefix of token indicating a bug id follows in a log
+			  message resolution. Used in the testsuite.],
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_PREFIX=$withval,
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_PREFIX='status ')
+AC_SUBST(DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_PREFIX)
+
+AC_ARG_WITH(resolution-template-bugid-token-postfix,
+[  --with-resolution-template-bugid-token-postfix=CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_POSTFIX,
+                          Postfix of token indicating a bug id was just found in
+			  a resolution. Used in the testsuite.],
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_POSTFIX=$withval,
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_POSTFIX=':')
+AC_SUBST(DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_POSTFIX)
+
+
+dnl This means ^\s*bug\s*([\d|\s|,|#]*?):
+dnl It will refuse to accept non-numeric bug ids.
+# This is the regular expression that will match bug ids in log comments.
+AC_ARG_WITH(log-template-bugid-regex,
+[  --with-log-template-bugid-regex=CONFIG_LOG_TEMPLATE_BUGID_REGEX,
+                          Regular expression describing how the bug id will be
+                          identified. It must set the unnamed variable $1 to
+	                  the bug number, or list of bug numbers. It is checked
+			  for a match as: m/$regex/s],
+DEVEL_CONFIG_LOG_TEMPLATE_BUGID_REGEX=$withval,
+DEVEL_CONFIG_LOG_TEMPLATE_BUGID_REGEX='^\s*bug\s*(@<:@\d|\s|,|@%:@@:>@*?):')
+AC_SUBST(DEVEL_CONFIG_LOG_TEMPLATE_BUGID_REGEX)
+
+dnl This means ,\s?#|\s?#|,|\s+
+dnl It covers the cases:
+dnl 1, #2
+dnl 1 #2
+dnl 1,2
+dnl 1 2
+dnl #1
+dnl http://www.gnu.org/software/autoconf/manual/autoconf-2.57/html_mono/autoconf.html#SEC95
+dnl We cannot set it directly inside the AC_ARG_WITH, since the comma
+dnl confuses autoconf. Thus, it must be set outside.
+DEVEL_CONFIG_LOG_TEMPLATE_BUGID_SPLIT_REGEX_OUTSIDE=",\s?@%:@|\s?@%:@|,|\s+"
+AC_SUBST(DEVEL_CONFIG_LOG_TEMPLATE_BUGID_SPLIT_REGEX_OUTSIDE)
+# This is the regular expression that will split bug ids among a list of them
+AC_ARG_WITH(log-template-bugid-split-regex,
+[  --with-log-template-bugid-split-regex=CONFIG_LOG_TEMPLATE_BUGID_SPLIT_REGEX,
+                          Regular expression describing how a list of bug ids
+                          will be split in individual bug numbers. It is split
+			  as: /$regex/ ],
+DEVEL_CONFIG_LOG_TEMPLATE_BUGID_SPLIT_REGEX=$withval,
+DEVEL_CONFIG_LOG_TEMPLATE_BUGID_SPLIT_REGEX=$DEVEL_CONFIG_LOG_TEMPLATE_BUGID_SPLIT_REGEX_OUTSIDE)
+AC_SUBST(DEVEL_CONFIG_LOG_TEMPLATE_BUGID_SPLIT_REGEX)
+
+# This is the regular expression that will match the log comments only
+AC_ARG_WITH(log-template-body-regex,
+[  --with-log-template-body-regex=CONFIG_LOG_TEMPLATE_BODY_REGEX,
+                          Regular expression describing how the log comment will
+                          be identified. It must set the unnamed variable $1 to
+	                  the bug number, or list of bug numbers. It is checked
+			  for a match as: m/$regex/s],
+DEVEL_CONFIG_LOG_TEMPLATE_BODY_REGEX=$withval,
+DEVEL_CONFIG_LOG_TEMPLATE_BODY_REGEX='^\s*bug.*?:\s*(.*)')
+AC_SUBST(DEVEL_CONFIG_LOG_TEMPLATE_BODY_REGEX)
+
+dnl It will refuse to accept non-numeric bug ids.
+# This is the regular expression that will match bug ids in resolution comments.
+AC_ARG_WITH(resolution-template-bugid-regex,
+[  --with-resolution-template-bugid-regex=CONFIG_RESOLUTION_TEMPLATE_BUGID_REGEX,
+                          Regular expression describing how the bug id will be
+                          identified. It must set the unnamed variable $1 to
+	                  the bug number, or list of bug numbers. It is checked
+			  for a match as: m/$regex/s],
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_REGEX=$withval,
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_REGEX='^\s*status\s*(@<:@\d|\s|,|@%:@@:>@*?):')
+AC_SUBST(DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_REGEX)
+
+dnl This means ,\s?#|\s?#|,|\s+
+dnl It covers the cases:
+dnl 1, #2
+dnl 1 #2
+dnl 1,2
+dnl 1 2
+dnl #1
+dnl http://www.gnu.org/software/autoconf/manual/autoconf-2.57/html_mono/autoconf.html#SEC95
+dnl We cannot set it directly inside the AC_ARG_WITH, since the comma
+dnl confuses autoconf. Thus, it must be set outside.
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_SPLIT_REGEX_OUTSIDE=",\s?@%:@|\s?@%:@|,|\s+"
+AC_SUBST(DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_SPLIT_REGEX_OUTSIDE)
+# This is the regular expression that will split bug ids among a list of them
+AC_ARG_WITH(resolution-template-bugid-split-regex,
+[  --with-resolution-template-bugid-split-regex=CONFIG_RESOLUTION_TEMPLATE_BUGID_SPLIT_REGEX,
+                          Regular expression describing how a list of bug ids
+                          will be split in individual bug numbers. It is split
+			  as: /$regex/ ],
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_SPLIT_REGEX=$withval,
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_SPLIT_REGEX=$DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_SPLIT_REGEX_OUTSIDE)
+AC_SUBST(DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_SPLIT_REGEX)
+
+
+dnl It will refuse to accept non-numeric bug ids.
+# This is the regular expression that will match only the requested
+# status
+AC_ARG_WITH(resolution-template-status-regex,
+[  --with-resolution-template-status-regex=CONFIG_RESOLUTION_TEMPLATE_STATUS_REGEX,
+                          Regular expression describing how the resolution comment will
+                          be identified. It must set the unnamed variable $1 to
+	                  the bug number, or list of bug numbers. It is checked
+			  for a match as: m/$regex/s],
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_REGEX=$withval,
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_REGEX='^\s*status.*?:\s*(\S+)\s*.*')
+AC_SUBST(DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_REGEX)
+
+dnl It will refuse to accept non-numeric bug ids.
+# This is the regular expression that will match only the requested
+# resolution status
+AC_ARG_WITH(resolution-template-status-resolution-regex,
+[  --with-resolution-template-status-resolution-regex=CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_REGEX,
+                          Regular expression describing how the resolution comment will
+                          be identified. It must set the unnamed variable $1 to
+	                  the bug number, or list of bug numbers. It is checked
+			  for a match as: m/$regex/s],
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_REGEX=$withval,
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_REGEX='^\s*status.*?:\s*\S+\s+(\S+)')
+AC_SUBST(DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_REGEX)
+
+dnl It will refuse to accept non-numeric bug ids.
+# This is the regular expression that will match only the requested
+# resolution status data
+AC_ARG_WITH(resolution-template-status-resolution-data-regex,
+[  --with-resolution-template-status-resolution-data-regex=CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_DATA_REGEX,
+                          Regular expression describing how the resolution comment will
+                          be identified. It must set the unnamed variable $1 to
+	                  the bug number, or list of bug numbers. It is checked
+			  for a match as: m/$regex/s],
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_DATA_REGEX=$withval,
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_DATA_REGEX='^\s*status.*?:\s*\S+\s+\S+\s+(\S+)')
+AC_SUBST(DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_DATA_REGEX)
+
+# Regular expressions that will convert characters in the
+# resolution_status_* information
+AC_ARG_WITH(resolution-template-status-convert-from-regex,
+[  --with-resolution-template-status-convert-from-regex=CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_FROM_REGEX,
+                          Regular expression that will be applied to convert
+                          the characters of all resolution_status_*
+	                  information. It is applied for substitution
+                          as: s/$regex_from/$regex_to/g],
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_FROM_REGEX=$withval,
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_FROM_REGEX='_')
+AC_SUBST(DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_FROM_REGEX)
+
+AC_ARG_WITH(resolution-template-status-convert-to-regex,
+[  --with-resolution-template-status-convert-to-regex=CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_TO_REGEX,
+                          Regular expression that will be applied to convert
+                          the characters of all resolution_status_*
+	                  information. It is applied for substitution
+                          as: s/$regex_from/$regex_to/g],
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_TO_REGEX=$withval,
+DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_TO_REGEX=' ')
+AC_SUBST(DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_TO_REGEX)
+
+AC_ARG_WITH(windows,
+[  --with-windows          Configure for a Windows platform],
+DEVEL_CONFIG_WINDOWS="yes",
+DEVEL_CONFIG_WINDOWS="no")
+AC_SUBST(DEVEL_CONFIG_WINDOWS)
+
+# Some Windows hooks must have a .bat extensions, and contain
+# batchfile code
+DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED_UNIX="${DEVEL_PRODUCT_NAME_LOWER}-server"
+AC_SUBST(DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED_UNIX)
+DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED_WINDOWS="${DEVEL_PRODUCT_NAME_LOWER}-server.bat"
+AC_SUBST(DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED_WINDOWS)
+
+DEVEL_CONFIG_COMMENT_TOKEN_WINDOWS="REM"
+DEVEL_CONFIG_COMMENT_TOKEN_UNIX="#"
+AC_SUBST(DEVEL_CONFIG_COMMENT_TOKEN_WINDOWS)
+AC_SUBST(DEVEL_CONFIG_COMMENT_TOKEN_UNIX)
+
+if test [ "${DEVEL_CONFIG_WINDOWS}" == "yes" ]; then
+   DEVEL_CONFIG_CVSHOOK_COMMITINFO="commitinfo"
+   DEVEL_CONFIG_CVSHOOK_LOGINFO="loginfo"
+   DEVEL_CONFIG_CVSHOOK_VERIFYMSG="verifymsg"
+   DEVEL_CONFIG_CVSHOOK_RCSINFO="rcsinfo"
+   DEVEL_CONFIG_CVSHOOK_TAGINFO="taginfo"
+
+   DEVEL_CONFIG_SVNHOOK_PRECOMMIT="pre-commit.bat"
+   DEVEL_CONFIG_SVNHOOK_POSTCOMMIT="post-commit.bat"
+
+   DEVEL_CONFIG_GITHOOK_COMMITMSG="commit-msg"
+   DEVEL_CONFIG_GITHOOK_POSTCOMMIT="post-commit"
+
+   DEVEL_CONFIG_COMMENT_TOKEN="REM"
+   DEVEL_CONFIG_PATH_SEP_TOKEN=";"
+
+   DEVEL_CONFIG_DAEMON_SERVICE_ORIGINAL="rc.bat"
+   DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED="${DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED_WINDOWS}"
+
+   DEVEL_CONFIG_DEFAULT_TEMP_DIR="${DEVEL_CONFIG_WINDOWS_TEMP_DIR}"
+
+   DEVEL_CONFIG_SCM_BINARY_CVS="cvs.exe"
+   DEVEL_CONFIG_SCM_BINARY_SVN="svn.exe"
+   DEVEL_CONFIG_SCM_BINARY_SVNLOOK="svnlook.exe"
+   DEVEL_CONFIG_SCM_BINARY_GIT="git.exe"
+   DEVEL_CONFIG_SCM_BINARY_GIT_REV_PARSE="git-rev-parse.exe"
+   DEVEL_CONFIG_SCM_BINARY_GIT_REV_LIST="git-rev-list.exe"
+   DEVEL_CONFIG_SCM_BINARY_GIT_DIFF="git-diff.exe"
+   DEVEL_CONFIG_SCM_BINARY_GIT_LOG="git-log.exe"
+   DEVEL_CONFIG_SCM_BINARY_GIT_BRANCH="git-branch.exe"
+   DEVEL_CONFIG_SCM_BINARY_GIT_WHATCHANGED="git-whatchanged.exe"
+   DEVEL_CONFIG_SCM_BINARY_GIT_STATUS="git-status.exe"
+
+   DEVEL_CONFIG_GENERAL_BINARY_DIFF="diff.exe"
+   DEVEL_CONFIG_GENERAL_BINARY_XSLTPROC="xsltproc.exe"
+   DEVEL_CONFIG_GENERAL_BINARY_DOCBOOK2HTML="docbook2html.exe"
+   DEVEL_CONFIG_GENERAL_BINARY_DOCBOOK2PDF="docbook2pdf.exe"
+else
+   DEVEL_CONFIG_CVSHOOK_COMMITINFO="commitinfo"
+   DEVEL_CONFIG_CVSHOOK_LOGINFO="loginfo"
+   DEVEL_CONFIG_CVSHOOK_VERIFYMSG="verifymsg"
+   DEVEL_CONFIG_CVSHOOK_RCSINFO="rcsinfo"
+   DEVEL_CONFIG_CVSHOOK_TAGINFO="taginfo"
+
+   DEVEL_CONFIG_SVNHOOK_PRECOMMIT="pre-commit"
+   DEVEL_CONFIG_SVNHOOK_POSTCOMMIT="post-commit"
+
+   DEVEL_CONFIG_GITHOOK_COMMITMSG="commit-msg"
+   DEVEL_CONFIG_GITHOOK_POSTCOMMIT="post-commit"
+
+   DEVEL_CONFIG_COMMENT_TOKEN="#"
+   DEVEL_CONFIG_PATH_SEP_TOKEN=":"
+
+   DEVEL_CONFIG_DAEMON_SERVICE_ORIGINAL="rc"
+   DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED="${DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED_UNIX}"
+
+   DEVEL_CONFIG_DEFAULT_TEMP_DIR="/tmp"
+
+   DEVEL_CONFIG_SCM_BINARY_CVS="cvs"
+   DEVEL_CONFIG_SCM_BINARY_SVN="svn"
+   DEVEL_CONFIG_SCM_BINARY_SVNLOOK="svnlook"
+   DEVEL_CONFIG_SCM_BINARY_GIT="git"
+   DEVEL_CONFIG_SCM_BINARY_GIT_REV_PARSE="git-rev-parse"
+   DEVEL_CONFIG_SCM_BINARY_GIT_REV_LIST="git-rev-list"
+   DEVEL_CONFIG_SCM_BINARY_GIT_DIFF="git-rev-list"
+   DEVEL_CONFIG_SCM_BINARY_GIT_LOG="git-log"
+   DEVEL_CONFIG_SCM_BINARY_GIT_BRANCH="git-branch"
+   DEVEL_CONFIG_SCM_BINARY_GIT_WHATCHANGED="git-whatchanged"
+   DEVEL_CONFIG_SCM_BINARY_GIT_STATUS="git-status"
+
+   DEVEL_CONFIG_GENERAL_BINARY_DIFF="diff"
+   DEVEL_CONFIG_GENERAL_BINARY_XSLTPROC="xsltproc"
+   DEVEL_CONFIG_GENERAL_BINARY_DOCBOOK2HTML="docbook2html"
+   DEVEL_CONFIG_GENERAL_BINARY_DOCBOOK2PDF="docbook2pdf"
+fi
+
+AC_SUBST(DEVEL_CONFIG_CVSHOOK_COMMITINFO)
+AC_SUBST(DEVEL_CONFIG_CVSHOOK_LOGINFO)
+AC_SUBST(DEVEL_CONFIG_CVSHOOK_VERIFYMSG)
+AC_SUBST(DEVEL_CONFIG_CVSHOOK_RCSINFO)
+AC_SUBST(DEVEL_CONFIG_CVSHOOK_TAGINFO)
+AC_SUBST(DEVEL_CONFIG_SVNHOOK_PRECOMMIT)
+AC_SUBST(DEVEL_CONFIG_SVNHOOK_POSTCOMMIT)
+AC_SUBST(DEVEL_CONFIG_GITHOOK_COMMITMSG)
+AC_SUBST(DEVEL_CONFIG_GITHOOK_POSTCOMMIT)
+AC_SUBST(DEVEL_CONFIG_COMMENT_TOKEN)
+AC_SUBST(DEVEL_CONFIG_PATH_SEP_TOKEN)
+AC_SUBST(DEVEL_CONFIG_DAEMON_SERVICE_ORIGINAL)
+AC_SUBST(DEVEL_CONFIG_DAEMON_SERVICE_DEPLOYED)
+AC_SUBST(DEVEL_CONFIG_DEFAULT_TEMP_DIR)
+AC_SUBST(DEVEL_CONFIG_SCM_BINARY_CVS)
+AC_SUBST(DEVEL_CONFIG_SCM_BINARY_SVN)
+AC_SUBST(DEVEL_CONFIG_SCM_BINARY_SVNLOOK)
+AC_SUBST(DEVEL_CONFIG_SCM_BINARY_GIT)
+AC_SUBST(DEVEL_CONFIG_SCM_BINARY_GIT_REV_PARSE)
+AC_SUBST(DEVEL_CONFIG_SCM_BINARY_GIT_REV_LIST)
+AC_SUBST(DEVEL_CONFIG_SCM_BINARY_GIT_DIFF)
+AC_SUBST(DEVEL_CONFIG_SCM_BINARY_GIT_LOG)
+AC_SUBST(DEVEL_CONFIG_SCM_BINARY_GIT_BRANCH)
+AC_SUBST(DEVEL_CONFIG_SCM_BINARY_GIT_WHATCHANGED)
+AC_SUBST(DEVEL_CONFIG_SCM_BINARY_GIT_STATUS)
+AC_SUBST(DEVEL_CONFIG_GENERAL_BINARY_DIFF)
+AC_SUBST(DEVEL_CONFIG_GENERAL_BINARY_XSLTPROC)
+AC_SUBST(DEVEL_CONFIG_GENERAL_BINARY_DOCBOOK2HTML)
+AC_SUBST(DEVEL_CONFIG_GENERAL_BINARY_DOCBOOK2PDF)
+
+AC_ARG_WITH(temp-dir,
+[  --with-temp-dir=CONFIG_TEMP_DIR,
+                          Temporary directory used during glue installation],
+DEVEL_CONFIG_TEMP_DIR=$withval,
+DEVEL_CONFIG_TEMP_DIR=${DEVEL_CONFIG_DEFAULT_TEMP_DIR})
+AC_SUBST(DEVEL_CONFIG_TEMP_DIR)
+
+AC_ARG_WITH(perl-binary,
+[  --with-perl-binary=CONFIG_PERL_BINARY
+                          Manually define the full path to the Perl binary
+                          This is required for Windows installations],
+DEVEL_CONFIG_PERL_BINARY=$withval,
+DEVEL_CONFIG_PERL_BINARY="/usr/bin/perl")
+AC_SUBST(DEVEL_CONFIG_PERL_BINARY)
+
+
+
+dnl ----------------------------------------------
+dnl Generate output files
+dnl ----------------------------------------------
+AC_OUTPUT(\
+Makefile \
+product_release.conf \
+doc/manpages/Makefile \
+doc/manpages/daemon.8.sgml \
+doc/manpages/install_glue.1.sgml \
+doc/manpages/vdd_generator.1.sgml \
+doc/manpages/merge.1.sgml \
+doc/manual/Makefile \
+doc/manual/check_html.sh \
+doc/manual/content/manual.sgml \
+doc/manual/images/system_architecture.fig \
+doc/paper_introduce/Makefile \
+doc/paper_introduce/paper_introduce.tex \
+packaging/debian/conffiles \
+packaging/debian/control \
+packaging/debian/copyright \
+packaging/debian/init.d \
+packaging/debian/manual \
+packaging/debian/rules \
+packaging/distribute/prepare.sh \
+packaging/redhat/prepare.sh \
+packaging/redhat/rpmmacros \
+packaging/redhat/rpmrc \
+packaging/redhat/product.spec \
+packaging/windows/prepare.sh \
+release_main.sh \
+src/glue/bin/activity.pl \
+src/glue/etc/product/glue.conf.template \
+src/glue/etc/product/log_template \
+src/glue/templates/scm_cvs/up_to_1_11/checkoutlist \
+src/glue/templates/scm_cvs/up_to_1_11/${DEVEL_CONFIG_CVSHOOK_COMMITINFO} \
+src/glue/templates/scm_cvs/up_to_1_11/${DEVEL_CONFIG_CVSHOOK_LOGINFO} \
+src/glue/templates/scm_cvs/up_to_1_11/${DEVEL_CONFIG_CVSHOOK_RCSINFO} \
+src/glue/templates/scm_cvs/up_to_1_11/${DEVEL_CONFIG_CVSHOOK_TAGINFO} \
+src/glue/templates/scm_cvs/up_to_1_11/${DEVEL_CONFIG_CVSHOOK_VERIFYMSG} \
+src/glue/templates/scm_cvs/latest/checkoutlist \
+src/glue/templates/scm_cvs/latest/${DEVEL_CONFIG_CVSHOOK_COMMITINFO} \
+src/glue/templates/scm_cvs/latest/${DEVEL_CONFIG_CVSHOOK_LOGINFO} \
+src/glue/templates/scm_cvs/latest/${DEVEL_CONFIG_CVSHOOK_RCSINFO} \
+src/glue/templates/scm_cvs/latest/${DEVEL_CONFIG_CVSHOOK_TAGINFO} \
+src/glue/templates/scm_cvs/latest/${DEVEL_CONFIG_CVSHOOK_VERIFYMSG} \
+src/glue/templates/scm_cvs/latest_cvsnt/checkoutlist \
+src/glue/templates/scm_cvs/latest_cvsnt/${DEVEL_CONFIG_CVSHOOK_COMMITINFO} \
+src/glue/templates/scm_cvs/latest_cvsnt/${DEVEL_CONFIG_CVSHOOK_LOGINFO} \
+src/glue/templates/scm_cvs/latest_cvsnt/${DEVEL_CONFIG_CVSHOOK_RCSINFO} \
+src/glue/templates/scm_cvs/latest_cvsnt/${DEVEL_CONFIG_CVSHOOK_TAGINFO} \
+src/glue/templates/scm_cvs/latest_cvsnt/${DEVEL_CONFIG_CVSHOOK_VERIFYMSG} \
+src/glue/templates/scm_svn/latest/${DEVEL_CONFIG_SVNHOOK_PRECOMMIT} \
+src/glue/templates/scm_svn/latest/${DEVEL_CONFIG_SVNHOOK_POSTCOMMIT} \
+src/glue/templates/scm_git/latest/${DEVEL_CONFIG_GITHOOK_COMMITMSG} \
+src/glue/templates/scm_git/latest/${DEVEL_CONFIG_GITHOOK_POSTCOMMIT} \
+src/glue/templates/stylesheets/vdd.sgml.header \
+src/daemon/daemon.pl \
+src/daemon/etc/daemon.conf.template \
+src/daemon/etc/TestDirector.conf.template \
+src/daemon/etc/WebReports.conf.template \
+src/other/etc/product/apache.conf.template \
+src/scripts/install_glue.pl \
+src/scripts/${DEVEL_CONFIG_DAEMON_SERVICE_ORIGINAL} \
+src/scripts/vdd_generator.pl \
+src/scripts/merge.pl \
+src/scripts/ActivityUtilities_test.pl \
+src/tests/Makefile \
+src/tests/test_scm_common.inc \
+src/tests/product.test/lib/common.inc \
+src/tests/product.test/config/testers/mkgnu/daemon.conf.bugzilla \
+src/tests/product.test/config/testers/mkgnu/daemon.conf.mantis \
+src/tests/product.test/config/testers/mkgnu/daemon.conf.requesttracker \
+src/tests/product.test/config/prep.sh \
+src/tests/product.test/scm_cvs/auto_commit_file.sh \
+src/tests/product.test/scm_cvs/auto_commit_file2.sh \
+src/tests/product.test/scm_cvs/create_vdd.sh \
+src/tests/product.test/scm_cvs/install_glue.sh \
+src/tests/product.test/scm_cvs/install_glue_no_hook_overwrite.sh \
+src/tests/product.test/scm_cvs/install_glue_wrong_ip.sh \
+src/tests/product.test/scm_cvs/set_none.sh \
+src/tests/product.test/scm_cvs/set_optional.sh \
+src/tests/product.test/scm_svn/create_vdd.sh \
+src/tests/product.test/scm_svn/install_glue.sh \
+src/tests/product.test/scm_svn/install_glue_no_hook_overwrite.sh \
+src/tests/product.test/scm_svn/install_glue_wrong_ip.sh \
+src/tests/product.test/scm_svn/set_none.sh \
+src/tests/product.test/scm_svn/set_optional.sh \
+src/tests/product.test/scm_git/auto_commit_file.sh \
+src/tests/product.test/scm_git/auto_commit_file2.sh \
+src/tests/product.test/scm_git/create_vdd.sh \
+src/tests/product.test/scm_git/install_glue.sh \
+src/tests/product.test/scm_git/install_glue_no_hook_overwrite.sh \
+src/tests/product.test/scm_git/install_glue_wrong_ip.sh \
+src/tests/product.test/scm_git/set_none.sh \
+src/tests/product.test/scm_git/set_optional.sh \
+src/lib/product/Activity.pm \
+src/lib/product/ActivityUtilities.pm \
+src/lib/product/Bug.pm \
+src/lib/product/BugComment.pm \
+src/lib/product/Common.pm \
+src/lib/product/Connection.pm \
+src/lib/product/Error.pm \
+src/lib/product/VDD.pm \
+src/lib/product/MergeList.pm \
+src/lib/product/Daemon/Bugtracker.pm \
+src/lib/product/Daemon/Bugzilla.pm \
+src/lib/product/Daemon/Daemon.pm \
+src/lib/product/Daemon/Integration.pm \
+src/lib/product/Daemon/Mantis.pm \
+src/lib/product/Daemon/Process.pm \
+src/lib/product/Daemon/Request.pm \
+src/lib/product/Daemon/RequestTracker.pm \
+src/lib/product/Daemon/TestDirector.pm \
+src/lib/product/Daemon/TestDirectorUtils.pm \
+src/lib/product/Daemon/TestDirectorInterface.pl \
+src/lib/product/Daemon/Trapper.pm \
+src/lib/product/Glue/CVS.pm \
+src/lib/product/Glue/CVSConsolidatedActivities.pm \
+src/lib/product/Glue/Git.pm \
+src/lib/product/Glue/Glue.pm \
+src/lib/product/Glue/SCM.pm \
+src/lib/product/Glue/Subversion.pm \
+src/lib/product/Tools/Glue_Installer.pm \
+src/lib/product/Tools/SCM_Description.pm \
+src/lib/product/Tools/SCM_Functions.pm \
+src/lib/product/Tools/VDD_Generator.pm \
+src/lib/product/Tools/Merge.pm \
+src/WebReports/cgi-bin/affected_files.pl \
+src/WebReports/cgi-bin/bug_report.pl \
+src/WebReports/cgi-bin/bug_report_input_form.pl \
+src/WebReports/cgi-bin/bug_report_document.pl \
+src/WebReports/cgi-bin/email_users.pl \
+src/WebReports/cgi-bin/WebReportUtilities.pm \
+src/WebReports/cgi-bin/CustomData.pm \
+src/WebReports/cgi-bin/EMail.pm \
+)
+
+# Set some scripts to be executable
+chmod ugo+x doc/manual/check_html.sh
+chmod ugo+x src/daemon/daemon.pl
+chmod ugo+x src/glue/bin/activity.pl
+chmod ugo+x src/glue/templates/scm_svn/latest/${DEVEL_CONFIG_SVNHOOK_PRECOMMIT}
+chmod ugo+x src/glue/templates/scm_svn/latest/${DEVEL_CONFIG_SVNHOOK_POSTCOMMIT}
+chmod ugo+x src/glue/templates/scm_git/latest/${DEVEL_CONFIG_GITHOOK_COMMITMSG}
+chmod ugo+x src/glue/templates/scm_git/latest/${DEVEL_CONFIG_GITHOOK_POSTCOMMIT}
+chmod ugo+x src/scripts/install_glue.pl
+chmod ugo+x src/scripts/vdd_generator.pl
+chmod ugo+x src/scripts/merge.pl
+chmod ugo+x src/tests/product.test/config/prep.sh
+chmod ugo+x src/tests/product.test/scm_cvs/auto_commit_file.sh
+chmod ugo+x src/tests/product.test/scm_cvs/auto_commit_file2.sh
+chmod ugo+x src/tests/product.test/scm_cvs/create_vdd.sh
+chmod ugo+x src/tests/product.test/scm_cvs/install_glue.sh
+chmod ugo+x src/tests/product.test/scm_cvs/install_glue_no_hook_overwrite.sh
+chmod ugo+x src/tests/product.test/scm_cvs/install_glue_wrong_ip.sh
+chmod ugo+x src/tests/product.test/scm_cvs/set_none.sh
+chmod ugo+x src/tests/product.test/scm_cvs/set_optional.sh
+chmod ugo+x src/tests/product.test/scm_svn/create_vdd.sh
+chmod ugo+x src/tests/product.test/scm_svn/install_glue.sh
+chmod ugo+x src/tests/product.test/scm_svn/install_glue_no_hook_overwrite.sh
+chmod ugo+x src/tests/product.test/scm_svn/install_glue_wrong_ip.sh
+chmod ugo+x src/tests/product.test/scm_svn/set_none.sh
+chmod ugo+x src/tests/product.test/scm_svn/set_optional.sh
+chmod ugo+x src/tests/product.test/scm_git/auto_commit_file.sh
+chmod ugo+x src/tests/product.test/scm_git/auto_commit_file2.sh
+chmod ugo+x src/tests/product.test/scm_git/create_vdd.sh
+chmod ugo+x src/tests/product.test/scm_git/install_glue.sh
+chmod ugo+x src/tests/product.test/scm_git/install_glue_no_hook_overwrite.sh
+chmod ugo+x src/tests/product.test/scm_git/install_glue_wrong_ip.sh
+chmod ugo+x src/tests/product.test/scm_git/set_none.sh
+chmod ugo+x src/tests/product.test/scm_git/set_optional.sh
+chmod ugo+x packaging/debian/rules
+chmod ugo+x packaging/distribute/prepare.sh
+chmod ugo+x packaging/redhat/prepare.sh
+chmod ugo+x packaging/windows/prepare.sh
+chmod ugo+x release_main.sh
+
+# Prepare some debian packaging files
+cp packaging/debian/manual packaging/debian/${DEVEL_PRODUCT_NAME_LOWER}-doc.doc-base
+
+#
+# Must carry out these bizarre tests since ln -sfn complains on Solaris
+#
+if test [ ! -e packaging/debian/${DEVEL_PRODUCT_NAME_LOWER}-doc.docs ]; then
+   (cd packaging/debian; ${LN_S} -fn docs ${DEVEL_PRODUCT_NAME_LOWER}-doc.docs)
+fi
+
+if test [ ! -e packaging/debian/${DEVEL_PRODUCT_NAME_LOWER}-common.docs ]; then
+   (cd packaging/debian; ${LN_S} -fn docs ${DEVEL_PRODUCT_NAME_LOWER}-common.docs)
+fi
+
+if test [ ! -e packaging/debian/${DEVEL_PRODUCT_NAME_LOWER}-server.docs ]; then
+   (cd packaging/debian; ${LN_S} -fn docs ${DEVEL_PRODUCT_NAME_LOWER}-server.docs)
+fi
+
+if test [ ! -e packaging/debian/${DEVEL_PRODUCT_NAME_LOWER}-tools.docs ]; then
+   (cd packaging/debian; ${LN_S} -fn docs ${DEVEL_PRODUCT_NAME_LOWER}-tools.docs)
+fi
+
+
+
+dnl ----------------------------------------------
+dnl Still inform about programs needed for a release that are missing,
+dnl but don't bail
+dnl ----------------------------------------------
+if test [ "${DEVEL_PROGRAMS_RELEASE_MISSING}" == "yes" ]; then
+   echo The following programs are necessary for formally releasing this project but are missing: ${DEVEL_PROGRAMS_RELEASE_MISSING_LIST};
+   echo "WARNING: It won't be possible to formally release this project from this workstation."
+fi

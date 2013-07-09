@@ -1,0 +1,27 @@
+[% SET title = 'E-mailed Open Assignees' %]
+[% INCLUDE templates/header.html.tmpl %]
+
+<H2>[% title %]</H2>
+
+<BLOCKQUOTE>
+<TABLE BOARDER=0 WIDTH=80%>
+    <TR><TD COLSPAN=2><HR></TD></TR>
+
+[% FOREACH status IN send_status %]
+    <TR><TD>Assignee</TD><TD>[% status.assignee %]</TD></TR>
+    <TR><TD>Faults</TD><TD>[% status.buglist %]</TD></TR>
+    <TR><TD>Result</TD><TD>
+    [% IF status.error_msg %]
+    	<FONT color=red><PRE>[% status.error_msg %]</PRE></FONT>
+    [% ELSE %]
+    	Sucessful
+    [% END %]
+    </TD></TR>
+    <TR><TD COLSPAN=2><HR></TD></TR>
+[% END %]
+
+</TABLE></BLOCKQUOTE>
+
+
+
+[% INCLUDE templates/footer.html.tmpl %]

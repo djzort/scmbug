@@ -1,0 +1,92 @@
+#!/bin/sh
+
+
+# This script distributes a product for distribution on the public
+# Internet. It assumes the product has already been packaged in the
+# various formats it can be distributed.
+DISTRIBUTE_OWNER_USER="www-data"
+DISTRIBUTE_OWNER_GROUP="www-data"
+DISTRIBUTE_USER="root"
+DISTRIBUTE_HOST="files.mkgnu.net"
+DISTRIBUTE_DIR=/var/www-virtual/mkgnu.net/files/files/@DEVEL_PRODUCT_NAME_LOWER@
+
+# Make sure that both of these variables are defined
+if [ "@DEVEL_PRODUCT_NAME_LOWER@" = "" -o "@DEVEL_PRODUCT_RELEASE_TAG@" = "" ]; then
+    echo "DEVEL_PRODUCT_NAME_LOWER or DEVEL_PRODUCT_RELEASE_TAG are not defined"
+    exit -1
+fi
+
+# Make the directory structure. Be idempotent. Cleanup a previous
+# structure if it's there
+ssh $DISTRIBUTE_USER@$DISTRIBUTE_HOST " \
+rm -rf $DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@; \
+mkdir -p $DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/windows; \
+mkdir -p $DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/rpms; \
+mkdir -p $DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/debs; \
+mkdir -p $DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/source; \
+mkdir -p $DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/manual; \
+"
+
+# Distribute Changelog
+scp @devel_top_dir@/../ChangeLog.@DEVEL_PRODUCT_RELEASE_TAG@ $DISTRIBUTE_USER@$DISTRIBUTE_HOST:/$DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/.
+scp @devel_top_dir@/../ChangeLog.*to_@DEVEL_PRODUCT_RELEASE_TAG@ $DISTRIBUTE_USER@$DISTRIBUTE_HOST:/$DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/.
+# Distribute source
+scp @devel_top_dir@/../@DEVEL_PRODUCT_RELEASE_TAG@.tar.gz $DISTRIBUTE_USER@$DISTRIBUTE_HOST:/$DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/source/.
+
+# Distribute Debian packages
+scp @devel_top_dir@/../@DEVEL_PRODUCT_NAME_LOWER@-*@DEVEL_PRODUCT_PACKAGE_VERSION@*.deb $DISTRIBUTE_USER@$DISTRIBUTE_HOST:/$DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/debs/.
+scp @devel_top_dir@/../@DEVEL_PRODUCT_NAME_LOWER@_*@DEVEL_PRODUCT_PACKAGE_VERSION@*.{dsc,changes} $DISTRIBUTE_USER@$DISTRIBUTE_HOST:/$DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/debs/.
+# Distribute RedHat packages
+scp @devel_top_dir@/../@DEVEL_PRODUCT_NAME_LOWER@-*@DEVEL_PRODUCT_PACKAGE_VERSION@*.rpm $DISTRIBUTE_USER@$DISTRIBUTE_HOST:/$DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/rpms/.
+# Distribute Windows packages
+scp @devel_top_dir@/../*.zip $DISTRIBUTE_USER@$DISTRIBUTE_HOST:/$DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/windows/.
+
+
+
+#
+# Distribute documentation
+#
+# First, package the manual
+TEMP_DIR=/tmp/@DEVEL_PRODUCT_NAME_LOWER@.distribute.$$
+mkdir -p $TEMP_DIR/manual
+mkdir -p $TEMP_DIR/manual/html-single
+mkdir -p $TEMP_DIR/manual/html-multi
+mkdir -p $TEMP_DIR/manual/images
+cp -pL @devel_alldoc_dir@/manual/output.single.html/* $TEMP_DIR/manual/html-single/.
+cp -pL @devel_alldoc_dir@/manual/output.multi.html/* $TEMP_DIR/manual/html-multi/.
+cp -pL @devel_alldoc_dir@/manual/images/*{png,jpg,gif} $TEMP_DIR/manual/images
+cp -pL @devel_alldoc_dir@/manual/output/manual.pdf $TEMP_DIR/manual
+(cd $TEMP_DIR/manual; tar -cf manual.tar *)
+
+# Clean the old latest_manual symbolic link
+ssh $DISTRIBUTE_USER@$DISTRIBUTE_HOST " \
+rm -f $DISTRIBUTE_DIR/doc/latest_manual; \
+"
+
+# Copy the new one
+scp $TEMP_DIR/manual/manual.tar $DISTRIBUTE_USER@$DISTRIBUTE_HOST:/$DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/manual/.
+rm -rf $TEMP_DIR
+
+# Uncompress the new one
+ssh $DISTRIBUTE_USER@$DISTRIBUTE_HOST " \
+cd $DISTRIBUTE_DIR/@DEVEL_PRODUCT_RELEASE_TAG@/manual; \
+tar -xf manual.tar; \
+rm manual.tar \
+"
+
+# Set a new latest_manual symbolic link
+ssh $DISTRIBUTE_USER@$DISTRIBUTE_HOST " \
+cd $DISTRIBUTE_DIR/doc; \
+ln -s ../@DEVEL_PRODUCT_RELEASE_TAG@/manual latest_manual; \
+"
+
+# Change the owner of the distributed files
+ssh $DISTRIBUTE_USER@$DISTRIBUTE_HOST " \
+chown -R $DISTRIBUTE_OWNER_USER.$DISTRIBUTE_OWNER_GROUP $DISTRIBUTE_DIR; \
+"
+
+
+#
+# Publish to Debian 
+#
+dupload -t mentors @devel_top_dir@/../@DEVEL_PRODUCT_NAME_LOWER@_@DEVEL_PRODUCT_PACKAGE_VERSION@_*.changes

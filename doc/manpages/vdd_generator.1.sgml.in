@@ -1,0 +1,163 @@
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook V4.2//EN">
+
+<refentry id="install-glue">
+	<refmeta>
+		<refentrytitle>@DEVEL_PRODUCT_NAME_LOWER@_vdd_generator.pl</refentrytitle>
+		<manvolnum>1</manvolnum>
+		<refmiscinfo class="date">@DEVEL_ISODATE@</refmiscinfo>
+	</refmeta>
+
+
+	<refnamediv>
+		<refname>@DEVEL_PRODUCT_NAME_LOWER@_vdd_generator.pl</refname>
+		<refpurpose>Produces a Version Description Document from an SCM repository that uses the @DEVEL_PRODUCT_NAME@ glue</refpurpose>
+	</refnamediv>
+
+
+	<refsynopsisdiv>
+		<cmdsynopsis>
+			<command>@DEVEL_PRODUCT_NAME_LOWER@_vdd_generator.pl</command>
+				<arg choice="req">--scm=SCM_NAME</arg>
+				<arg choice="req">--repository=REPOSITORY_PATH</arg>
+				<arg choice="req">--product=PRODUCT_NAME</arg>
+				<arg choice="req">--from=RELEASE_FROM</arg>
+				<arg choice="req">--to=RELEASE_TO</arg>
+				<arg choice="opt">--user=USERNAME</arg>
+				<arg choice="opt">--output-directory=OUTPUT_DIRECTORY</arg>
+		</cmdsynopsis>
+	</refsynopsisdiv>
+
+
+	<refsect1>
+		<title>DESCRIPTION</title>
+		<para>
+			Produces a Version Description Document from an SCM repository that uses the @DEVEL_PRODUCT_NAME@ glue.
+		</para>
+	</refsect1>
+	
+	<refsect1>
+		<title>USAGE</title>
+		<para>
+			Run with all required parameters.
+		</para>
+	</refsect1>
+	
+	<refsect1>
+		<title>OPTIONS</title>
+		<para>
+			The parameters are:
+		</para>
+		<variablelist>
+			<varlistentry>
+				<term>--scm=SCM_NAME</term>
+				<listitem>
+					<para>The name of the SCM system. Valid options are:</para>
+					<itemizedlist>
+						<listitem>
+							<para>
+								CVS
+							</para>
+						</listitem>
+						<listitem>
+							<para>
+								Subversion
+							</para>
+						</listitem>
+					</itemizedlist>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--repository=REPOSITORY_PATH</term>
+				<listitem>
+					<para>The path to the SCM repository.</para>
+					<para>When using for CVS, this should be set to the contents of the CVSROOT variable.</para>
+					<para>When using for Subversion, this should be prefixed with file://.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--product=PRODUCT_NAME</term>
+				<listitem>
+					<para>The name used in the bug-tracking system to track defects for the product developed under the SCM system.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--from=RELEASE_FROM</term>
+				<listitem>
+					<para>The previous release label.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--to=RELEASE_TO</term>
+				<listitem>
+					<para>The new release label.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--user=USERNAME</term>
+				<listitem>
+					<para>The username of the user creating the VDD document. The default is the username of the user executing the tool.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--output-directory=OUTPUT_DIRECTORY</term>
+				<listitem>
+					<para>The directory in which all VDD output will be created. The default is vdd_output.</para>
+				</listitem>
+			</varlistentry>
+
+		</variablelist>
+	</refsect1>
+
+	
+	<refsect1>
+		<title>EXAMPLES</title>
+		<example>
+			<title>Subversion</title>
+			<para>
+			@DEVEL_PRODUCT_NAME_LOWER@_vdd_generator.pl --scm=Subversion --product=TestProduct --repository=/tmp/testrepository --from=SCMBUG_RELEASE_0-8-18 --to=SCMBUG_RELEASE_0-8-19
+			</para>
+		</example>
+	</refsect1>
+
+	<refsect1>
+		<title>VERSION</title>
+		<para>
+			@DEVEL_PRODUCT_VERSION@
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>BUGS</title>
+		<para>
+		  This tool needs improvement. The list of bugs
+                  is available at the project's <ulink
+url="@DEVEL_PRODUCT_BUGTRACKER@">bug-tracking system</ulink>, under
+                  the 'Tools' component.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>REPORTING_BUGS</title>
+		<para>
+			Please report bugs at the project's <ulink url="@DEVEL_PRODUCT_BUGTRACKER@">bug-tracking system</ulink>.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>SEE ALSO</title>
+		<para>
+			The <ulink url="@datadir@/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual">@DEVEL_PRODUCT_NAME@ manual</ulink>, provided by the package <filename>@DEVEL_PRODUCT_NAME_LOWER@-doc</filename>.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>AUTHOR</title>
+		<para>
+			The <ulink url="@DEVEL_PRODUCT_WEBPAGE@">@DEVEL_PRODUCT_NAME@ Team</ulink>.
+		</para>
+	</refsect1>
+</refentry>

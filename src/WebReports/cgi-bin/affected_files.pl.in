@@ -1,0 +1,250 @@
+#!/usr/bin/perl -w 
+# Program to generate Affected File information
+
+use lib "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/lib";
+
+use strict;
+use CGI qw(:standard);
+use WebReportUtilities;
+use @DEVEL_PRODUCT_NAME@::ActivityUtilities;
+
+# Make sure text isn't buffered
+$|=1;
+
+my $web_utils = WebReportUtilities->new();
+my $webreports_config = $web_utils->webreports_config();
+
+
+sub main {
+    my $bugids = param("bugids");
+
+    if( !defined($bugids) || $bugids eq "" ) {
+        display_form();
+    } else {
+    	# Get the values that match the URL
+	my $fileLinks = param("filelinks");
+     	my $repo = param("repo");
+	my $viewvcPath = "";
+	my $websvnPath = "";
+
+    	foreach my $repository ( @{ $webreports_config->{repositories}} ) {
+    	    if( $repository->{repository_url} eq $repo ) {
+    	    	$viewvcPath = $repository->{viewvc};
+    	    	$websvnPath = $repository->{websvn};
+    	    }
+    	}
+    
+        run_report($bugids, $fileLinks, $viewvcPath, $websvnPath);
+    }
+}
+
+
+#
+# Displays the entry form
+#
+sub display_form {
+    my $viewvcPath = shift;
+    my $websvnPath = shift;
+
+    $web_utils->standard_header("Affected Files Report");
+    
+    print "<BLOCKQUOTE>";
+    print "This report will retrieve all of the affected files for a given bug ";
+    print "(or list of bugs - comma seperated) and group the file list under ";
+    print "changes for each file.  A link to viewvc for each file will be created.";
+    print "</BLOCKQUOTE><p>\n";
+    
+    print "<form name=theForm action=/@DEVEL_PRODUCT_NAME_LOWER@-cgi/affected_files.pl>";
+
+    print "    <table border=0 id=table1>";
+    print "	    <tr>";
+    print "		<td width=267>Repository</td>";
+    print "		<td>\n";
+    
+    print "    <select size=1 name=repo>";
+    
+    foreach my $repository ( @{ $webreports_config->{repositories}} ) {
+        print "    <option value=\"" . $repository->{repository_url} . "\">";
+	print $repository->{name} . "</option>\n";
+    }
+    print "			</select></td>";
+    print "		</tr>";
+    print "	<tr>";
+    print "		<td width=267>Bug IDs:</td>";
+    print "		<td><input type=text name=bugids size=40></td>";
+    print "		</tr>";
+
+    # Check if any file view options are being allowed
+    if( scalar @{$webreports_config->{repo_webview_options}} > 0 ) {
+	print "	<tr>";
+	print "		<td width=267>File Viewer:</td><td>";
+
+	my $isChecked = "CHECKED";
+
+	foreach my $repo_view ( @{ $webreports_config->{repo_webview_options}} ) {
+            print "    <input type=radio name=filelinks value=\"" . $repo_view . "\" $isChecked>";
+    	    print $repo_view . "\n";
+	    $isChecked = "";
+        }
+        print "		</td></tr>";
+    }
+    print "		<tr>";
+    print "			<td width=267>&nbsp;</td>";
+    print "			<td>&nbsp;</td>";
+    print "		</tr>";
+    print "	</table>";
+    
+    
+    print "	<p align=center><input type=submit value=\"Submit\">&nbsp;&nbsp;&nbsp; <input type=reset value=\"Reset\"></p>";
+    print "</form>";
+    print "</p>";
+    print "</body></html>";
+}
+
+#
+# Runs the report
+#
+sub run_report {
+    my $bugids = shift;
+    my $fileLinks = shift;
+    my $viewvcPath = shift;
+    my $websvnPath = shift;
+
+    $web_utils->standard_header("Affected Files For " . $bugids);
+
+    my $activityUtils = @DEVEL_PRODUCT_NAME@::ActivityUtilities->new( $webreports_config->{daemon_location},
+							$webreports_config->{daemon_port} );
+    my $results = $activityUtils->get_affected_files( $bugids );
+
+    if( $results ne "" ) {
+        print_html_data( sortData($results), $fileLinks, $viewvcPath, $websvnPath );
+    }
+
+    print end_html();
+}
+
+
+
+#####################
+sub print_html_data
+{
+    my $bugids     = shift;
+    my $changeList = shift;
+    my $fileLinks  = shift;
+    my $viewvcPath = shift;
+    my $websvnPath = shift;
+
+    my $file = 'templates/affected_files.results.html.tmpl';
+
+    my $vars = {
+    	heading_banner => $webreports_config->{heading_banner},
+	bugids         => $bugids,
+	changeList     => $changeList,
+	fileLinks      => $fileLinks,
+	viewvcPath     => $viewvcPath,
+	websvnPath     => $websvnPath
+    };
+
+    my $template = Template->new();
+ 
+    print header;
+ 
+    $template->process($file, $vars)
+    || die "Template process failed: ", $template->error(), "\n";
+
+    return;
+}
+
+
+#
+# Sorts the data in the change sets
+#
+sub sortData {
+    my $changelist = shift;
+
+    my @filenames = ();
+
+    # First extract the filenames so that they can be sorted
+    my $changeset;
+    foreach $changeset ( @{ $changelist } ) {
+    	my $uniqueFile;
+    	my $exists = 0;
+        foreach $uniqueFile ( @filenames ) {
+            if( $changeset->{ file } eq $uniqueFile ) {
+            	$exists = 1;
+            }
+        }
+        if($exists != 1) {
+            push @filenames, $changeset->{ file };
+        }
+    }
+
+    my @sortedlist = ();
+
+    my $file;
+    foreach $file ( sort(@filenames) ) {
+        my @revlist = ();
+        
+        # Now get all the revision numbers for each file
+        my $changeset;
+	foreach $changeset ( @{ $changelist } ) {
+	    if( $changeset->{ file } eq $file ) {
+		push @revlist, $changeset->{old};
+		
+		# Can't use zero for both create and delete
+		if( $changeset->{ new } eq "0" ) {
+		    push @revlist, "-1";
+		} else {
+		    push @revlist, $changeset->{ new };
+		}
+	    }
+	}
+	
+	# Sort the version numbers numerically
+	@revlist = sort { $a <=> $b } @revlist;
+	my @reducedlist = ();
+	
+	# Remove any numbers that occure twice, this means that
+	# we have multiple edits one after each other without any other
+	# edits interupting it
+	my $item1;
+	foreach $item1( @revlist ) {
+	    my $item2;
+	    my $num_matches = 0;
+	    foreach $item2( @revlist ) {
+	    	if( $item1 eq $item2 ) {
+	    	    $num_matches++;
+	    	}
+	    }
+	    if( $num_matches < 2 ) {
+	    	push @reducedlist, $item1;
+	    }
+	}
+	
+	# Now check if we have a deleted file, if so need
+	# to replace the -1 at the start with a 0 at the end
+	if( scalar @reducedlist > 0 ) {
+	    my $first = shift( @reducedlist );
+	    if( $first eq "-1" ) {
+	    	push @reducedlist, -1;
+	    } else {
+	    	unshift( @reducedlist, $first );
+	    }
+	}
+	
+	my $newdata;
+	$newdata->{ file } = $file;
+	$newdata->{ revisions } = \@reducedlist;
+	push @sortedlist, $newdata;
+    }
+
+    return \@sortedlist;
+}
+
+
+###########################################
+##  Main Invoke Code
+###########################################
+
+main();
+exit;

@@ -1,0 +1,687 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Glue::Subversion;
+
+@ISA = qw ( @DEVEL_PRODUCT_NAME@::Glue::SCM );
+
+use strict;
+use Data::Dumper;
+use @DEVEL_PRODUCT_NAME@::Activity;
+use @DEVEL_PRODUCT_NAME@::Common;
+use @DEVEL_PRODUCT_NAME@::Error;
+use @DEVEL_PRODUCT_NAME@::Glue::SCM;
+
+
+
+my $SUBVERSION_ADD_TOKEN = "A";
+my $SUBVERSION_DELETE_TOKEN = "D";
+my $SUBVERSION_UPDATE_PROPERTY_TOKEN = "_U";
+my $SUBVERSION_MODIFY_TOKEN = "U";
+my $SUBVERSION_MODIFY_AND_UPDATE_PROPERTY_TOKEN = "UU";
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $data = shift;
+    my $self = @DEVEL_PRODUCT_NAME@::Glue::SCM->new( $data );
+
+    bless $self, $type;
+
+    if ( !defined( $data->{ label_directories } ) ) {
+	log_fatal_error( $GLUE_ERROR_LABEL_DIRECTORIES_MISSING,
+                        "Configuration variable label_directories is missing.\n" );
+    } else {
+	$self->label_directories( $data->{ label_directories } );
+    }
+
+    if ( !defined( $data->{ main_trunk_directories } ) ) {
+	log_fatal_error( $GLUE_ERROR_MAIN_TRUNK_DIRECTORIES_MISSING,
+                        "Configuration variable main_trunk_directories is missing.\n" );
+    } else {
+	$self->main_trunk_directories( $data->{ main_trunk_directories } );
+    }
+
+    return $self;
+}
+
+
+
+sub label_directories {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ label_directories } = $data;
+    } else {
+	return $self->{ label_directories };
+    }
+
+}
+
+
+
+sub main_trunk_directories {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ main_trunk_directories } = $data;
+    } else {
+	return $self->{ main_trunk_directories };
+    }
+
+}
+
+
+
+sub detect_version {
+    my $self = shift;
+    my $command = "@DEVEL_CONFIG_SCM_BINARY_SVN@ --version";
+    my $command_output = execute_command($command);
+
+    my $version = $command_output;
+    $version =~ s/.*?(\d+\.\d+\.\d+).*/$1/s;
+
+    $logger->info( "Detected Subversion version $version\n" );
+    $self->version( $version );
+}
+
+
+# Initializes some internal configuration parameters
+sub init_internal {
+    my $self = shift;
+
+    $self->required_tool("@DEVEL_CONFIG_SCM_BINARY_SVN@");
+    $self->required_tool("@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@");
+}
+
+
+sub set_version_type {
+    my $self = shift;
+    my $version = $self->version();
+
+    if ($version =~ m/(\d+)\.(\d+)\.(\d+)/ ) {
+	my $major = $1;
+	my $minor = $2;
+	my $patch = $3;
+	if ( $major == 1 ) {
+	    if ( $minor <= 6 ) {
+		$self->version_type( $SCM_VERSION_LATEST );
+	    } else {
+		$self->version_type( $SCM_VERSION_NOT_SUPPORTED );
+	    }
+	} else {
+	    $self->version_type( $SCM_VERSION_NOT_SUPPORTED );
+	}
+    } else {
+	$self->version_type( $SCM_VERSION_WRONG_FORMAT );
+    }
+}
+
+
+
+#
+# Prepares the internal data structures needed to handle a verify
+# activity using data received from Subversion
+#
+sub prepare_activity_verify
+{
+    my $self = shift;
+    my ( $svn_repository, $svn_txn_or_rev ) = ( @_ );
+
+    if ( !defined ( $svn_repository ) ) {
+        log_fatal_error( $GLUE_ERROR_SVN_ARGUMENT_REPOSITORY_MISSING, "Subversion repository argument was not provided\n" );
+    }
+
+    if ( !defined ( $svn_txn_or_rev ) ) {
+        log_fatal_error( $GLUE_ERROR_SVN_ARGUMENT_TXN_OR_REV_MISSING, "Subversion transaction or revision argument was not provided\n" );
+    }
+
+    $self->prepare_activity_verify_or_commit( $svn_repository, $svn_txn_or_rev, "-t");
+}
+
+
+
+#
+# Prepares the internal data structures needed to handle a commit
+# activity using data received from Subversion
+#
+sub prepare_activity_commit
+{
+    my $self = shift;
+    my ( $svn_repository, $svn_txn_or_rev ) = ( @_ );
+
+    if ( !defined ( $svn_repository ) ) {
+        log_fatal_error( $GLUE_ERROR_SVN_ARGUMENT_REPOSITORY_MISSING, "Subversion repository argument was not provided\n" );
+    }
+
+    if ( !defined ( $svn_txn_or_rev ) ) {
+        log_fatal_error( $GLUE_ERROR_SVN_ARGUMENT_TXN_OR_REV_MISSING, "Subversion transaction or revision argument was not provided\n" );
+    }
+
+    $self->prepare_activity_verify_or_commit( $svn_repository, $svn_txn_or_rev, "-r");
+}
+
+
+
+# Prepares the internal data structures needed to handle a verify or
+# commit activity using data received from Subversion. Uses the
+# svnlook command to extract the required information. During
+# verification, the "-t" argument must be passed to the Subversion
+# commands, since a transaction is in progress. After verification,
+# the "-r" argument must be passed, since a revision is referred to.
+sub prepare_activity_verify_or_commit
+{
+    my $self = shift;
+    my ( $svn_repository, $svn_txn, $svn_tools_argument ) = ( @_ );
+    my $line;
+    my $old_version;
+
+    # Set the repository
+    $self->activity()->repository( $svn_repository );
+
+    # Find some information about this activity
+    $logger->info( "Calling '@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ info' to collect activity information\n" );
+    open ( SVNLOOK_INFO, "@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ info " . $svn_tools_argument . " $svn_txn $svn_repository |" ) || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_SVNLOOK_INFO, "Cannot execute '@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ info': $!\n");
+    # Cygwin has a problem with newlines
+    binmode( SVNLOOK_INFO, ":crlf" );
+
+    # First line is the username
+    $line = <SVNLOOK_INFO>;
+    $line =~ s/\n$//g;
+    $self->activity()->user( $line );
+
+    # Second line is the date. Ignore it
+    $line = <SVNLOOK_INFO>;
+
+    # Third line is the log message size. Ignore it
+    $line = <SVNLOOK_INFO>;
+
+    $logger->info( "Reading the log message\n" );
+    my $original_log_message = "";
+    # Rest of the lines are the log message
+    while ( $line = <SVNLOOK_INFO> ) {
+	$original_log_message .= $line;
+    }
+    $self->activity()->original_log_message( $original_log_message );
+    close ( SVNLOOK_INFO );
+
+
+    #
+    # Find the current repository revision
+    #
+    if ( $svn_tools_argument eq '-r' ) {
+        # This is a commit activity. The version number is explicitly
+        # supplied. We should use that.
+        $logger->info( "This is a commit activity, the new version number is explicitly provided and is '$svn_txn'\n" );
+        $old_version = $svn_txn;
+    } else {
+        # This is a verification activity. We must find the find the
+        # version number.
+        $logger->info( "This is a commit activity, and we must find the new version number using transaction number '$svn_txn'\n" );
+        $logger->info( "Calling '@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ youngest' to find the current repository revision\n" );
+        open ( SVNLOOK_YOUNGEST, "@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ youngest $svn_repository |" ) || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_SVNLOOK_YOUNGEST, "Cannot execute '@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ youngest': $!\n");
+        # Cygwin has a problem with newlines
+        binmode( SVNLOOK_YOUNGEST, ":crlf" );
+
+        $line = <SVNLOOK_YOUNGEST>;
+        $line =~ s/\n$//g;
+        $old_version = $line;
+        close ( SVNLOOK_YOUNGEST );
+    }
+
+    # Find the list of affected files
+    $logger->info( "Calling '@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ changed' to find the list of affected files\n" );
+    open ( SVNLOOK_CHANGED, "@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ changed " . $svn_tools_argument . " $svn_txn $svn_repository |" ) || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_SVNLOOK_CHANGED, "Cannot execute '@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ changed': $!\n");
+    # Cygwin has a problem with newlines
+    binmode( SVNLOOK_CHANGED, ":crlf" );
+    while ( $line = <SVNLOOK_CHANGED> ) {
+	my $file_state;
+	my $file_name;
+
+	$line =~ s/\n$//g;
+	if ( $line =~ m/(\w+?)\s+(.*)/ ) {
+	    $file_state = $1;
+	    $file_name = $2;
+            $logger->debug( "Found file_state '$file_state' for file_name '$file_name'\n" );
+	} else {
+	    log_fatal_error( $GLUE_ERROR_INVALID_SVNLOOK_OUTPUT_FORMAT, "Invalid output format '$line' from command 'svnlook changed'\n");
+	}
+
+
+	#
+	# Discover the previous version of this file
+	#
+	my $last_revision;
+	if ( $svn_tools_argument eq '-t' ) {
+	    # a '-t' argument is not available for 'svnlook history', thus
+	    # we should not attempt to use it.
+	    $last_revision = "N/A";
+	} else {
+	    my $svn_txn_for_history = $svn_txn;
+
+	    if ( $file_state eq $SUBVERSION_DELETE_TOKEN ) {
+		# If this file is being deleted, we need to look in
+		# the history from at least the last revision and
+		# prior in order to get a listing of all revisions. In
+		# that listing, the revision number where the file was
+		# last worked on is reported first.
+		$svn_txn_for_history = $svn_txn - 1;
+	    }
+            $logger->info( "Calling '@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ history' to discover the previous version of this file\n" );
+	    open (SVNLOOK_HISTORY, "@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ history " . $svn_tools_argument . "$svn_txn_for_history $svn_repository \"$file_name\" |") || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_SVNLOOK_HISTORY, "Cannot execute '@DEVEL_CONFIG_SCM_BINARY_SVNLOOK@ history': $!\n");
+	    # Cygwin has a problem with newlines
+	    binmode( SVNLOOK_HISTORY, ":crlf" );
+
+	    # The first line reads:
+	    # REVISION   PATH
+	    $line = <SVNLOOK_HISTORY>;
+	    # The second line reads:
+	    # --------   ----
+	    $line = <SVNLOOK_HISTORY>;
+	    # The remaining lines display the history of this file
+	    $last_revision = "NONE";
+	    my $last_filename = "";
+	    my $counter = 1;
+	    while ( $line = <SVNLOOK_HISTORY> ) {
+		# Note: if the filename in $line contains spaces,
+		# $last_filename does not contain the complete filename,
+		# but it doesn't matter
+		my $this_revision;
+		( $this_revision, $last_filename ) = split( " ", $line );
+
+		if ( $file_state eq $SUBVERSION_DELETE_TOKEN ) {
+		    # If a file is deleted, grab the first revision
+		    # number listed (revisions are listed from last to
+		    # first) on this file
+		    if ( $counter == 1 ) {
+                        $logger->debug( "The file is deleted. Grabbing the first revision number '$this_revision'.\n" );
+			$last_revision = $this_revision;
+		    }
+		} else {
+		    # If a file is added or updated, grab the second
+		    # revision number listed (revisions are listed
+		    # from last to first). That will be the previous
+		    # revision number
+		    if ( $counter == 2 ) {
+                        $logger->debug( "The file is added or updated. Grabbing the second revision number '$this_revision'.\n" );
+			$last_revision = $this_revision;
+		    }
+		}
+		$counter++;
+	    }
+	    close ( SVNLOOK_HISTORY );
+	}
+
+	#
+	# Add the file in the list of affected files
+	#
+	if ( $file_state eq $SUBVERSION_DELETE_TOKEN ) {
+	    # The file was deleted
+	    $self->activity()->{ files }->{ $file_name }->{ file_state } = $SCM_FILE_STATE_DELETED;
+	    $self->activity()->{ files }->{ $file_name }->{ old_version } = $last_revision;
+	    $self->activity()->{ files }->{ $file_name }->{ new_version } = $old_version;
+	} elsif ( $file_state eq $SUBVERSION_ADD_TOKEN ) {
+	    $self->activity()->{ files }->{ $file_name }->{ file_state } = $SCM_FILE_STATE_ADDED;
+	    $self->activity()->{ files }->{ $file_name }->{ old_version } = $last_revision;
+	    $self->activity()->{ files }->{ $file_name }->{ new_version } = $old_version;
+	} elsif ( $file_state eq $SUBVERSION_MODIFY_TOKEN ) {
+	    $self->activity()->{ files }->{ $file_name }->{ file_state } = $SCM_FILE_STATE_MODIFIED;
+	    $self->activity()->{ files }->{ $file_name }->{ old_version } = $last_revision;
+	    $self->activity()->{ files }->{ $file_name }->{ new_version } = $old_version;
+	} elsif ( $file_state eq $SUBVERSION_UPDATE_PROPERTY_TOKEN ) {
+	    $self->activity()->{ files }->{ $file_name }->{ file_state } = $SCM_FILE_STATE_PROPERTY_MODIFIED;
+	    $self->activity()->{ files }->{ $file_name }->{ old_version } = $last_revision;
+	    $self->activity()->{ files }->{ $file_name }->{ new_version } = $old_version;
+	} elsif ( $file_state eq $SUBVERSION_MODIFY_AND_UPDATE_PROPERTY_TOKEN ) {
+	    $self->activity()->{ files }->{ $file_name }->{ file_state } = $SCM_FILE_STATE_MODIFIED_AND_PROPERTY_MODIFIED;
+	    $self->activity()->{ files }->{ $file_name }->{ old_version } = $last_revision;
+	    $self->activity()->{ files }->{ $file_name }->{ new_version } = $old_version;
+	} else {
+            log_fatal_error( $GLUE_ERROR_INVALID_SVNLOOK_CHANGED_TOKEN, "Invalid token '$file_state' from command 'svnlook changed' for file '$file_name'.\n");
+	}
+
+	#
+	# Automatically detect the product name
+	#
+	$self->activity()->prepare_product_name();
+
+	# Subversion does not flag labeling (tagging or branching)
+	# operations in a special way. We must manually detect if the
+	# user intented to create a branch or tag using an 'svn copy'
+	# operation. If this was the case, the affected files include
+	# a prefix such as:
+	# branches/branchname/filename
+	# tags/tagname/filename
+	if ( $svn_tools_argument eq "-t" ) {
+	    # This is a verification. We may have to tag as well.
+
+	    my $label_name = $self->is_labeling_operation( $file_name );
+	    if ( $label_name ne "" ) {
+
+                $logger->info( "This is also a labeling operation.\n" );
+		# This is also a labeling operation.
+		if ( $file_state eq $SUBVERSION_ADD_TOKEN ) {
+		    # We must add a label
+		    $self->activity()->{ type }->{ tag }->{ name } = $label_name;
+		    $self->activity()->{ type }->{ tag }->{ operation } = $TAG_OPERATION_ADD;
+		} elsif ( $file_state eq $SUBVERSION_DELETE_TOKEN ) {
+		    # We must delete a label
+		    $self->activity()->{ type }->{ tag }->{ name } = $label_name;
+		    $self->activity()->{ type }->{ tag }->{ operation } = $TAG_OPERATION_DELETE;
+		} elsif ( $file_state eq $SUBVERSION_UPDATE_PROPERTY_TOKEN ) {
+		    # A property was updated. No need to do anything.
+		} else {
+		    log_fatal_error( $GLUE_ERROR_INVALID_SVNLOOK_TOKEN, "Invalid token '$file_state' from command 'svnlook changed'\n");
+		}
+	    }
+	}
+    }
+
+    close ( SVNLOOK_CHANGED );
+
+}
+
+
+
+# Identifies if a filename is about to get commited in a directory
+# that is used by the user to store branches or tags.
+#
+# RETURNS: - The tag name used if indeed a filename was commited in such
+#            a directory.
+#          - An empty string otherwise.
+#
+sub is_labeling_operation {
+    my $self = shift;
+    my $filename = shift;
+    my $label_name = "";
+
+    $logger->info( "Identifying a labeling operation for '$filename'.\n" );
+
+    foreach my $label_directory ( @{ $self->{ label_directories } } ) {
+	# Strip the label directory from trailing slashes if the user
+	# added any by accident
+	my $label_directory_modified = $label_directory;
+	$label_directory_modified =~ s/\/$/g/; # Strip a trailing '/'
+
+	my $regex_match_after = '.*' . $label_directory_modified . '\/' . $self->activity()->product_name() . "\/(.*?)\/";
+
+	# The same problem described below in COMPLICATION DUE TO
+	# PRODUCT NAME AUTODETECTION applies here for "tags" and
+	# "branches" and should be handled too.
+
+	# The additional complication in "tags", "branches" is that we
+	# need to report up to one directory after the product_name.
+	#
+	# e.g.
+	#   committing
+	# AfterA/Long/DirectoryPrefix/tags/TestProduct/p_ats_new_tag/test_file1.txt
+	#
+	# we should report
+	#  p_ats_new_tag
+	# NOT
+	#  TestProduct
+
+	#
+	# Identify the branch or tag name
+	#
+
+	#
+	# Is this a commit of the following format ??
+	#
+	# AfterA/Long/DirectoryPrefix/tags/TestProduct/p_ats_new_tag/test_file1.txt
+	#
+	if ( $filename =~ /$regex_match_after/ ) {
+	    # This file was copied in a labeling directory
+	    $label_name = $1;
+
+            $logger->debug( "The file '$filename' was copied in a user-supplied label directory, reporting one directory after the product name.\n" );
+
+	    $filename =~ s/$regex_match_after//;
+	    if ( $filename eq "") {
+		# If what's left is blank, then this "filename" is in
+		# fact the path to the branch directory. Only consider
+		# the directory name. This eliminates false detection
+		# of deletion of an entire tag or branch when in fact
+		# only a single file in the tag or branch directory
+		# was deleted.
+                $logger->debug( "This file shares the path to the labeling directory. The label is '$label_name', reporting one directory after the product name.\n" );
+		return $label_name;
+	    }
+	} else {
+	    #
+	    # Is this a commit of the following format ??
+	    #
+	    # AfterA/Long/DirectoryPrefix/tags/TestProduct
+	    #
+	    # In other words, a labeling directory is just being created
+	    my $regex_match_after_label = '.*' . $label_directory_modified . '\/' . $self->activity()->product_name() . "\/" . '$';
+	    
+	    if ( $filename =~ /$regex_match_after_label/ ) {
+		# This isn't a labeling operation. It's just
+		# creation of a labeling directory.
+                $logger->debug( "This isn't a labeling operation. It's just creation of a product directory after a label directory.\n" );
+	    } else {
+		#
+		# Is this a commit of the following format ??
+		#
+		# BeforeA/Long/DirectoryPrefix/TestProduct/tags
+		#
+		# In other words, a labeling directory is just being created
+		my $regex_match_before_label = '.*' . $label_directory_modified . "\/" . '$';
+		
+		if ( $filename =~ /$regex_match_before_label/ ) {
+		    # This isn't a labeling operation. It's just
+		    # creation of a labeling directory.
+
+                    $logger->debug( "This isn't a labeling operation. It's just creation of a labeling directory after a product directory.\n" );
+		} else {
+		    my $regex_match_before = '.*' . $label_directory_modified . "\/(.*?)\/";
+		    
+		    #
+		    # Is this a commit of the following format ??
+		    #
+		    # BeforeA/Long/DirectoryPrefix/TestProduct/tags/p_ats_new_tag/test_file1.txt
+		    #
+		    if ( $filename =~ /$regex_match_before/ ) {
+			# This file was copied in a labeling directory
+			$label_name = $1;
+			
+                        $logger->debug( "The file '$filename' was copied in a user-supplied labeling directory, the product name is before the labeling directory.\n" );
+
+			$filename =~ s/$regex_match_before//;
+			if ( $filename eq "" ) {
+			    # If what's left is blank, then this "filename" is in
+			    # fact the path to the branch directory. Only consider
+			    # the directory name. This eliminates false detection
+			    # of deletion of an entire tag or branch when in fact
+			    # only a single file in the tag or branch directory
+			    # was deleted.
+                            $logger->debug( "This file shares the path to the label directory. The label is '$label_name', the product name is before the label directory.\n" );
+			    return $label_name;
+			}
+		    } else {
+			#
+			# Is this a commit of the following format ??
+			#
+			# BeforeA/Long/DirectoryPrefix/TestProduct/tags
+			#
+			# In other words, a labeling directory is just being created
+			my $regex_match_before_label = '.*' . $label_directory_modified . "\/" . '$';
+			
+			if ( $filename =~ /$regex_match_before_label/ ) {
+			    # This isn't a labeling operation. It's just
+			    # creation of a labeling directory.
+                            $logger->debug( "This isn't a labeling operation. It's just creation of a labeling directory after a product directory.\n" );
+			} else {
+			    # This isn't a labeling operation
+                            $logger->debug( "This isn't a labeling operation. It's a commit after a labeling directory, after a product directory.\n" );
+			}
+		    }
+		}
+	    }
+	}
+    }
+
+    $logger->debug( "Found no label_name.\n" );
+    return "";
+}
+
+
+#
+# Used to detect the branch name
+#
+sub prepare_branch_name {
+    my $self = shift;
+    my $possible_branch_names;
+
+    foreach my $file_name ( keys %{ $self->activity()->files() } ) {
+	# Subversion does not flag commiting in the main trunk in a
+	# special way. We must manually detect the branch in which the
+	# changeset will be committed.
+	$possible_branch_names->{ $self->detect_branch_name( $file_name ) } = 1;
+
+    }
+
+    # It may be the case that more than one branch name detected is
+    # possible. For example, if trunk,branches,tags are created for
+    # the first time, or if the user is committing a changeset that
+    # touches all of them. The user shouldn't do that, but we won't
+    # prohibit the changeset.
+    my @possible_branch_names_array = keys %{ $possible_branch_names };
+    my $number_of_possible_branches = scalar @possible_branch_names_array;
+    my $branch_name;
+    if ($number_of_possible_branches == 1) {
+	# Return the branch name if only one branch name was detected
+	$branch_name = $possible_branch_names_array[0];
+    } else {
+        $logger->debug( "$number_of_possible_branches possible branch names were detected.\n" );
+	$branch_name = $BRANCH_NAME_INDETERMINATE;
+    }
+
+    $self->activity()->branch_name( $branch_name );
+}
+
+
+
+# Detects the branch name in which the changeset is commited.
+#
+# RETURNS: - The branch name used if indeed a filename was commited in such
+#            a directory.
+#          - A string indicating that the branch name could not be
+#            determined, otherwise.
+#
+sub detect_branch_name {
+    my $self = shift;
+    my $filename = shift;
+    my $branch_name = "";
+
+    $logger->debug( "Detecting branch name for file '$filename'.\n" );
+
+    # The branch name could not be determined yet
+    $branch_name = $BRANCH_NAME_INDETERMINATE;
+
+    # First, check if the activity is against the main trunk
+    foreach my $main_trunk_directory ( @{ $self->{ main_trunk_directories } } ) {
+	# Strip the main trunk directory from trailing slashes if the
+	# user added any by accident
+	my $main_trunk_directory_modified = $main_trunk_directory;
+	$main_trunk_directory_modified =~ s/\/$//g; # Strip a trailing '/'
+
+	my $regex_match = '(.*' . $main_trunk_directory_modified . ")\/.*";
+	if ( $filename =~ /$regex_match/ ) {
+	    # This file is committed in a main trunk directory
+	    $branch_name = $1;
+
+	    # COMPLICATION DUE TO PRODUCT NAME AUTODETECTION
+	    #
+	    # If the product name has been autodetected to be after
+	    # trunk, then we need to include it as part of the branch
+	    # name that should be reported.
+	    # e.g.
+	    # commiting
+	    #  AfterA/Long/DirectoryPrefix/trunk/TestProduct/some/dir/test_file1.txt
+	    #
+	    # will detect that "TestProduct", the product_name, is
+	    # after "trunk". Hence it should be included in the
+	    # reported branch name, which is currently
+	    # "AfterA/Long/DirectoryPrefix/trunk". It should be
+	    # "AfterA/Long/DirectoryPrefix/trunk/TestProduct"
+	    #
+	    # But, if committing:
+	    #  A/Long/DirectoryPrefix/TestProduct/trunk/test_file1.txt
+	    #
+	    # then "TestProduct", the product_name, is before "trunk",
+	    # hence it should not be reported in the branch name at
+	    # all. The branch name should remain
+	    # "A/Long/DirectoryPrefix/TestProduct/trunk"
+	    my $new_regex_match = '(' . $branch_name . '\/' . $self->activity()->product_name() . ")\/.*";
+	    if ($filename =~ $new_regex_match) {
+                $logger->debug( "Found branch name '$branch_name' to be the main trunk.\n" );
+		$branch_name = $1;
+	    }
+	}
+    }
+
+    # Now, check if the activity is against a labeling directory. In
+    # other words, check if this is creation of a tag, or work on a
+    # branch.
+    foreach my $label_directory ( @{ $self->{ label_directories } } ) {
+	# Strip the label directory from trailing slashes if the user
+	# added any by accident
+	my $label_directory_modified = $label_directory;
+	$label_directory_modified =~ s/\/$/g/; # Strip a trailing '/'
+
+	my $regex_match = '(.*' . $label_directory_modified . "\/.*?)\/";
+	# Identify the branch or tag name
+	if ( $filename =~ /$regex_match/ ) {
+	    # This file is committed in a labeling directory
+	    $branch_name = $1;
+
+	    # The same problem described above in COMPLICATION DUE TO
+	    # PRODUCT NAME AUTODETECTION applies here for "tags" and
+	    # "branches" and should be handled too.
+	    #
+
+	    # The additional complication in "tags", "branches" is
+	    # that we need to report up to one directory after the
+	    # product_name.
+	    # e.g.
+	    #   committing
+	    # AfterA/Long/DirectoryPrefix/tags/TestProduct/p_ats_new_tag/test_file1.txt
+	    #
+	    # we should report
+	    #  tags/TestProduct/p_ats_new_tag
+	    # NOT
+	    #  tags/TestProduct
+	    my $new_regex_match = '(.*' . $label_directory_modified . '\/' . $self->activity()->product_name() . "\/.*?)\/";
+	    if ($filename =~ $new_regex_match) {
+                $logger->debug( "Found branch name '$branch_name' to be a labeling directory.\n" );
+		$branch_name = $1;
+	    }
+
+	}
+    }
+
+    $logger->debug( "The branch name detected was '$branch_name'.\n" );
+    return $branch_name;
+}
+
+
+
+1;

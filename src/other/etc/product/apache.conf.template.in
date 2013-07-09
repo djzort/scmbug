@@ -1,0 +1,21 @@
+# Apache configuration to enable the @DEVEL_PRODUCT_NAME@ Web Reports
+
+Alias /@DEVEL_PRODUCT_NAME_LOWER@/ "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/html/"
+
+<Directory "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/html/">
+   AllowOverride none
+   Options Indexes FollowSymLinks
+   Order allow,deny
+   Allow from all
+</Directory>
+
+
+ScriptAlias /@DEVEL_PRODUCT_NAME_LOWER@-cgi/ "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/cgi-bin/"
+
+<Directory "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/WebReports/cgi-bin/">
+   AllowOverride All
+   Options ExecCGI Indexes Includes FollowSymLinks MultiViews
+   Order allow,deny
+   Allow from all
+   SetHandler cgi-script
+</Directory>

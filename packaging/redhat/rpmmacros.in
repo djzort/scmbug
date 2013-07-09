@@ -1,0 +1,6 @@
+%_topdir @devel_top_dir@/packaging/redhat/build
+%_buildroot @devel_top_dir@/packaging/redhat/build/tmp
+%_tmppath @devel_top_dir@/packaging/redhat/build/tmp
+%_signature gpg
+%_gpg_name @DEVEL_PRODUCT_DEVELOPER_USER@
+%_gpgbin /usr/bin/gpg

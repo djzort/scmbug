@@ -1,0 +1,1 @@
+macrofiles: @devel_top_dir@/packaging/redhat/rpmmacros_orig:@devel_top_dir@/packaging/redhat/rpmmacros

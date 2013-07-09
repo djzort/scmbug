@@ -1,0 +1,575 @@
+<chapter id="bugtracking-backends">
+  <title>Bug-tracking Backends</title>
+
+  <section id="bugzilla">
+    <title>Bugzilla</title>
+	
+    <para>
+      <glossterm linkend="glossary-bugzilla">Bugzilla</glossterm> is
+      an enterprise-class piece of software that tracks millions of
+      bugs and issues for hundreds of organizations around the world.
+    </para>
+    
+    <para>
+      Bugzilla does not provide a public interface for SCM
+      integration. Nevertheless, the &devel-product-name; daemon
+      attempts to reuse functionality already available in the
+      Perl-based Bugzilla libraries. As a result, the source code used
+      to host a Bugzilla instance must be locally accessible by the
+      daemon. The <filename>installation_directory</filename> variable
+      is used to define the location of the Bugzilla source
+      installation as shown in <xref
+      linkend="fig-installation-directory">.
+
+	  <figure id="fig-installation-directory">
+	    <title>Bug-tracker installation directory for Bugzilla.</title>
+	    <programlisting>
+# Used for Bugzilla and RequestTracker.
+#
+# Path to the directory of the bugtracker sources providing an
+# API that the daemon can use
+installation_directory => '/usr/share/bugzilla/lib'
+	    </programlisting>
+	  </figure>
+      </para>
+
+
+      <para>Additionally, the <filename>installed_locally</filename>
+        variable is used to flag whether Bugzilla is installed locally
+        on the same machine the daemon is running as shown in <xref
+        linkend="fig-installed-locally">. This is required to flush
+        Bugzilla's version cache when SCM tags are added or deleted,
+        and immediately reflect tag manipulation to Bugzilla's user
+        interface.
+
+	  <figure id="fig-installed-locally">
+	    <title>Bug-tracker installed locally variable.</title>
+	    <programlisting>
+# Used only for Bugzilla.
+#
+# Flags whether the live bugtracker instance is installed
+# locally on the same machine the daemon is running
+installed_locally => 1,
+	    </programlisting>
+	  </figure>
+       </para>
+
+     <note>
+        <para>For example, it is possible to install Bugzilla in
+        machine A, and install a duplicate Bugzilla source in machine
+        B where &devel-product-name; is installed. In this scenario
+        <filename>installation_directory</filename> would be set to
+        Bugzilla's source code path on machine B, but the variable
+        <filename>installed_locally</filename> would be set to 0.
+        </para>
+     </note>
+
+    <para>
+      The Bugzilla developers are <ulink
+      url="http://bugzilla.mozilla.org/show_bug.cgi?id=254400">planning</ulink>
+      to provide a formal SCM integration interface in future
+      releases.
+    </para>
+
+    <para>
+      As of version 2.22.0, Bugzilla does not yet support a mapping of
+      the SCM username to a Bugzilla username. An SCM to bug-tracking
+      username mapping is accomodated by the integration daemon using
+      the <filename>userlist</filename> variable, as described in
+      <xref linkend="verification-checks-valid-username-mapping">.
+    </para>
+
+    <para>
+      Bugzilla currently lacks a <ulink
+      url="http://bugzilla.mkgnu.net/show_bug.cgi?id=763">per-bug
+      comment id</ulink>. This makes it very difficult to accurately
+      report the comment ids in a VDD for Bugzilla. Currently, the VDD
+      comment ids are prefixed with the string
+      "<filename>inaccurate_</filename>".
+    </para>
+
+    <para>
+      &devel-product-name; has been verified to work against the
+      following releases of Bugzilla:
+
+      <itemizedlist>
+	<listitem>
+	  <para>
+	    <emphasis>2.14.2</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>2.16.5</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>2.18rc2</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>2.19.2</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>2.20.1,2.20.7</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>2.22.0</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>3.0.0, 3.0.9</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>3.2.2</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>3.4.5</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>3.6.1</emphasis>
+	  </para>
+	</listitem>
+      </itemizedlist>
+
+    </para>
+	
+  </section>
+
+
+
+  <section id="mantis">
+    <title>Mantis</title>
+
+    <para>
+      <glossterm linkend="glossary-mantis">Mantis</glossterm> is a web
+       based PHP/MySQL-based bugtracking system.
+    </para>
+
+    <para>
+      Mantis does not provide a public interface for SCM
+      integration. However, the &devel-product-name; daemon includes a
+      native Perl-based bug-tracking backend for integration with
+      Mantis. Configuration of the variables
+      <filename>installation_directory</filename>(<xref
+      linkend="fig-installation-directory">) and
+      <filename>installed_locally</filename>(<xref
+      linkend="fig-installed-locally">) is not required. 
+    </para>
+
+    <para>
+       Mantis supports installation with multiple database
+       backends. The daemon configuration variable
+       <filename>database_vendor</filename> defines the selected
+       database backend, as shown in <xref
+       linkend="fig-database-vendor">.
+
+       <figure id="fig-database-vendor">
+         <title>Database vendor variable.</title>
+	   <programlisting>
+# Valid values are the ones accepted by the Perl DBI.
+#
+# For Bugzilla, this value is ignored
+#
+# For Mantis, *some* valid values (there are others) are:
+# - 'mysql'
+# - 'Pg'
+database_vendor => 'mysql',
+	   </programlisting>
+       </figure>
+
+    </para>
+
+    <para>
+      The Mantis developers are <ulink
+      url="http://www.futureware.biz/mantis/view.php?id=151">planning</ulink>
+      to provide a formal SCM integration <ulink
+      url="http://www.futureware.biz/mantisconnect/">interface</ulink>
+      in future releases.
+    </para>
+
+    <para>
+      As of version 0.19.0, Mantis does not yet support a mapping of
+      the SCM username to a Mantis username. An SCM to bug-tracking
+      username mapping is accomodated by the integration daemon using
+      the <filename>userlist</filename> variable, as described in
+      <xref linkend="verification-checks-valid-username-mapping">.
+    </para>
+
+    <para>
+      &devel-product-name; has been verified to work against the
+      following releases of Mantis:
+
+      <itemizedlist>
+	<listitem>
+	  <para>
+	    <emphasis>0.19.0</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>1.0.0rc3</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>1.1.0rc1</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>1.2.1</emphasis>
+	  </para>
+	</listitem>
+      </itemizedlist>
+
+    </para>
+
+  </section>
+
+
+
+  <section id="requesttracker">
+    <title>Request Tracker</title>
+
+    <para>
+      <glossterm linkend="glossary-requesttracker">Request Tracker</glossterm> is a web
+       based request tracking system written in object-oriented Perl.
+    </para>
+
+    <para>
+      Request Tracker provides a public interface for SCM integration. The &devel-product-name;
+      daemon reuses functionality already available in the Perl-based Request Tracker libraries.
+      As a result, the library code used to host a Request Tracker instance must be locally
+      accessible by the daemon. The <filename>installation_directory</filename> variable
+      is used to define the location of the Request Tracker installation as shown in <xref
+      linkend="fig-rt-installation-directory">.
+
+	  <figure id="fig-rt-installation-directory">
+	    <title>Bug-tracker installation directory for Request Tracker.</title>
+	    <programlisting>
+# Used for Bugzilla and RequestTracker.
+#
+# Path to the directory of the bugtracker sources providing an
+# API that the daemon can use
+installation_directory => '/usr/share/request-tracker3.4/lib'
+	    </programlisting>
+	  </figure>
+    </para>
+
+    <para>
+      This backend integration with Request Tracker assumes the
+      product names in <filename>glue.conf</filename> match the queue
+      names set in the Request Tracker.
+    </para>
+
+    <para>
+      The <filename>&devel-config-activity-tag;</filename> integration
+      action is not yet supported.
+    </para>
+
+    <para>
+       The Request Tracker backend does not currently support the
+       <xref linkend="vdd" endterm="vdd-short"> and <xref
+       linkend="merger" endterm="merger-short">.
+    </para>
+
+    <para>
+      As of version 3.4.5, Request Tracker does not require a mapping
+      of the SCM username to a Request Tracker username. The username
+      mappings can be disabled as shown in <xref
+      linkend="fig-mappings-disabled">.
+    </para>
+
+    <para>
+      &devel-product-name; has been verified to work against the
+      following releases of Request Tracker:
+
+      <itemizedlist>
+	<listitem>
+	  <para>
+	    <emphasis>3.4.5</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>3.6.1</emphasis>
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </para>
+
+  </section>
+
+
+
+  <section id="testdirector">
+    <title>Test Director</title>
+
+    <para>
+      <glossterm linkend="glossary-testdirector">Test
+       Director</glossterm> is a test and fault tracking system.
+    </para>
+
+    <para>
+      Test Director is based on MS Windows and hence the interfaces
+      into the system are available on MS Windows only. Users have to
+      run the &devel-product-name; daemon on a Windows machine.
+    </para>
+
+    <para>
+      In order to use Test Director as your fault tracking system you
+      will need to ensure that you install:
+
+      <itemizedlist>
+	<listitem>
+	  <para>
+             The Perl OLE package.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+             Test Director <emphasis>Mercury Quality Center System Test Remote
+             Agent Add-in</emphasis> (Available from the Test Director <filename>Help-&gt;
+             Add-ins</filename> menu).
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </para>
+
+    <para>
+       For Test Director, some example configuration settings for the
+       daemon configuration file
+       <filename>&devel-sysconf-dir;/&devel-product-name-lower;/daemon.conf</filename>
+       are shown in <xref
+       linkend="fig-testdirector-daemon-configuration">.
+
+	  <figure id="fig-testdirector-daemon-configuration">
+	    <title>Example daemon configuration settings for Test Director.</title>
+	    <programlisting>
+# The URL connection string to Test Director.
+database_location => 'http://emea-testdir:8080/qcbin',
+	
+# The database vendor is the same as the Domain within Test Director,
+# This must match the value that you would use on manual login.
+database_vendor => 'Domain',
+
+# The database name is the same as the Project within Test Director.
+database_name => 'Project',
+
+# The user name is the Test Director user login.
+database_username => 'username',
+
+# The password for the Test Director login.
+database_password => 'password',
+	    </programlisting>
+	  </figure>
+    </para>
+
+
+    <para>
+       Test Director and its fields can be further customized in the
+       file
+       <filename>&devel-sysconf-dir;/&devel-product-name-lower;/TestDirector.conf</filename>. This
+       file must be updated to match your system.
+    </para>
+
+    <para>
+       The Test Director backend does not currently support the <xref
+       linkend="vdd" endterm="vdd-short">.
+    </para>
+
+    <para>
+      As of version 9.0.0, Test Director does not yet support a
+      mapping of the SCM username to a Test Director username. An SCM
+      to bug-tracking username mapping is accomodated by the
+      integration daemon using the <filename>userlist</filename>
+      variable, as described in <xref
+      linkend="verification-checks-valid-username-mapping">.
+    </para>
+
+    <note>
+      <para>
+         Due to a <ulink
+         url="http://bugs.activestate.com/show_bug.cgi?id=38968">bug</ulink>
+         in Windows ActiveState Perl, the backend would crash if a
+         Win32::OLE object was called from a forked process (the
+         forked daemon connection handler).  For this reason the Test
+         Director backend calls are all executed from a seperate
+         script and the results are read back in. This does not limit
+         the functionality, but it does mean that sub-processes are
+         created.
+      </para>
+    </note>
+
+    <para>
+      &devel-product-name; has been verified to work against the
+      following releases of Test Director:
+
+      <itemizedlist>
+	<listitem>
+	  <para>
+	    <emphasis>9.0.0 (Quality Center), 9.2</emphasis>
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </para>
+
+  </section>
+
+
+
+  <section id="other-bugtracking">
+    <title>Other Bug-tracking Systems</title>
+
+    <para>
+      Additional bug-tracking backends can be supported by
+      &devel-product-name;. Developers and system integrators of the
+      following bug-tracking systems are <emphasis
+      role="bold">strongly encouraged</emphasis> to contribute a
+      bug-tracking integration backend:
+      <itemizedlist>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-anthill">AntHill</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-bosco">Bosco</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-debbugs">debbugs</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-doublechocolatte">Double Choco Latte</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-eventum">Eventum</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-gforge">GForge</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-gnats">GNATS</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-helis">Helis</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-itracker">ITracker</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-phpbugtracker">phpBugTracker</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-roundup">Roundup</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-scarab">Scarab</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-Trac">Trac</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-tutos">TUTOS</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-workbench">Workbench</glossterm>
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </para>
+
+    <para>
+      Developing a backend requires:
+      <itemizedlist>
+	<listitem>
+	  <para>
+            Committing to support this backend in future releases of
+            &devel-product-name;.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Creating a new backend module named
+            <filename>src/lib/product/Daemon/BackendName.pm.in</filename>. The
+            Bugzilla backend
+            <filename>src/lib/product/Daemon/Bugzilla.pm.in</filename> serves
+            as a good example.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Updating
+            <filename>src/lib/product/Daemon/Daemon.pm.in:read_configuration</filename>
+            accordingly.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Updating the configuration management files
+            <filename>configure.in</filename> and
+            <filename>Makefile.in</filename> to autogenerate, and
+            autocleanup the new backend.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Updating the <filename>install-server</filename> rule of
+            <filename>Makefile.in</filename> to install the new
+            backend from source.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+           Updating the documentation in
+           <filename>doc/manual/content</filename> to reflect support for the
+           new backend.
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </para>
+
+  </section>
+
+</chapter>

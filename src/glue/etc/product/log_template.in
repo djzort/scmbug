@@ -1,0 +1,6 @@
+@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX@ @DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX@ 
+CVS: ----------------------------------------------------------------------
+CVS: e.g.
+CVS: @DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_PREFIX@441@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_TOKEN_POSTFIX@Implemented a flexible mechanism of extracting
+CVS: the bug ids and log comment.
+CVS: ----------------------------------------------------------------------

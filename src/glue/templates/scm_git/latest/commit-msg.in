@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# An example hook script to check the commit log message.
+# Called by git-commit with one argument, the name of the file
+# that has the commit message.  The hook should exit with non-zero
+# status after issuing an appropriate message if it wants to stop the
+# commit.  The hook is allowed to edit the commit message file.
+#
+# To enable this hook, make this file executable.
+
+
+
+# @DEVEL_PRODUCT_NAME@_STANZA_START
+#
+#
+# Call the @DEVEL_PRODUCT_NAME@ integration glue
+COMMIT_LOG_FILE=$1
+REPOS="@DEVEL_PRODUCT_NAME@_STANZA_REPOS"
+
+@DEVEL_CONFIG_PERL_BINARY@ -I ${REPOS}/.git/hooks/lib/@DEVEL_PRODUCT_NAME_LOWER@ ${REPOS}/.git/hooks/bin/@DEVEL_PRODUCT_NAME_LOWER@_activity.pl ${REPOS}/.git/hooks/etc/@DEVEL_PRODUCT_NAME_LOWER@/glue.conf @DEVEL_CONFIG_ACTIVITY_VERIFY@ ${COMMIT_LOG_FILE} >&2
+
+exit $?
+#
+#
+# @DEVEL_PRODUCT_NAME@_STANZA_STOP

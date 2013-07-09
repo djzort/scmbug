@@ -1,0 +1,869 @@
+<chapter id="resources">
+  <title>Resources</title>
+
+
+  <section id="availability">
+    <title>Availability</title>
+    
+    <para>
+        &devel-product-name; is available for UNIX and Windows
+	systems. It is expected to work with Perl version 5.6.1 or
+	later and has been confirmed to work with Perl version
+	5.8.4. Dependencies on additional programs are described in
+	<xref linkend="installation">.
+    </para>
+
+    <para>
+        The project's <ulink
+	url="&devel-product-webpage;">webpage</ulink> contains the
+	most up to date information on the project, including the
+	latest release and manual. A users mailing list is available
+	for <ulink
+	url="&devel-product-mailing-list-users-http;">subscription</ulink>,
+	or simply for sending <ulink
+	url="&devel-product-mailing-list-users-email;">email</ulink>.
+	The project's <ulink
+	url="http://bugzilla.mkgnu.net">bug-tracking system</ulink>
+	contains the latest <ulink
+	url="http://bugzilla.mkgnu.net/buglist.cgi?query_format=specific&amp;bug_status=__open__&amp;product=Scmbug&amp;content=&amp;order=bugs.bug_id&amp;query_based_on=">TODO
+	list</ulink>. Source code access to developers is available
+	using anonymous CVS as shown in <xref
+	linkend="fig-cvs-repository-access"> or through <ulink
+	url="http://www.mkgnu.net/cgi-bin/viewcvs.cgi/scmbug/">ViewCVS</ulink>.
+
+        <figure id="fig-cvs-repository-access">
+	  <title>Developer access to project's CVS repository.</title>
+
+          <screen>
+<prompt>bash$</prompt> <command> cvs -d:pserver:anonymous@cvs.mkgnu.net:/projects/scmbug/cvsroot login</command>
+<command>Password:</command>
+<prompt>bash$</prompt> <command> cvs -d:pserver:anonymous@cvs.mkgnu.net:/projects/scmbug/cvsroot co .</command>
+          </screen>
+        </figure>
+      </para>
+
+  </section>
+
+
+
+  <section id="installation">
+    <title>Installation</title>
+
+  <section id="installation-system">
+    <title>System</title>
+    
+    <para>
+      Under UNIX, &devel-product-name; is available in the form of
+      Debian and RPM packages. The provided packages are:
+      <itemizedlist>
+	<listitem>
+	  <para>
+	    <filename>&devel-product-name-lower;-common</filename>:
+	    common libraries.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <filename>&devel-product-name-lower;-doc</filename>:
+	    documentation.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <filename>&devel-product-name-lower;-tools</filename>:
+	    tools that can install the integration glue in an SCM
+	    repository and enhance the experience of integrating SCM
+	    with bug-tracking.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <filename>&devel-product-name-lower;-server</filename>:
+	    the integration daemon.
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </para>
+
+    <tip>
+      <para>
+        If you believe your system meets the package dependencies, but
+        installing packages fails due to missing dependencies,
+        installation of the packages is still possible. Installation
+        of RPM packages can be forced as shown in <xref
+        linkend="fig-rpm-installation-force">, and installation of
+        Debian packages can be forced as shown in <xref
+        linkend="fig-deb-installation-force">.
+
+        <figure id="fig-rpm-installation-force">
+	  <title>Forcing installation of RPM packages.</title>
+      
+          <screen>
+	  <prompt>bash$</prompt> <command>rpm -ivh --force --nodeps &lt;RPM_PACKAGE_NAME&gt;</command>
+          </screen>
+        </figure>
+
+        <figure id="fig-deb-installation-force">
+	  <title>Forcing installation of Debian packages.</title>
+      
+          <screen>
+	  <prompt>bash$</prompt> <command>dpkg -i --force-depends &lt;DEB_PACKAGE_NAME&gt;</command>
+          </screen>
+        </figure>
+
+      </para>
+    </tip>
+
+
+
+    <para>
+       Under Windows, the entire &devel-product-name; system is
+       available in the form of a single .zip file. It must be
+       manually installed in
+       <filename>&devel-config-windows-prefix;</filename>. It requires
+       <ulink
+       url="http://www.activestate.com/Products/ActivePerl/">ActiveState
+       ActivePerl</ulink> installed in
+       <filename>&devel-config-windows-perl;</filename>, and a
+       temporary directory called
+       <filename>&devel-config-windows-temp-dir;</filename>.
+    </para>
+
+    <para>
+      Source code distributions are also available. <xref
+      linkend="fig-source-installation"> shows how the system can be
+      configured and installed from source. It is possible to choose a
+      different destination of the libraries and binaries of
+      &devel-product-name; both in UNIX and Windows systems at
+      configuration time. It is also possible to build the system
+      without documentation. If you are configuring from source code,
+      running <command>'./configure --help'</command> can provide more
+      information.
+
+      <figure id="fig-source-installation">
+	<title>Installation of the system from source.</title>
+      
+        <screen>
+	<prompt>bash$</prompt> <command>./configure</command>
+	<prompt>bash$</prompt> <command>make</command>
+	<prompt>bash$</prompt> <command>su</command>
+	<prompt>bash#</prompt> <command>make install-common</command>
+	<prompt>bash#</prompt> <command>make install-doc</command>
+	<prompt>bash#</prompt> <command>make install-tools</command>
+	<prompt>bash#</prompt> <command>make install-server</command>
+        </screen>
+      </figure>
+    </para>
+
+    <tip>
+      <para>
+        Installing all these packages will <emphasis
+        role="bold">NOT</emphasis> automatically integrate an SCM
+        repository with a bug-tracking system. It will only install
+        the basic software needed to do so.
+     </para>
+
+     <para>
+        A user must configure the <xref
+        linkend="installation-integration-daemon"
+        endterm="installation-integration-daemon-short"> and start it
+        as shown in <xref linkend="fig-start-daemon">.
+
+        Then, a user must run the <xref linkend="glue"
+        endterm="glue-installer-short"> to install the
+        &devel-product-name; integration in an SCM repository.
+      </para>
+
+	    <figure id="fig-start-daemon">
+	      <title>Integration daemon start.</title>
+                <blockquote>
+                  <para>
+                     Starting the Integration Daemon in UNIX systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>bash#</prompt> <command>&devel-sysconf-dir;/init.d/&devel-config-daemon-service-deployed-unix; start</command>
+                </screen>
+
+                <blockquote>
+                  <para>
+                     Starting the Integration Daemon in Windows systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>C:\></prompt> <command>cd &devel-config-windows-prefix;/etc/init.d</command>
+<prompt>&devel-config-windows-prefix;/etc/init.d></prompt> <command>&devel-config-daemon-service-deployed-windows;</command>
+                </screen>
+	    </figure>
+    </tip>
+
+    <tip>
+      <para>
+        When specifying paths in Windows, either in the glue
+        installer, the glue configuration file, or the integration
+        daemon, paths should have directories separated with a
+        <emphasis role="bold">forward (/) slash</emphasis>.
+      </para>
+    </tip>
+
+    <tip>
+      <para>
+        There are various dependencies on the packages provided. Both
+        dependencies on other packages, and on Perl modules. If they
+        are ignored, the <xref
+        linkend="installation-integration-daemon"
+        endterm="installation-integration-daemon-short"> and the <xref
+        linkend="tools" endterm="tools-short"> will detect the missing
+        dependency and refuse to execute.
+      </para>
+    </tip>
+
+  </section>
+
+
+
+  <section id="installation-documentation">
+    <title>
+      Documentation
+    </title>
+    
+    <para>
+      Installation of documentation, including this manual, requires
+      installing the package
+      <filename>&devel-product-name-lower;-doc</filename>.
+    </para>
+  </section>
+  
+
+  <section id="installation-common-libraries">
+    <title>
+      Common libraries
+    </title>
+
+    <para>
+      The common libraries require instaling the Perl module
+      <filename>Log::Log4perl</filename> for logging, as shown in
+      <xref linkend="fig-install-log-log4perl">.
+
+	    <figure id="fig-install-log-log4perl">
+	      <title>XML::Simple installation.</title>
+                <blockquote>
+                  <para>
+                     Installation in UNIX systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>bash$</prompt> <command>su</command>
+<prompt>bash#</prompt> <command>perl -MCPAN -e "install Log::Log4perl"</command>
+                </screen>
+
+                <blockquote>
+                  <para>
+                     Installation in Windows systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>C:\></prompt> <command>ppm</command>
+PPM - Programmer's Package Manager version 3.1.
+Copyright (c) 2001 ActiveState Corp. All Rights Reserved.
+ActiveState is a devision of Sophos.
+
+Entering interactive shell. Using Term::ReadLine::Stub as readline library.
+
+Type 'help' to get started.
+<prompt>ppm></prompt> <command>install Log-Log4perl</command>
+                </screen>
+	    </figure>
+    </para>
+
+  </section>
+
+
+
+  <section id="installation-integration-tools">
+    <title>
+      Integration Tools
+    </title>
+    
+    <para>
+      Installation of the <xref linkend="tools" endterm="tools-short">
+      requires installing the packages
+      <filename>&devel-product-name-lower;-common</filename> and
+      <filename>&devel-product-name-lower;-tools</filename>. It also
+      requires a diffing tool. For Windows, one such binary
+      (<filename>diff.exe</filename>) is available in <ulink
+      url="http://gnuwin32.sourceforge.net//">GnuWin32</ulink>.
+    </para>
+
+    <para>
+        Running the <xref linkend="vdd" endterm="vdd-short">
+	additionally requires installing the
+	<filename>xsltproc</filename>, and
+	<filename>docbook-utils</filename> packages. It is uncertain
+	where one could get these packages for Windows. An
+	<filename>xsltproc</filename> distribution for Windows seems
+	to be available from <ulink
+	url="http://www.zlatkovic.com/libxml.en.html">Igor Zlatkovic's
+	website</ulink>, but we have yet to locate a
+	<filename>docbook-utils</filename> package for Windows. <ulink
+	url="http://www.e-novative.info/software/ede.php">eDE</ulink>
+	seems to be usable under Windows, but he have yet to try
+	it. However, both <filename>xsltproc</filename> and
+	<filename>docbook-utils</filename> are provided by <ulink
+	url="http://www.cygwin.com/">Cygwin</ulink>.
+    </para>
+    
+    <para>
+      Running the <xref linkend="merger" endterm="merger-short">
+      requires instaling the Perl module
+      <filename>XML::Simple</filename> (for an
+      <filename>&devel-config-activity-get-bugs;</filename>), as shown
+      in <xref linkend="fig-install-xml-simple">.
+
+	    <figure id="fig-install-xml-simple">
+	      <title>XML::Simple installation.</title>
+                <blockquote>
+                  <para>
+                     Installation in UNIX systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>bash$</prompt> <command>su</command>
+<prompt>bash#</prompt> <command>perl -MCPAN -e "install XML::Simple"</command>
+                </screen>
+
+                <blockquote>
+                  <para>
+                     Installation in Windows systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>C:\></prompt> <command>ppm</command>
+PPM - Programmer's Package Manager version 3.1.
+Copyright (c) 2001 ActiveState Corp. All Rights Reserved.
+ActiveState is a devision of Sophos.
+
+Entering interactive shell. Using Term::ReadLine::Stub as readline library.
+
+Type 'help' to get started.
+<prompt>ppm></prompt> <command>install XML-Simple</command>
+                </screen>
+	    </figure>
+    </para>
+
+    <para>
+      Installation of the <xref linkend="web-reports"
+      endterm="web-reports-short"> requires configuring a webserver in
+      a way similar to the Apache configuration shown in <xref
+      linkend="fig-install-web-reports">. It also requires installing
+      the Perl module <filename>Template</filename>, as shown in <xref
+      linkend="fig-install-template">.
+
+      <figure id="fig-install-web-reports">
+	<title>Apache configuration for Web Reports.</title>
+        <programlisting>
+Include &devel-sysconf-dir;/&devel-product-name-lower;/apache.conf
+        </programlisting>
+      </figure>
+
+	    <figure id="fig-install-template">
+	      <title>Template installation.</title>
+                <blockquote>
+                  <para>
+                     Installation in UNIX systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>bash$</prompt> <command>su</command>
+<prompt>bash#</prompt> <command>perl -MCPAN -e "install Template"</command>
+                </screen>
+
+                <blockquote>
+                  <para>
+                     Installation in Windows systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>C:\></prompt> <command>ppm</command>
+PPM - Programmer's Package Manager version 3.1.
+Copyright (c) 2001 ActiveState Corp. All Rights Reserved.
+ActiveState is a devision of Sophos.
+
+Entering interactive shell. Using Term::ReadLine::Stub as readline library.
+
+Type 'help' to get started.
+<prompt>ppm></prompt> <command>install Template</command>
+                </screen>
+	    </figure>
+
+    </para>
+
+
+  </section>
+  
+
+
+  <section id="installation-integration-daemon">
+    <title>
+      Integration Daemon
+    </title>
+    <titleabbrev id="installation-integration-daemon-short">Integration Daemon</titleabbrev>
+    
+    <para>
+      Installation of the daemon requires installing the packages
+      <filename>&devel-product-name-lower;-common</filename> and
+      <filename>&devel-product-name-lower;-server</filename>. Additionally,
+      it requires installing the Perl modules
+      <filename>Mail::Sendmail</filename> (for policy <xref
+      linkend="additional-features-mail-notification"
+      endterm="additional-features-mail-notification-short">) and
+      <filename>XML::Simple</filename> (for an
+      <filename>&devel-config-activity-get-vdd;</filename> issued by
+      the <xref linkend="vdd" endterm="vdd-short">), as shown in <xref
+      linkend="fig-install-mail-sendmail">.  If an SCM to bug-tracking
+      username mapping is configured based on variable
+      <filename>mapping_ldap</filename>, as described in <xref
+      linkend="verification-checks-valid-username-mapping">, the Perl module
+      <filename>Net::LDAP</filename> must also be installed.
+
+	    <figure id="fig-install-mail-sendmail">
+	      <title>Mail::Sendmail, XML::Simple installation.</title>
+                <blockquote>
+                  <para>
+                     Installation in UNIX systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>bash$</prompt> <command>su</command>
+<prompt>bash#</prompt> <command>perl -MCPAN -e "install Mail::Sendmail"</command>
+<prompt>bash#</prompt> <command>perl -MCPAN -e "install XML::Simple"</command>
+                </screen>
+
+                <blockquote>
+                  <para>
+                     Installation in Windows systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>C:\></prompt> <command>ppm</command>
+PPM - Programmer's Package Manager version 3.1.
+Copyright (c) 2001 ActiveState Corp. All Rights Reserved.
+ActiveState is a devision of Sophos.
+
+Entering interactive shell. Using Term::ReadLine::Stub as readline library.
+
+Type 'help' to get started.
+<prompt>ppm></prompt> <command>install Mail-Sendmail</command>
+<prompt>ppm></prompt> <command>install XML-Simple</command>
+                </screen>
+	    </figure>
+
+    </para>
+    
+    <para>
+      The file
+      <filename>&devel-sysconf-dir;/&devel-product-name-lower;/daemon.conf</filename>
+      holds the configuration of the daemon.
+    </para>
+
+    <para>
+      The daemon can be started in different execution modes. These
+      are defined in the daemon configuration file using the
+      <filename>daemon_mode</filename> variable and are:
+    </para>
+
+    <itemizedlist spacing="compact">
+       <listitem>
+          <para>
+            <emphasis role="bold">Threaded</emphasis>. Multiple threads
+           are created to handle incoming connections. This was
+           observed to work well under Windows but cause a significant
+           slowdown under UNIX. For more information see <ulink
+           url="http://bugzilla.mkgnu.net/show_bug.cgi?id=264#c7">bug
+           264</ulink>.
+          <para>
+       </listitem>
+       <listitem>
+         <para>
+            <emphasis role="bold">Forked</emphasis>. Multiple processes
+          are created to handle incoming connections. This was
+          observed to work well under UNIX and most Windows
+          systems. The daemon unexpectedly dies during some
+          connections in Windows. For a while, it was believed that
+          this was due to an outdated ActiveState Perl or running a
+          version of the DBI &lt; 1.50, but there seems to be more to
+          the problem. For more information see <ulink
+          url="http://bugzilla.mkgnu.net/show_bug.cgi?id=597#c9">bug
+          597</ulink>, <ulink
+          url="http://bugzilla.mkgnu.net/show_bug.cgi?id=264#c20">bug
+          264</ulink>, and <ulink
+          url="http://bugzilla.mkgnu.net/show_bug.cgi?id=646#c7">bug
+          646</ulink>.
+
+         </para>
+       </listitem>
+       <listitem>
+         <para>
+            <emphasis role="bold">Automatically
+          detected</emphasis>. Automatically chooses between a
+          threaded or forked mode.
+         </para>
+       </listitem>
+    </itemizedlist>
+
+    
+    <para>
+      Integration with multiple bug-tracking systems can be
+      accomplished by starting multiple daemons listening at
+      different ports.
+    </para>
+
+
+    
+    <section id="installation-integration-daemon-bugzilla">
+      <title>Bugzilla</title>
+      
+      <para>
+	For reasons explained in <xref linkend="bugzilla">, the
+	integration daemon requires local presence of the source code
+	used to run a Bugzilla instance. It also requires access to
+	the database used to store Bugzilla's data. It is recommended
+	that the daemon is installed on the same machine Bugzilla
+	runs, but this is not required. If the daemon
+	<emphasis>is</emphasis> installed on the same machine Bugzilla
+	runs, &devel-product-name; will force the Bugzilla version
+	cache (which is a local file) to be regenerated when
+	<filename>&devel-config-activity-tag;</filename> integration
+	requests are processed.
+      </para>
+
+        <warning>
+          <para>
+            On Windows, DBI version 1.50 or greater is required, and
+            can be installed as shown in <xref
+            linkend="fig-install-mantis-dbi">. Earlier versions have
+            threading issues.
+          </para>
+        </warning>
+
+    </section>
+
+
+
+    <section id="installation-integration-daemon-mantis">
+      <title>Mantis</title>
+      
+      <para>
+        Integration with Mantis requires access to the database used
+	to store Mantis' data. At a minimum, it requires installing
+	the <filename>DBI</filename> Perl module, as shown in <xref
+	linkend="fig-install-mantis-dbi">.
+
+        <warning>
+          <para>
+            On Windows, DBI version 1.50 or greater is
+            required. Earlier versions have threading issues.
+          </para>
+        </warning>
+
+	    <figure id="fig-install-mantis-dbi">
+	      <title>DBI installation.</title>
+                <blockquote>
+                  <para>
+                     Installation in UNIX systems:
+                  </para>
+                </blockquote>
+        <screen>
+<prompt>bash$</prompt> <command>su</command>
+<prompt>bash#</prompt> <command>perl -MCPAN -e "install DBI"</command>
+        </screen>
+
+                <blockquote>
+                  <para>
+                     Installation in Windows systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>C:\></prompt> <command>ppm</command>
+PPM - Programmer's Package Manager version 3.1.
+Copyright (c) 2001 ActiveState Corp. All Rights Reserved.
+ActiveState is a devision of Sophos.
+
+Entering interactive shell. Using Term::ReadLine::Stub as readline library.
+
+Type 'help' to get started.
+<prompt>ppm></prompt> <command>install DBI</command>
+                </screen>
+
+	    </figure>
+
+
+	As explained in <xref linkend="mantis">, Mantis supports
+	installation with multiple database backends, and requires the
+	corresponding DBD Perl module to be installed.  For example,
+	if Mantis is installed with a MySQL database backend, the
+	<filename>DBD::mysql</filename> Perl module must also be
+	installed(<xref linkend="fig-install-mantis-dbd-mysql">) and
+	the <filename>database_vendor</filename> variable must be
+	configured as shown in <xref linkend="fig-database-vendor">.
+
+	    <figure id="fig-install-mantis-dbd-mysql">
+	      <title>DBD::mysql installation.</title>
+                <blockquote>
+                  <para>
+                     Installation in UNIX systems:
+                  </para>
+                </blockquote>
+        <screen>
+	<prompt>bash$</prompt> <command>su</command>
+	<prompt>bash#</prompt> <command>perl -MCPAN -e "install DBD::mysql"</command>
+        </screen>
+
+                <blockquote>
+                  <para>
+                     Installation in Windows systems:
+                  </para>
+                </blockquote>
+                <screen>
+<prompt>C:\></prompt> <command>ppm</command>
+PPM - Programmer's Package Manager version 3.1.
+Copyright (c) 2001 ActiveState Corp. All Rights Reserved.
+ActiveState is a devision of Sophos.
+
+Entering interactive shell. Using Term::ReadLine::Stub as readline library.
+
+Type 'help' to get started.
+<prompt>ppm></prompt> <command>install DBD-mysql</command>
+                </screen>
+	    </figure>
+
+
+      </para>
+
+    </section>
+
+
+
+    <section id="installation-integration-daemon-requesttracker">
+      <title>Request Tracker</title>
+      
+      <para>
+	For reasons explained in <xref linkend="requesttracker">, the
+	integration daemon requires local presence of the source code
+	used to run a RequestTracker instance. It has not yet been
+	investigated if it also requires local access to the database
+	used to store RequestTracker's data.
+      </para>
+
+    </section>
+
+
+
+    </section>
+    
+  </section>
+
+  <section id="upgrading">
+    <title>Upgrading</title>
+
+    <para>
+      Upgrading to newer versions of &devel-product-name; is
+      possible. It first requires understanding the issues involved in
+      running non-matching versions of the Glue and Daemon.
+    </para>
+
+    <section id="upgrading-issues">
+      <title>
+        Issues
+      </title>
+
+      <para>
+        The communication protocol between the Glue and the Daemon is
+        upgraded and is backwards-incompatible when the minor version
+        number of &devel-product-name; increases. For example,
+        &devel-product-name-caps;_RELEASE_0-1-x and
+        &devel-product-name-caps;_RELEASE_0-2-x are not compatible,
+        but &devel-product-name-caps;_RELEASE_0-2-1 and
+        &devel-product-name-caps;_RELEASE_0-2-8 are.
+
+        <tip>
+          <para>
+            During SCM events activity, if the Glue detects an
+            incompatible version of the Daemon, it will refuse to
+            continue.
+          </para>
+        </tip>
+
+        <warning>
+          <para>
+            Running incompatible versions of the Glue and Daemon can
+            result in developers being locked out of an SCM
+            repository.
+          </para>
+
+          <para>
+            For example, when using CVS it could result in the
+            integration failing to commit any changes, leading into a
+            dead-end. This would prohibit disabling the Glue in its
+            entirety, and require manually editing the repository
+            locally using RCS commands. Certainly, an SCM repository
+            can always be brought back to a working state by a
+            competent administrator.
+          </para>
+
+        </warning>
+
+      </para>
+
+      <para>
+        Since version &devel-product-name-caps;_RELEASE_0-3-3, the
+        Glue Installer is able to safely upgrade the integration to
+        newer versions. It first completely disables all SCM hooks
+        installed by &devel-product-name;, upgrades the Glue code, and
+        then enables the hooks. During the last step, the Daemon does
+        not need to be contacted, since the hooks are not yet active.
+      </para>
+
+
+      <note>
+        <para>
+          If you understand the implementation internals of
+          &devel-product-name; you will be able to determine whether a
+          new feature is implemented in the Glue or the Daemon, and
+          upgrade only the Glue or only the Daemon.
+        </para>
+
+        <para>
+           One example where you might not want to upgrade both the
+           Glue and Daemon is if you have a lot of SCM repositories
+           and you need a new feature that has been implemented only
+           on the Daemon. Upgrading only the daemon is a lot easier
+           than first upgrading all repositories. Another example
+           would be upgrading only the Glue of a single SCM repository
+           if you need a new &devel-product-name; feature only in that
+           repository.
+         </para>
+
+      </note>
+
+       <para>
+          <tip>
+             <para>
+               If in doubt, upgrade everything.
+             </para>
+          </tip>
+       </para>
+
+    </section>
+
+
+    <section id="upgrading-steps">
+      <title>
+        Steps
+      </title>
+
+      <para>
+        Upgrading to a newer version of &devel-product-name; requires
+        first upgrading the Glue and then the Daemon, by carrying out
+        in order the following steps.
+      </para>
+
+      <section id="upgrading-steps-glue">
+        <title>
+          Glue Upgrading
+        </title>
+
+        <itemizedlist>
+	  <listitem>
+	    <para>
+              <emphasis>Upgrading &devel-product-name;</emphasis>:
+	      Install newer versions of the packages
+	      <filename>&devel-product-name-lower;-common</filename>,
+	      <filename>&devel-product-name-lower;-doc</filename>, and
+	      <filename>&devel-product-name-lower;-tools</filename>,
+	      as shown in <xref linkend="installation-system">.
+              <tip>
+                <para>
+                  If one of the SCM repositories that will be upgraded
+	          is hosted by Subversion, then these packages must
+	          also be installed on the machine hosting the
+	          Subversion repository. As explained in <xref
+	          linkend="glue-svn">, local repository access will be
+	          required in the next step to upgrade the integration
+	          glue.
+	        </para>
+              </tip>
+	    </para>
+	  </listitem>
+	  <listitem>
+	    <para>
+	      <emphasis>Upgrading all SCM repositories</emphasis>: Run
+	      the <xref linkend="glue" endterm="glue-installer-short">
+	      once per SCM repository with respective arguments to
+	      upgrade to a newer version of the Glue, as described in
+	      <xref linkend="glue">.
+              <warning>
+                <para>
+                  The Glue Installer will display changes between the
+                  existing and updated glue configuration file in diff
+                  format. Manually merge-in any updates to the glue
+                  configuration file as needed. Failure to do so could
+                  result in the Glue failing to work.
+                </para>
+              </warning>
+	    </para>
+	  </listitem>
+        </itemizedlist>
+
+      </section>
+
+
+
+      <section id="upgrading-steps-daemon">
+        <title>
+          Daemon Upgrading
+        </title>
+
+
+        <itemizedlist>
+	<listitem>
+	  <para>
+	    <emphasis>Upgrading the Integration Daemon</emphasis>:
+	    After <emphasis role="bold">all</emphasis> SCM
+	    repositories have been upgraded, upgrade the Integration
+	    Daemon by installing a newer version of the packages
+	    <filename>&devel-product-name-lower;-common</filename> and
+	    <filename>&devel-product-name-lower;-server</filename>, as
+	    shown in <xref linkend="installation-integration-daemon">.
+
+            <warning>
+              <para>
+                Ommiting to upgrade an SCM repository before upgrading
+                the Daemon could result in developers being locked out
+                of the repository.
+              </para>
+
+              <para>
+                 Should that happen, it's possible to downgrade to the
+                 previous version of the Daemon, upgrade the
+                 repository as described in <xref
+                 linkend="upgrading-steps-glue">, and upgrade the
+                 Daemon again. During this process, all other upgraded
+                 SCM repositories will be unable to accept activity,
+                 since the Glue will detect an incompatible Daemon and
+                 refuse to continue.
+              </para>
+
+            </warning>
+
+	  </para>
+	</listitem>
+      </itemizedlist>
+
+      </section>
+
+    </section>
+
+  </section>
+
+</chapter>

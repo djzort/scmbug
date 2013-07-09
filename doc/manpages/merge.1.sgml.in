@@ -1,0 +1,168 @@
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook V4.2//EN">
+
+<refentry id="install-glue">
+	<refmeta>
+		<refentrytitle>@DEVEL_PRODUCT_NAME_LOWER@_merge.pl</refentrytitle>
+		<manvolnum>1</manvolnum>
+		<refmiscinfo class="date">@DEVEL_ISODATE@</refmiscinfo>
+	</refmeta>
+
+
+	<refnamediv>
+		<refname>@DEVEL_PRODUCT_NAME_LOWER@_merge.pl</refname>
+		<refpurpose>Merges the work done on a list of bugs against an existing branch</refpurpose>
+	</refnamediv>
+
+
+	<refsynopsisdiv>
+		<cmdsynopsis>
+			<command>@DEVEL_PRODUCT_NAME_LOWER@_merge.pl</command>
+				<arg choice="req">--scm=SCM_NAME</arg>
+				<arg choice="req">--repository=REPOSITORY_PATH</arg>
+				<arg choice="req">--product=PRODUCT_NAME</arg>
+				<arg choice="req">--commit-bugs=COMMIT_BUG_LIST</arg>
+				<arg choice="req">--merge-bugs=MERGE_BUG_LIST</arg>
+				<arg choice="req">--base-label=BASE_LABEL_NAME</arg>
+				<arg choice="opt">--target-label=TARGET_LABEL_NAME</arg>
+		</cmdsynopsis>
+	</refsynopsisdiv>
+
+
+	<refsect1>
+		<title>DESCRIPTION</title>
+		<para>
+			Merges the work done on a list of bugs against an existing branch.
+		</para>
+	</refsect1>
+	
+	<refsect1>
+		<title>USAGE</title>
+		<para>
+			Run with all required parameters.
+		</para>
+	</refsect1>
+	
+	<refsect1>
+		<title>OPTIONS</title>
+		<para>
+			The parameters are:
+		</para>
+		<variablelist>
+			<varlistentry>
+				<term>--scm=SCM_NAME</term>
+				<listitem>
+					<para>The name of the SCM system. Valid options are:</para>
+					<itemizedlist>
+						<listitem>
+							<para>
+								CVS
+							</para>
+						</listitem>
+						<listitem>
+							<para>
+								Subversion
+							</para>
+						</listitem>
+					</itemizedlist>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--repository=REPOSITORY_PATH</term>
+				<listitem>
+					<para>The path to the SCM repository.</para>
+					<para>When using for CVS, this should be set to the contents of the CVSROOT variable.</para>
+					<para>When using for Subversion, this should be prefixed with file://.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--product=PRODUCT_NAME</term>
+				<listitem>
+					<para>The name used in the bug-tracking system to track defects for the product developed under the SCM system.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--merge-bugs=MERGE_BUG_LIST</term>
+				<listitem>
+					<para>A comma-separated list of bug ids whose activity will be merged.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--commit-bugs=COMMIT_BUG_LIST</term>
+				<listitem>
+					<para>A comma-separated list of bug ids against which the merge will be recorded in the bugtracker.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--base-label=BASE_LABEL_NAME</term>
+				<listitem>
+					<para>The base branch name.</para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
+				<term>--target-label=TARGET_LABEL_NAME</term>
+				<listitem>
+					<para>The target branch name. If this option is not supplied then the changes defined by the --bugs option will be applied directly in the label defined by --base-label.</para>
+				</listitem>
+			</varlistentry>
+		</variablelist>
+	</refsect1>
+
+	
+	<refsect1>
+		<title>EXAMPLES</title>
+		<example>
+			<title>Merging bug changes in a codebase based on an existing tag and applying a new tag in Subversion </title>
+			<para>
+			@DEVEL_PRODUCT_NAME_LOWER@_merge.pl --scm=Subversion --product=TestProduct --repository=/tmp/testrepository --base-label=tags/SOMEPRODUCT_RELEASE_1-3-0 --new-branch=tags/SOMEPRODUCT_RELEASE_1-3-1 --merge-bugs=545,591 --commit-bugs=771
+			</para>
+		</example>
+		<example>
+			<title>Merging bug changes directly in an existing branch in Subversion </title>
+			<para>
+			@DEVEL_PRODUCT_NAME_LOWER@_merge.pl --scm=Subversion --product=TestProduct --repository=/tmp/testrepository --base-label=branches/SOMEPRODUCT_RELEASE_1-x-0-series --merge-bugs=708 --commit-bugs=771
+			</para>
+		</example>
+	</refsect1>
+
+	<refsect1>
+		<title>VERSION</title>
+		<para>
+			@DEVEL_PRODUCT_VERSION@
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>BUGS</title>
+		<para>
+		  This tool needs improvement. The list of bugs
+                  is available at the project's <ulink
+url="@DEVEL_PRODUCT_BUGTRACKER@">bug-tracking system</ulink>, under
+                  the 'Tools' component.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>REPORTING_BUGS</title>
+		<para>
+			Please report bugs at the project's <ulink url="@DEVEL_PRODUCT_BUGTRACKER@">bug-tracking system</ulink>.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>SEE ALSO</title>
+		<para>
+			The <ulink url="@datadir@/doc/@DEVEL_PRODUCT_NAME_LOWER@-doc/manual">@DEVEL_PRODUCT_NAME@ manual</ulink>, provided by the package <filename>@DEVEL_PRODUCT_NAME_LOWER@-doc</filename>.
+		</para>
+	</refsect1>
+
+
+	<refsect1>
+		<title>AUTHOR</title>
+		<para>
+			The <ulink url="@DEVEL_PRODUCT_WEBPAGE@">@DEVEL_PRODUCT_NAME@ Team</ulink>.
+		</para>
+	</refsect1>
+</refentry>

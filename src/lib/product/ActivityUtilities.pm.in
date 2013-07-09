@@ -1,0 +1,300 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+package @DEVEL_PRODUCT_NAME@::ActivityUtilities;
+
+use strict;
+use XML::Simple;
+
+use @DEVEL_PRODUCT_NAME@::Connection;
+use @DEVEL_PRODUCT_NAME@::Common;
+
+
+#
+# Constructor
+#
+sub new {
+    my ($type, $hostname, $port) = @_;
+    
+    my $self = {};
+
+    # Setup logging as soon as possible
+    #
+    use Log::Log4perl qw(:easy);
+    # Setup a really basic logger
+    Log::Log4perl::easy_init( $ERROR );
+    $logger = get_logger( "ActivityUtilities" );
+    @DEVEL_PRODUCT_NAME@::Common::set_logger( $logger );
+
+    my $connection = @DEVEL_PRODUCT_NAME@::Connection->new( ) ;
+    $connection->port( $port );
+    $connection->location( $hostname );
+
+    bless $self, $type;
+
+    $self->connection( $connection );
+
+    return $self;
+}
+
+
+#
+# Reads the configuration file provided for the glue
+#
+sub connection {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ connection } = $data;
+    } else {
+	return $self->{ connection };
+    }
+}
+
+
+#
+# Retrieve affected files in XML format from the Daemon
+#
+sub get_affected_files_XML {
+    my $self = shift;
+    my ( $bugids ) = ( @_ );
+
+    my $new_activity = @DEVEL_PRODUCT_NAME@::Activity->new();
+    $new_activity->{ name } = $ACTIVITY_GET_BUGS;
+    $new_activity->{ user } = "activityutilities";
+    $new_activity->{ product_name } = "";
+    $new_activity->{ repository } =  "";
+    $new_activity->{ log_message } = "";
+
+    # Comma seperated list of bugs
+    $new_activity->{ bugs } = $bugids;
+    # Remove any spaces
+    $new_activity->{ bugs } =~ s/ //g;
+    
+    # Specify which fields we want returned
+    $new_activity->{ must_retrieve }->{ summary } = 0;
+    $new_activity->{ must_retrieve }->{ status } = 0;
+    $new_activity->{ must_retrieve }->{ owners } = 0;
+    $new_activity->{ must_retrieve }->{ severity } = 0;
+    $new_activity->{ must_retrieve }->{ resolution } = 0;
+    $new_activity->{ must_retrieve }->{ priority } = 0;
+    $new_activity->{ must_retrieve }->{ comments_data } = 1;
+
+    # Process this tagging activity as well
+    my $affected_files = $self->connection()->process_activity( $new_activity, undef, 1 );
+
+    return $affected_files;
+}
+
+#
+# Convert the XML format to a nice Perl structured format
+# grouping all the files together
+#
+sub convert_affected_files_from_xml {
+    my $self = shift;
+    my $affected_files_xml = shift;
+    
+    my $xml = new XML::Simple( NoAttr=>1,keyattr=>[] );
+    my $raw = $xml->XMLin( $affected_files_xml );
+    
+    my @changelist = ();
+    
+    foreach my $bug_section ( sort keys %{ $raw->{ mergelist } } ) {
+        if( $bug_section =~ /^bug_/ ) {
+	    my @comments_sections = ();
+
+            # The XML will load into a HASH if just one element and an
+            # ARRAY if more than one element
+            if (ref($raw->{ mergelist }->{ $bug_section }->{ comments }) eq "HASH") {
+                push( @comments_sections, $raw->{ mergelist }->{ $bug_section }->{ comments } );
+            }
+            else
+            {
+                @comments_sections = @{ $raw->{ mergelist }->{ $bug_section }->{ comments } };
+            }
+
+	    foreach my $comments_section ( @comments_sections ) {
+                my @affected_files = ();
+
+                # The XML will load into a HASH if just one element and an
+                # ARRAY if more than one element
+		if( defined($comments_section->{ data }->{ affected_files }) ) {
+                    if (ref($comments_section->{ data }->{ affected_files }) eq "HASH") {
+                        push( @affected_files, $comments_section->{ data }->{ affected_files } );
+                    }
+                    else
+                    {
+                        @affected_files = @{ $comments_section->{ data }->{ affected_files } };
+                    }
+                }
+        
+                foreach my $aff_file ( @affected_files ) {
+                    my $changeset;
+                    $changeset->{ file } = $aff_file->{ name };
+                    $changeset->{ new } = $aff_file->{ new_version };
+                    $changeset->{ old } = $aff_file->{ old_version };
+            
+		    # Set the old version for new files to 0
+                    if( $changeset->{ old } eq "NONE" ) {
+                        $changeset->{ old } = 0;
+                    }
+                    if( $changeset->{ new } eq "NONE" ) {
+                        $changeset->{ new } = 0;
+                    }
+                    push @changelist, $changeset;
+                }
+            }
+        }
+    }
+    
+    return \@changelist;
+}
+
+#
+# Prints the data to the screen
+#
+sub printData {
+    my $self = shift;
+    my $changeList = shift;
+
+    foreach my $changeset ( @{ $changeList } ) {
+    	print $changeset->{ file } . "\t" . $changeset->{ old } . " -> " . $changeset->{ new } . "\n";
+    }
+}
+
+
+#
+# Retrieves the affected files for a given comma seperated list of bugids
+#
+# Return an array of structures of the format
+#	->{ file } = filename
+#	->{ old }  = the old revision number
+#	->{ new }  = the new revision number
+#
+sub get_affected_files {
+    my $self = shift;
+    my ( $bugids ) = ( @_ );
+
+    # Retrieve the affected files in XML format from the daemon
+    my $affected_files_xml = $self->get_affected_files_XML( $bugids );
+    
+    if( ! defined($affected_files_xml) ) {
+    	return "";
+    }
+    
+    my $changeList = $self->convert_affected_files_from_xml( $affected_files_xml );    
+
+    return $changeList;
+}
+
+
+#
+# Retrieve bug summaries in XML format from the Daemon
+#
+sub get_bug_details_XML {
+    my $self = shift;
+    my ( $bugids ) = ( @_ );
+
+    my $new_activity = @DEVEL_PRODUCT_NAME@::Activity->new();
+    $new_activity->{ name } = $ACTIVITY_GET_BUGS;
+    $new_activity->{ user } = "activityutilities";
+    $new_activity->{ product_name } = "";
+    $new_activity->{ repository } =  "";
+    $new_activity->{ log_message } = "";
+
+    # Comma seperated list of bugs
+    $new_activity->{ bugs } = $bugids;
+    # Remove any spaces
+    $new_activity->{ bugs } =~ s/ //g;
+    
+    # Specify which fields we want returned
+    $new_activity->{ must_retrieve }->{ summary } = 1;
+    $new_activity->{ must_retrieve }->{ status } = 1;
+    $new_activity->{ must_retrieve }->{ owners } = 1;
+    $new_activity->{ must_retrieve }->{ severity } = 0;
+    $new_activity->{ must_retrieve }->{ resolution } = 0;
+    $new_activity->{ must_retrieve }->{ priority } = 0;
+    $new_activity->{ must_retrieve }->{ comments_data } = 0;
+
+    # Process this tagging activity as well
+    my $affected_files = $self->connection()->process_activity( $new_activity, undef, 1 );
+
+    return $affected_files;
+}
+
+#
+# Convert the XML format to a nice Perl structured format
+# grouping all the files together
+#
+sub convert_bug_details_from_xml {
+    my $self = shift;
+    my $bug_details_xml = shift;
+    
+    my $xml = new XML::Simple( NoAttr=>1,keyattr=>[] );
+    my $raw = $xml->XMLin( $bug_details_xml );
+
+    my @bug_summaries = ();   
+    
+    foreach my $bug_section ( sort keys %{ $raw->{ mergelist } } ) {
+        if( $bug_section =~ /^bug_/ ) {
+            foreach my $bug_detail ( $raw->{ mergelist }->{ $bug_section } ) {
+        	my $bug_summary;
+        	$bug_summary->{ bugid }    = $bug_detail->{ bug_id };
+        	$bug_summary->{ severity } = $bug_detail->{ severity };
+        	$bug_summary->{ status }   = $bug_detail->{ status };
+        	# the XML parser will convert 0's to undef, so switch it back
+        	if( !defined $bug_detail->{ active } ) {
+        	    $bug_detail->{ active } = 0;
+        	}
+        	$bug_summary->{ active }   = $bug_detail->{ active };
+        	$bug_summary->{ summary }  = $bug_detail->{ summary };
+
+                # The XML will load into a HASH if just one element
+                # and into an ARRAY if more than one element
+                if (ref($bug_detail->{ owners }) eq "ARRAY") {
+                    $bug_summary->{ owners } = $bug_detail->{ owners };
+                }
+                else
+                {
+		    my @owners = ();
+		    if( defined($bug_detail->{ owners }) ) {
+	                push( @owners, $bug_detail->{ owners } );
+	            }
+                    $bug_summary->{ owners } = \@owners;
+                }
+
+                push @bug_summaries, $bug_summary;
+            }
+        }
+    }
+    
+    return \@bug_summaries;
+}
+
+
+sub get_details_for_bug {
+    my $self = shift;
+    my ( $bugids ) = ( @_ );
+    
+    # Retrieve the affected files in XML format from the daemon
+    my $bug_summaries_xml = $self->get_bug_details_XML( $bugids );
+    my $bug_summaries = $self->convert_bug_details_from_xml( $bug_summaries_xml );    
+
+    return $bug_summaries;
+}
+
+
+
+1;

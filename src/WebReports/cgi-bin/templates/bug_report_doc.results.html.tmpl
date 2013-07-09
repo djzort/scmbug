@@ -1,0 +1,29 @@
+[% SET title = 'Impact Document' %]
+[% INCLUDE templates/header.html.tmpl %]
+
+
+[% INCLUDE templates/bug_report_doc.results.content.html.tmpl %]
+
+
+[% IF error_msg != "" %]
+    <HR><BLOCKQUOTE><FONT color=red><B>ERROR:<BR><BLOCKQUOTE>
+    [% error_msg %]
+    </B></FONT></BLOCKQUOTE></BLOCKQUOTE>
+[% END %]
+
+
+<HR>
+<form action="[% final_update_page %]" method=post>
+<input type=hidden name=stage size=0 value="[% impdoc.stages%]">
+<input type=hidden name=version size=0 value="[% impdoc.versions %]">
+<input type=hidden name=platforms size=0 value="[% OS_List %]">
+<input type=hidden name=bug_list size=0 value="[% buglist %]">
+<input type=hidden name=proj_code size=0 value="[% impdoc.project_num %]">
+<input type=hidden name=force size=0 value="N">
+
+<CENTER><input type=submit value="Update Fault Tracker"></CENTER>
+</form>
+
+
+
+[% INCLUDE templates/footer.html.tmpl %]

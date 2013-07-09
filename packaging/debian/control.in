@@ -1,0 +1,30 @@
+Source: @DEVEL_PRODUCT_NAME_LOWER@
+Section: devel
+Priority: optional
+Maintainer: @DEVEL_PRODUCT_MAINTAINER@
+Build-Depends: debhelper (>> 3.0.0)
+Build-Depends-Indep: docbook-dsssl, docbook-utils, transfig, imagemagick
+Standards-Version: 3.8.0
+
+Package: @DEVEL_PRODUCT_NAME_LOWER@-server
+Architecture: all
+Depends: @DEVEL_PRODUCT_NAME_LOWER@-common (= @DEVEL_PRODUCT_PACKAGE_VERSION@), libxml-simple-perl, libmail-sendmail-perl, libnet-ldap-perl
+Description: @DEVEL_PRODUCT_PACKAGE_SERVER_DESCRIPTION_SHORT@
+ @DEVEL_PRODUCT_PACKAGE_SERVER_DESCRIPTION_LONG@
+
+Package: @DEVEL_PRODUCT_NAME_LOWER@-tools
+Architecture: all
+Depends: @DEVEL_PRODUCT_NAME_LOWER@-common (= @DEVEL_PRODUCT_PACKAGE_VERSION@), xsltproc, docbook-utils, cvs | subversion
+Description: @DEVEL_PRODUCT_PACKAGE_TOOLS_DESCRIPTION_SHORT@
+ @DEVEL_PRODUCT_PACKAGE_TOOLS_DESCRIPTION_LONG@
+
+Package: @DEVEL_PRODUCT_NAME_LOWER@-common
+Architecture: all
+Depends: liblog-log4perl-perl
+Description: @DEVEL_PRODUCT_PACKAGE_COMMON_DESCRIPTION_SHORT@
+ @DEVEL_PRODUCT_PACKAGE_COMMON_DESCRIPTION_LONG@
+
+Package: @DEVEL_PRODUCT_NAME_LOWER@-doc
+Architecture: all
+Description: @DEVEL_PRODUCT_PACKAGE_DOC_DESCRIPTION_SHORT@
+ @DEVEL_PRODUCT_PACKAGE_DOC_DESCRIPTION_LONG@

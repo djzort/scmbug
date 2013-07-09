@@ -1,0 +1,49 @@
+@echo off
+REM POST-COMMIT HOOK
+REM
+REM The post-commit hook is invoked after a commit.  Subversion runs
+REM this hook by invoking a program (script, executable, binary, etc.)
+REM named 'post-commit' (for which this file is a template) with the 
+REM following ordered arguments:
+REM
+REM   [1] REPOS-PATH   (the path to this repository)
+REM   [2] REV          (the number of the revision just committed)
+REM
+REM The default working directory for the invocation is undefined, so
+REM the program should set one explicitly if it cares.
+REM
+REM Because the commit has already completed and cannot be undone,
+REM the exit code of the hook program is ignored.  The hook program
+REM can use the 'svnlook' utility to help it examine the
+REM newly-committed tree.
+REM
+REM On a Unix system, the normal procedure is to have 'post-commit'
+REM invoke other programs to do the real work, though it may do the
+REM work itself too.
+REM
+REM Note that 'post-commit' must be executable by the user(s) who will
+REM invoke it (typically the user httpd runs as), and that user must
+REM have filesystem-level permission to access the repository.
+REM
+REM On a Windows system, you should name the hook program
+REM 'post-commit.bat' or 'post-commit.exe',
+REM but the basic idea is the same.
+REM 
+REM Here is an example hook script, for a Unix /bin/sh interpreter:
+
+set REPOS=%1
+set REV=%2
+
+
+REM @DEVEL_PRODUCT_NAME@_STANZA_START
+REM
+REM
+REM Call the @DEVEL_PRODUCT_NAME@ integration glue
+"@DEVEL_CONFIG_PERL_BINARY@" -I %REPOS%/hooks/lib/@DEVEL_PRODUCT_NAME_LOWER@ %REPOS%/hooks/bin/@DEVEL_PRODUCT_NAME_LOWER@_activity.pl %REPOS%/hooks/etc/@DEVEL_PRODUCT_NAME_LOWER@/glue.conf @DEVEL_CONFIG_ACTIVITY_COMMIT@ %REPOS% %REV% >&2
+
+REM Do not define label @DEVEL_PRODUCT_NAME_LOWER@_script_failed. This will result in the batch
+REM file to fail without terminating the command interpreter
+if NOT %ERRORLEVEL% == 0 goto @DEVEL_PRODUCT_NAME_LOWER@_script_failed 2>nul
+REM
+REM
+REM @DEVEL_PRODUCT_NAME@_STANZA_STOP

@@ -1,0 +1,558 @@
+#
+# Test the integration using a Subversion repository
+#
+set timeout -1
+
+
+
+set test "Remove repository"
+spawn ./remove_repository.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Init repository"
+spawn ./init_repository.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Checkout the repository"
+spawn ./checkout_repository.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Add tag with an invalid naming convention that will be renamed later"
+spawn ./add_tag_invalid_name_renamed_later.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Add tag with an invalid naming convention that will be deleted later"
+spawn ./add_tag_invalid_name_deleted_later.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Install Glue supplying a wrong daemon ip"
+spawn ./install_glue_wrong_ip.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Install Glue"
+spawn ./install_glue.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Add trunk/tags/branches directories"
+spawn ./add_directories_convention.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file"
+spawn ./commit_file.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file (update) and also change its svn properties"
+spawn ./commit_file_properties.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Change status: resolved fixed"
+spawn ./status_resolved_fixed.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Change status: reopened (invalid)"
+spawn ./status_reopened_invalid.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Delete a file"
+spawn ./delete_file.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file with a bug id prefixed with \#"
+spawn ./commit_file_pound.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file against a nonexistent bug id"
+spawn ./commit_file_nonexistent.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file against a bug id in parenthesis"
+spawn ./commit_file_parenthesis.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file against a non-numeric bug id"
+spawn ./commit_file_nonnumeric.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file against a bug id with more than one digit"
+spawn ./commit_file_more_than_one_digit.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+# For some reason, if the backend cannot handle the quotes, the test
+# still succeeds. Need manual inspection here.
+set test "Commit a file with single quotes in the comment"
+spawn ./commit_file_quotes_single.sh
+expect {
+    -re "PASSED" { unresolved $test }
+    default      { fail $test }
+}
+
+# For some reason, if the backend cannot handle the quotes, the test
+# still succeeds. Need manual inspection here.
+set test "Commit a file with double quotes in the comment"
+spawn ./commit_file_quotes_double.sh
+expect {
+    -re "PASSED" { unresolved $test }
+    default      { fail $test }
+}
+
+set test "presence_of_bug_ids policy is required, no bug id, and commit is rejected"
+spawn ./commit_file_fail.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file against multiple bugs, comma separated"
+spawn ./commit_file_multiple_bugs.sh comma
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file against multiple bugs, whitespace separated"
+spawn ./commit_file_multiple_bugs.sh whitespace
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file against multiple bugs, whitespace separated prefixed with \#"
+spawn ./commit_file_multiple_bugs.sh whitespace_and_pound
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file with no log message"
+spawn ./commit_file_nolog.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file with an invalid bug owner"
+spawn ./commit_file_invalid_owner.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file that does not meet the minimum log message size"
+spawn ./commit_file_invalid_message_size.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file with an invalid product name"
+spawn ./commit_file_invalid_product.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file against a closed bug"
+spawn ./commit_file_closed_bug.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+#
+# From this point on, the open_bug_state policy is disabled
+#
+set test "open_bug_state policy is disabled"
+spawn ./set_openbugstate_disabled.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "open_bug_state policy is disabled and commit a file"
+spawn ./openbugstate_disabled_commit_file.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Change status: resolved worksforme"
+spawn ./status_resolved_worksforme.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Change status: resolved duplicate XXX"
+spawn ./status_resolved_duplicate.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Change status: reopened"
+spawn ./status_reopened.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Change status: assigned (reopened -> new)"
+spawn ./status_assigned.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Change status: assigned (new -> assigned)"
+spawn ./status_assigned2.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+#
+# From this point on, the open_bug_state policy is enabled
+#
+set test "open_bug_state policy is enabled"
+spawn ./set_openbugstate_enabled.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Add tag with a valid naming convention"
+spawn ./add_tag.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Delete tag"
+spawn ./delete_tag.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Rename invalid tag"
+spawn ./rename_invalid_tag.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Delete invalid tag"
+spawn ./delete_invalid_tag.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Add tag with an invalid naming convention"
+spawn ./add_tag_invalid_name.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+#
+# From this point on, the product name is invalid but valid_product_name is off
+#
+set test "Set an invalid product name"
+spawn ./set_productname_invalid.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Add tag with an invalid product name"
+spawn ./add_tag_invalid_product.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+#
+# From this point on, the product name is valid and valid_product_name is on
+#
+set test "Set a valid product name"
+spawn ./set_productname_valid.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Add more logic in a hook"
+spawn ./set_hook_more_logic.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Re-install glue, without overwritting the existing hooks"
+spawn ./install_glue_no_hook_overwrite.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Remove the extra logic from the hook"
+spawn ./set_hook_less_logic.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+
+#
+# From this point on, the presence_of_bug_ids policy is set to optional
+#
+set test "presence_of_bug_ids policy set to optional"
+spawn ./set_optional.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "presence_of_bug_ids policy is optional, no bug id, and commit is accepted"
+spawn ./commit_file_optional.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "presence_of_bug_ids policy is optional, no bug id, no bug id token, and commit is accepted"
+spawn ./commit_file_optional2.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Create a VDD"
+spawn ./create_vdd.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+#
+# From this point on, the presence_of_bug_ids policy is set to none
+#
+set test "presence_of_bug_ids policy set to none"
+spawn ./set_none.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "presence_of_bug_ids policy is none, no bug id, commit is accepted"
+spawn ./commit_file_none.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "presence_of_bug_ids policy is none, no bug id, no bug id token, and commit is accepted"
+spawn ./commit_file_none2.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+
+#
+# From this point on, the presence_of_bug_ids policy is set to required
+#
+set test "presence_of_bug_ids policy set to required"
+spawn ./set_required.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Create a branch"
+spawn ./create_branch.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit in a branch"
+spawn ./commit_branch.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Add a long prefix directory for the product_name_definition policy auto tests"
+spawn ./add_long_prefix_directory.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Add a short prefix directory for the product_name_definition policy auto tests"
+spawn ./add_short_prefix_directory.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Add a long prefix directory for the valid_product_name policy auto tests, after trunk/branches/tags"
+spawn ./add_long_prefix_directory_after.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Add a short prefix directory for the valid_product_name policy auto tests, after trunk/branches/tags"
+spawn ./add_short_prefix_directory_after.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+#
+# From this point on, the valid_product_name policy is disabled
+#
+set test "valid_product_name policy is disabled"
+spawn ./set_validproductname_disabled.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Commit a file with an invalid product name, when valid_product_name is disabled"
+spawn ./commit_file_validproductname_disabled.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+#
+# From this point on, the valid_product_name policy is enabled
+#
+set test "valid_product_name policy is enabled"
+spawn ./set_validproductname_enabled.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+#
+# From this point on, the product_name_definition policy is set to auto
+#
+set test "product_name_definition policy set to auto"
+spawn ./set_auto.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Autodetect product name and commit a file"
+spawn ./auto_commit_file.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Autodetect product name and commit a file, 2"
+spawn ./auto_commit_file2.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Autodetect product name and add tag with a valid naming convention"
+spawn ./auto_add_tag.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+#
+# From this point on, the product_name_definition policy is set to auto
+# again, but will test detecting product names after
+# trunk/branches/tags.
+#
+set test "product_name_definition policy set to auto, after trunk/branches/tags"
+spawn ./set_auto_after.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Autodetect product name and commit a file, after trunk/branches/tags"
+spawn ./auto_commit_file_after.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Autodetect product name and commit a file 2, after trunk/branches/tags"
+spawn ./auto_commit_file_after2.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}
+
+set test "Autodetect product name and add tag with a valid naming convention, after trunk/branches/tags"
+spawn ./auto_add_tag_after.sh
+expect {
+    -re "PASSED" { pass $test }
+    default      { fail $test }
+}

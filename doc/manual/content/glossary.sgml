@@ -1,0 +1,635 @@
+<glossary id="glossary">
+
+  <glossdiv id="glossary-a">
+    <title>A</title>
+
+    <glossentry id="glossary-aegis">
+      <glossterm>Aegis</glossterm>
+      <glossdef>
+	<para>
+            <ulink
+	    url="http://freshmeat.net/projects/aegis/"><citetitle>Aegis</citetitle></ulink>
+	    is a transaction-based software configuration management
+	    system. It provides a framework within which a team of
+	    developers may work on many changes to a program
+	    independently, and Aegis coordinates integrating these
+	    changes back into the master source of the program, with
+	    as little disruption as possible. Aegis supports
+	    geographically distributed development.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-anthill">
+      <glossterm>AntHill</glossterm>
+      <glossdef>
+	<para>
+            <ulink
+	    url="http://freshmeat.net/projects/anthill/"><citetitle>Anthill</citetitle></ulink>
+	    is a bug tracking database system written in PHP. It
+	    provides the standard bug tracking features such as: user
+	    logins, summary reports, submitting bugs, querying bugs,
+	    various severity and status levels. It also provides some
+	    unique features, such as a template system, and
+	    multi-lingual support.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-arch">
+      <glossterm>Arch</glossterm>
+      <glossdef>
+	<para>
+            <ulink
+	    url="http://regexps.srparish.net/www/#Gnu-arch"><citetitle>Arch</citetitle></ulink>
+	    is a modern replacement for CVS, specifically designed for
+	    the distributed development needs of open source
+	    projects. It has uniquely good support for development on
+	    branches (especially good merging tools), distributed
+	    repositories (every developer can have branches in their
+	    own repository), changeset-oriented project management
+	    (arch commits changes to multiple files at once), and, of
+	    course, file and directory renaming.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+  <glossdiv id="glossary-b">
+    <title>B</title>
+
+
+    <glossentry id="glossary-bazzar-ng">
+      <glossterm>Bazaar-NG</glossterm>
+      <glossdef>
+	<para>
+	    <ulink
+	    url="http://www.bazaar-ng.org/"><citetitle>Bazaar-NG</citetitle></ulink>
+	    is a powerful, friendly, and scalable open source
+	    distributed version control system. It attempts to combine
+	    the best features from all free version control systems
+	    into a single coherent and simple system.
+	</para>
+      </glossdef>
+    </glossentry>
+
+
+    <glossentry id="glossary-bitkeeper">
+      <glossterm>Bitkeeper</glossterm>
+      <glossdef>
+	<para>
+	    <ulink
+	    url="http://freshmeat.net/projects/bitkeeper/"><citetitle>Bitkeeper</citetitle></ulink>
+	    is a fully distributed source management system,
+	    supporting globally distributed development, disconnected
+	    operation, change sets, and many active branches. It is
+	    used by some major projects such as the Linux kernel,
+	    MySQL, Xaraya, and Xen.
+	</para>
+      </glossdef>
+    </glossentry>
+
+
+    <glossentry id="glossary-bosco">
+      <glossterm>Bosco</glossterm>
+      <glossdef>
+	<para>
+            <ulink
+	    url="http://freshmeat.net/projects/bosco/"><citetitle>Bosco</citetitle></ulink>
+	    is a rewrite of the popular Bugzilla defect tracking
+	    software in PHP. It is database-independent, and aims to
+	    be easy to maintain and modify. It also has an API to
+	    allow external applications to work with its data.
+	</para>
+      </glossdef>
+    </glossentry>
+
+
+    <glossentry id="glossary-bugzilla">
+      <glossterm>Bugzilla</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	    url="http://www.bugzilla.org"><citetitle>Bugzilla</citetitle></ulink>
+	    is an enterprise-class piece of software that tracks
+	    millions of bugs and issues for hundreds of organizations
+	    around the world.
+	</para>
+      </glossdef>
+    </glossentry>
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-c">
+    <title>C</title>
+
+    <glossentry id="glossary-clearcase">
+      <glossterm>ClearCase</glossterm>      
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://www-306.ibm.com/software/awdtools/clearcase/"><citetitle>ClearCase</citetitle></ulink>
+	  is a version control system.
+	</para>
+      </glossdef>
+    </glossentry>
+
+
+
+    <glossentry id="glossary-cvs">
+      <glossterm>CVS</glossterm>      
+      <glossdef>
+	<para>
+	  <ulink url="http://www.cvshome.org/">
+	    <citetitle>CVS</citetitle></ulink> is the Concurrent
+	  Versions System, the dominant, open-source,
+	  network-transparent version control system. It allows you to
+	  keep old versions of files (usually source code), keep a log
+	  of who, when, and why changes occurred, etc., like RCS or
+	  SCCS. Unlike the simpler systems, CVS does not just operate
+	  on one file at a time or one directory at a time, but
+	  operates on hierarchical collections of directories
+	  consisting of version controlled files. CVS helps to manage
+	  releases and to control the concurrent editing of source
+	  files among multiple authors. CVS allows triggers to
+	  enable/log/control various operations and works well over a
+	  wide area network.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-cvs2cl">
+      <glossterm>cvs2cl</glossterm>
+      <glossdef>
+	<para>
+	  A <ulink
+          url="http://www.red-bean.com/cvs2cl/"><citetitle>tool</citetitle></ulink>
+          that autogenerates a <filename>ChangeLog</filename> document
+          from CVS.
+	</para>
+      </glossdef>
+    </glossentry>
+    
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-d">
+    <title>D</title>
+
+    <glossentry id="glossary-debbugs">
+      <glossterm>debbugs</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://www.benham.net/debbugs/"><citetitle>debbugs</citetitle></ulink>
+	  is the Debian bug-tracking system.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-doublechocolatte">
+      <glossterm>Double Choco Latte</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://freshmeat.net/projects/doublechocolatte/"><citetitle>Double
+	  Choco Latte</citetitle></ulink> is a system for tracking
+	  bugs, changes, enhancements, and requests for software. The
+	  system is suited for multiple products and multiple accounts
+	  (clients). It is also known to handle call center activity,
+	  although this will evolve into a separate module.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-e">
+    <title>E</title>
+
+    <glossentry id="glossary-eventum">
+      <glossterm>Eventum</glossterm>
+      <glossdef>
+
+	<para>
+	  <ulink
+	  url="http://dev.mysql.com/downloads/other/eventum/"><citetitle>Eventum</citetitle></ulink>
+	  is a user-friendly and flexible issue tracking system that
+	  can be used by a support department to track incoming
+	  technical support requests, or by a software development
+	  team to quickly organize tasks and bugs. Eventum is used by
+	  the MySQL AB Technical Support team.
+	</para>
+
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-g">
+    <title>G</title>
+
+    <glossentry id="glossary-gforge">
+      <glossterm>GForge</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://www.gforge.org"><citetitle>GForge</citetitle></ulink>
+	  is a Web-based collaborative development environment. It's
+	  based on a fork of the 2.61 SourceForge code, which used to
+	  be available via anonymous CVS from VA Software, but has
+	  been extensively rewritten and enhanced.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-git">
+      <glossterm>GIT</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://freshmeat.net/projects/git"><citetitle>GIT</citetitle></ulink>
+	  is a "directory content manager" that was designed to handle
+	  massive projects such as the Linux kernel with speed and
+	  efficiency. It falls in the category of distributed source
+	  code management tools and is similar to GNU Arch, Monotone,
+	  and BitKeeper. Every GIT working directory is a
+	  fully-fledged repository with full revision tracking
+	  capabilities and is not dependent on network access to a
+	  central server.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-gnats">
+      <glossterm>GNATS</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://freshmeat.net/projects/gnats/"><citetitle>GNATS</citetitle></ulink>
+	  is the GNU bug-tracking system, a portable incident/bug
+	  report/help request-tracking system which runs on UNIX-like
+	  operating systems. It easily handles thousands of problem
+	  reports, has been in wide use since the early 90s, and can
+	  do most of its operations over e-mail. Several front end
+	  interfaces exist, including command line, emacs, and Tcl/Tk
+	  interfaces. There are also a number of Web (CGI) interfaces
+	  written in scripting languages like Perl and Python.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-h">
+    <title>H</title>
+
+    <glossentry id="glossary-helis">
+      <glossterm>Helis</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://freshmeat.net/projects/helis/"><citetitle>Helis</citetitle></ulink>
+	  includes the main features of most bug tracking systems. It
+	  is helpful for managing required evolutions, lacks,
+	  proposals, and bugs. Authenticated users can reach the
+	  database through a Web browser (Mozilla, Netscape, or
+	  IE). Distinct features include the ability to manage
+	  releases (e.g. return resolved bugs between release 1.04 and
+	  1.00), precise access rights, and managing validation
+	  reports.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-i">
+    <title>I</title>
+
+    <glossentry id="glossary-itracker">
+      <glossterm>ITracker</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://freshmeat.net/projects/itracker/"><citetitle>ITracker</citetitle></ulink>
+	  is a Java J2EE issue/bug tracking system designed to support
+	  multiple projects with independent user bases. It supports
+	  features such as full i18n support, multiple versions and
+	  project components, detailed histories, issue searching,
+	  file attachments, dynamic reports with charts, configurable
+	  field values, customizable project level fields, pluggable
+	  authentication, a built-in scheduler, and email
+	  notifications.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-k">
+    <title>K</title>
+
+    <glossentry id="glossary-katie">
+      <glossterm>Katie</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://freshmeat.net/projects/katie/"><citetitle>Katie</citetitle></ulink>
+	  is a revision control system, somewhat like a cross between
+	  CVS and NFS, that was inspired by Rational ClearCase. The
+	  three most interesting features are that the repository is
+	  mounted as a filesystem (rather than being copied to a local
+	  workspace), that all versions of all files (even deleted
+	  ones) are accessible through this filesystem (so the "katie
+	  diff" command is a convenience rather than a necessity like
+	  "cvs diff"), and that directories are versioned (just like
+	  files are). It is functional enough to be self-hosting, but
+	  there is much work still to go before it will be a generally
+	  useful tool. Features that are implemented already include
+	  VOBs, elements, branches, dynamic views, view-extended
+	  pathnames, config specs (including auto-make-branch rules),
+	  labels, hard links, and symbolic links.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-m">
+    <title>M</title>
+
+    <glossentry id="glossary-mantis">
+      <glossterm>Mantis</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://freshmeat.net/projects/mantis/"><citetitle>Mantis</citetitle></ulink>
+	  is a PHP/MySQL-based bug-tracking system. It is extremely
+	  easy to deploy and customize, and features one of the
+	  simplest and cleanest interfaces of any tracking tool
+	  available. It supports multiple projects and email
+	  notification, and is localized for over 18 languages.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-mercurial">
+      <glossterm>Mercurial</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://freshmeat.net/projects/mercurial/"><citetitle>Mercurial</citetitle></ulink>
+	  is a fast, lightweight Source Control Management system
+	  designed for the efficient handling of very large
+	  distributed projects.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-monotone">
+      <glossterm>Monotone</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://freshmeat.net/projects/monotone/"><citetitle>Monotone</citetitle></ulink>
+	  is a distributed version control system with a flat peer
+	  model, cryptographic version naming, meta-data certificates,
+	  decentralized authority, and overlapping branches. It works
+	  out of a transactional version database stored in a regular
+	  file, and uses a custom network protocol for efficient
+	  database synchronization.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-o">
+    <title>O</title>
+
+    <glossentry id="glossary-opencm">
+      <glossterm>OpenCM</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	   url="http://freshmeat.net/projects/opencm/"><citetitle>OpenCM</citetitle></ulink>
+	   is designed as a secure, high-integrity replacement for
+	   CVS. It includes features such as file renaming, branch and
+	   file level access control, cryptographic authentication,
+	   and end-to-end integrity controls.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+  <glossdiv id="glossary-p">
+    <title>P</title>
+
+    <glossentry id="glossary-perforce">
+      <glossterm>Perforce</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://freshmeat.net/projects/perforce/"><citetitle>Perforce</citetitle></ulink>
+	  is a software configuration management system that is fast,
+	  robust, runs on over 50 platforms, and scales to over 1000
+	  users on a single repository. It supports atomic submits and
+	  works well over wide area networks, including the Internet.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-phpbugtracker">
+      <glossterm>phpBugTracker</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://freshmeat.net/projects/phpbt/"><citetitle>phpBugTracker</citetitle></ulink>
+	  is an attempt to copy the functionality of Bugzilla while
+	  providing a codebase that is independent of the database and
+	  presentation layers.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-r">
+    <title>R</title>
+
+    <glossentry id="glossary-requesttracker">
+      <glossterm>Request Tracker</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://www.bestpractical.com/rt/"><citetitle>Request Tracker</citetitle></ulink>
+      is an enterprise-grade ticketing system which enables
+      a group of people to intelligently and efficiently manage
+      tasks, issues, and requests submitted by a community of users.
+      Written in object-oriented Perl, RT is a high-level, portable,
+      platform independent system that eases collaboration within
+      organizations and makes it easy for them to take care of their
+      customers.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-roundup">
+      <glossterm>Roundup</glossterm>
+      <glossdef>
+	<para>
+	  <ulink url="http://roundup.sourceforge.net/">
+	    <citetitle>Roundup</citetitle></ulink> is a simple-to-use
+	    and -install issue-tracking system with command-line, web
+	    and e-mail interfaces. It is based on the winning design
+	    from Ka-Ping Yee in the Software Carpentry "Track" design
+	    competition.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-s">
+    <title>S</title>
+
+
+    <glossentry id="glossary-scarab">
+      <glossterm>Scarab</glossterm>
+      <glossdef>
+	<para>
+	  <ulink url="http://freshmeat.net/projects/scarab/">
+	    <citetitle>Scarab</citetitle></ulink> is an issue tracking
+	    system that features data entry, queries, reports,
+	    notifications to interested parties, collaborative
+	    accumulation of comments, dependency tracking, and
+	    collaborative prioritization (voting). It uses Java
+	    Servlet technology to enhance speed, scalability,
+	    maintainability, and ease of installation. It contains XML
+	    import/export support, allowing easy migration from other
+	    systems (like Bugzilla). The modular code design eases the
+	    modification of features. It is fully customizable via a
+	    set of administrative Web pages. The look and feel of the
+	    UI can easily be modified, and Scarab can easily be
+	    integrated into larger systems.  .
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-svn">
+      <glossterm>Subversion</glossterm>
+      <glossdef>
+	<para>
+	  <ulink url="http://subversion.tigris.org/">
+	    <citetitle>Subversion</citetitle></ulink> is a compelling
+	  replacement for CVS.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-t">
+    <title>T</title>
+
+
+    <glossentry id="glossary-testdirector">
+      <glossterm>Test Director</glossterm>
+      <glossdef>
+	<para>
+	  <ulink
+	  url="http://www.mercury.com/us/products/quality-center/"><citetitle>Test
+	  Director</citetitle></ulink> is a test and fault tracking
+	  system sold by Mercury.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-trac">
+      <glossterm>Trac</glossterm>
+      <glossdef>
+	<para>
+	  <ulink url="http://freshmeat.net/projects/trac/">
+	    <citetitle>Trac</citetitle></ulink> is a minimalistic but
+	    highly useful issue tracker and software project
+	    environment based around an integrated Wiki
+	    engine. Features include an interface to Subversion
+	    (source revision control), a bug/issue tracking database,
+	    and convenient report facilities.
+	</para>
+      </glossdef>
+    </glossentry>
+
+    <glossentry id="glossary-tutos">
+      <glossterm>TUTOS</glossterm>
+      <glossdef>
+	<para>
+	  <ulink url="http://freshmeat.net/projects/tutos/">
+	    <citetitle>TUTOS</citetitle></ulink> (The Ultimate Team
+	    Organization Software) is a groupware, ERP (Enterprise
+	    Resource Planing), CRM (Customer Relationship Management),
+	    and PLM (Project Lifecycle Management) suite that helps
+	    small to medium teams manage various things in one
+	    place. Its features include personal and group calendars,
+	    an address book, product and project management, bug
+	    tracking, installation management, a task list, notes,
+	    files, mailboxes, and useful links between all of the
+	    above.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+  <glossdiv id="glossary-w">
+    <title>W</title>
+
+
+    <glossentry id="glossary-workbench">
+      <glossterm>Workbench</glossterm>
+
+      <glossdef>
+	<para>
+	  <ulink url="http://freshmeat.net/projects/workbench/">
+	  <citetitle>Workbench</citetitle></ulink> is a powerful
+	  PHP/MySQL bug-tracking application. It supports multiple
+	  projects, full change history, custom reporting, and many
+	  other useful tools.
+	</para>
+      </glossdef>
+    </glossentry>
+
+  </glossdiv>
+
+
+
+</glossary>

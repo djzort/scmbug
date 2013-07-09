@@ -1,0 +1,666 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Daemon::Integration;
+
+
+use strict;
+use Data::Dumper;
+use @DEVEL_PRODUCT_NAME@::Daemon::Request;
+use @DEVEL_PRODUCT_NAME@::Common;
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my ( $bugtracker, $request ) = ( @_ );
+    my $self = {};
+
+    bless $self, $type;
+    if ( !defined( $bugtracker ) ) {
+	print STDERR "No bugtracker set in Integration->new()\n";
+	exit -1;
+    }
+    $self->bugtracker( $bugtracker );
+
+    if ( !defined( $request ) ) {
+	print STDERR "No request set in Integration->new()\n";
+	exit -1;
+    }
+    $self->request( $request );
+
+    return $self;
+}
+
+
+
+sub bugtracker {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ bugtracker } = $data;
+    } else {
+	return $self->{ bugtracker };
+    }
+}
+
+
+
+sub request {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ request } = $data;
+    } else {
+	return $self->{ request };
+    }
+}
+
+
+
+#
+# Processes a commit activity
+#
+sub process_activity_commit {
+    my $self = shift;
+    my $retval;
+
+    log_daemon_debug( $self->request(), "In process_activity_commit.\n" );
+    $self->bugtracker()->integration_connect_database();
+
+    # Add integration comments in the bug-tracker
+    $retval = $self->add_comment_to_all( $self->request()->{ translated_username },
+					 $self->request()->{ log_message },
+					 $self->request()->{ ids } );
+
+    if ( $retval != 0 ) {
+	# There was a problem adding integration comments. Thus we
+	# won't attempt to change the bug resolution at all.
+        log_daemon_debug( $self->request(), "There was a problem adding integration comments. Will not attempt to change the bug resolution at all.\n" );
+    } else {
+	# Change the bug resolution
+        log_daemon_debug( $self->request(), "Will change the bug resolution.\n" );
+	$retval = $self->change_resolution_in_all ( $self->request()->{ translated_username } );
+    }
+
+    $self->bugtracker()->integration_disconnect_database();
+
+    return $retval;
+}
+
+
+
+#
+# Processes a verify activity
+#
+sub process_activity_verify {
+    my $self = shift;
+    my $ret_message = "";
+
+    log_daemon_debug( $self->request(), "Entering process_activity_verify.\n" );
+    $self->bugtracker()->integration_connect_database();
+
+    # Perform various verification tests for all these bugs
+    foreach my $id ( @{ $self->request()->{ ids } } ) {
+	my $bugid = $id;
+	my $who = $self->request()->{ translated_username };
+	my $ret;
+	my $bug_state;
+
+        log_daemon_debug( $self->request(), "Will perform verification on bug $id.\n" );
+	# Apply policy valid_product_name
+	if ( $self->request()->{ policies }->{ valid_product_name }->{ enabled } ) {
+	    my $bug_product_name;
+
+            log_daemon_debug( $self->request(), "valid_product_name is enabled.\n" );
+	    $bug_product_name = $self->bugtracker()->integration_get_product_name( $bugid );
+	    if ( $bug_product_name ne $self->request()->{ product_name } ) {
+		
+		# This bug does not belong to the list of products
+		# specified by the SCM system. Report an error accordingly.
+		$ret_message = "Bug '$bugid' does not belong to the product '" . $self->request()->{ product_name } . "'";
+		$ret_message .= ". It belongs to product '" . $bug_product_name . "'.\n";
+		$self->request()->add_result(1, $ret_message );
+                log_daemon_info( $self->request(), $ret_message );
+	    }
+	}
+
+	# Apply policy valid_bug_owner
+	if ( $self->request()->{ policies }->{ valid_bug_owner }->{ enabled } ) {
+	    # Verify that a bug is owned by the user submitting the
+	    # request
+            log_daemon_debug( $self->request(), "valid_product_owner is enabled.\n" );
+	    my @bug_owners = $self->bugtracker()->integration_get_bug_owners( $bugid );
+            my ( $matched_owner, $case_sensitive_username_verification_who ) = $self->verify_bug_ownership( $who, $self->request()->{ policies }->{ case_sensitive_username_verification }, @bug_owners );
+
+            if( $matched_owner == 0 ) {
+                my $owners_string = join( ',', @bug_owners );
+                $ret_message = "Bug '$bugid' is not assigned to '$case_sensitive_username_verification_who'. It is assigned to '$owners_string'.\n";
+                $self->request()->add_result(1, $ret_message);
+                log_daemon_info( $self->request(), $ret_message );
+            }
+	}
+
+	# Apply policy open_bug_state
+	if ( $self->request()->{ policies }->{ open_bug_state }->{ enabled } ) {
+	    # Verify that the bug against which the activity is issued
+	    # is in an open bug state
+            log_daemon_debug( $self->request(), "open_bug_state is enabled.\n" );
+	    ($ret, $bug_state) = $self->bugtracker()->integration_bug_in_active_state( $bugid );
+	    if ( $ret == 0) {
+		$ret_message = "Bug '$bugid' is in the '$bug_state' state, instead of the " . $self->bugtracker()->integration_active_states_list() . ".\n";
+		$self->request()->add_result(1, $ret_message);
+                log_daemon_info( $self->request(), $ret_message );
+	    }
+	}
+
+	# Check if the bug is locked by the bug-tracker. This is
+	# required because the bug-tracker may acquire a write lock on
+	# given activities (e.g. backups)
+        my $lock_available = $self->bugtracker()->integration_bug_lock_available( $id );
+
+	if( $lock_available == 0 ) {
+	    $ret_message = "Bug '$id' is currently locked.\n";
+	    $self->request()->add_result(1, $ret_message);
+            log_daemon_info( $self->request(), $ret_message );
+	}
+
+    }
+
+
+
+    #
+    # Apply policy resolution_template
+    #
+    if ( $self->request()->{ policies }->{ resolution_template }->{ enabled } ) {
+        log_daemon_debug( $self->request(), "resolution_template is enabled.\n" );
+
+	foreach my $resolution_id ( sort keys %{ $self->request()->{ resolution_ids } } ) {
+	    my $who = $self->request()->{ translated_username };
+            
+            log_daemon_debug( $self->request(), "Will perform verification on bug id '$resolution_id' for resolution_template.\n" );
+	    # Verify that the bugs are owned by the user changing the
+	    # resolution status
+	    if ( $self->request()->{ policies }->{ resolution_template }->{ resolution_valid_product_name } ) {
+		my $bug_product_name;
+
+                log_daemon_debug( $self->request(), "resolution_valid_product_name is on.\n" );
+		$bug_product_name = $self->bugtracker()->integration_get_product_name( $resolution_id );
+		if ( $bug_product_name ne $self->request()->{ product_name } ) {
+		    
+		    # This bug does not belong to the list of products
+		    # specified by the SCM system. Report an error accordingly.
+		    $ret_message = "Bug '$resolution_id' used for bug resolution does not belong to the product '" . $self->request()->{ product_name } . "'";
+		    $ret_message .= ". It belongs to product '" . $bug_product_name . "'.\n";
+		    $self->request()->add_result(1, $ret_message );
+                    log_daemon_info( $self->request(), $ret_message );
+		}
+	    }
+
+	    # Verify that the bugs are owned by the user changing the
+	    # resolution status
+	    if ( $self->request()->{ policies }->{ resolution_template }->{ resolution_valid_bug_owner } ) {
+                log_daemon_debug( $self->request(), "resolution_valid_bug_owner is on.\n" );
+		my @bug_owners = $self->bugtracker()->integration_get_bug_owners( $resolution_id );
+                my ( $matched_owner, $case_sensitive_username_verification_who ) = $self->verify_bug_ownership( $who, $self->request()->{ policies }->{ case_sensitive_username_verification }, @bug_owners );
+                if( $matched_owner == 0 ) {
+                    my $owners_string = join( ',', @bug_owners );
+                    $ret_message = "Bug '$resolution_id' used for bug resolution is not assigned to '$case_sensitive_username_verification_who'. It is assigned to '$owners_string'.\n";
+                    $self->request()->add_result(1, $ret_message);
+                    log_daemon_info( $self->request(), $ret_message );
+                }
+	    }
+
+	    # Verify that the resolution status change is valid
+	    my ( $resolution_change_retval, $current_resolution_state ) = $self->bugtracker()->integration_bug_resolution_change_is_valid( $resolution_id, $self->request()->{ resolution_ids }->{ $resolution_id }->{ status }, $self->request()->{ resolution_ids }->{ $resolution_id }->{ resolution }, $self->request()->{ policies }->{ resolution_template }->{ resolution_status_case_sensitive_verification } );
+	    if ( $resolution_change_retval == 1 ) {
+		$ret_message = "Resolving bug '$resolution_id' from state '$current_resolution_state' to state '" . $self->request()->{ resolution_ids }->{ $resolution_id }->{ status } . "' would violate the workflow of the bug-tracker. Instead, the resolution could be changed to the " . $self->bugtracker()->integration_valid_resolution_states_list( $current_resolution_state ) . ".\n";
+		$self->request()->add_result(1, $ret_message);
+                log_daemon_info( $self->request(), $ret_message );
+	    } elsif ( $resolution_change_retval == 2 ) {
+		$ret_message = "Invalid resolution '" . $self->request()->{ resolution_ids }->{ $resolution_id }->{ resolution } . "' when resolving bug '$resolution_id' from state '$current_resolution_state' to state '" . $self->request()->{ resolution_ids }->{ $resolution_id }->{ status } . "'. Instead, a valid resolution could be the " . $self->bugtracker()->integration_valid_resolutions_list( $self->request()->{ resolution_ids }->{ $resolution_id }->{ status }, $self->request()->{ policies }->{ resolution_template }->{ resolution_status_case_sensitive_verification } ) . ".\n";
+		$self->request()->add_result(1, $ret_message);
+                log_daemon_info( $self->request(), $ret_message );
+	    }
+	
+	    # Check if the bug is locked by the bug-tracker. This is
+	    # required because the bug-tracker may acquire a write lock on
+	    # given activities (e.g. backups)
+	    my $lock_available = $self->bugtracker()->integration_bug_lock_available( $resolution_id );
+
+	    if( $lock_available == 0 ) {
+		$ret_message = "Bug '$resolution_id' is currently locked.\n";
+		$self->request()->add_result(1, $ret_message);
+                log_daemon_info( $self->request(), $ret_message );
+	    }
+	}
+    }
+
+    $self->bugtracker()->integration_disconnect_database();
+}
+
+
+#
+# Processes a tagging activity. Assumes only one product name was
+# specified
+#
+# RETURNS:
+# - 0 if the tag already exists.
+# - 1 otherwise
+sub process_activity_tag {
+    my $self = shift;
+    my $ret_message;
+
+    log_daemon_debug( $self->request(), "Entering process_activity_tag.\n" );
+    $self->bugtracker()->integration_connect_database();
+
+    if ( $self->request()->{ type }->{ tag }->{ operation } eq $TAG_OPERATION_ADD ) {
+        log_daemon_debug( $self->request(), "This is a tag operation '" . $TAG_OPERATION_ADD . "'.\n" );
+	# Add the tag if it's not already there
+        my $ret = $self->bugtracker()->integration_tag_exists( $self->request()->{ product_name },
+                                                               $self->request()->{ type }->{ tag }->{ name } );
+	if ( $ret == 0) {
+            log_daemon_debug( $self->request(), "The tag '" . $self->request()->{ type }->{ tag }->{ name } . "' does not exist for product '" . $self->request()->{ product_name } . "'. Will add it.\n" );
+	    # This tag does not exist already for this product. Add it
+	    $ret = $self->bugtracker()->integration_add_tag( $self->request()->{ product_name },
+							     $self->request()->{ type }->{ tag }->{ name },
+							     $self->request()->{ original_log_message },
+							     $self->request()->{ translated_username } );
+	    
+            # Apply policy valid_product_name
+            if ( $self->request()->{ policies }->{ valid_product_name }->{ enabled } ) {
+                log_daemon_debug( $self->request(), "valid_product_name is enabled.\n" );
+                if ( $ret == 1 ) {
+                    $ret_message = "Tag '" . $self->request()->{ type }->{ tag }->{ name } . 
+                        "' could not be added on product '" . $self->request()->{ product_name } . "' because no product with this name exists.\n";
+                    $self->request()->add_result( 1, $ret_message );
+                    log_daemon_info( $self->request(), $ret_message );
+                }
+            } else {
+                # This product name does not exist and the
+                # product_name should not be verified to be valid,
+                # hence we will not raise an error.
+                log_daemon_debug( $self->request(), "The product '" . $self->request()->{ product_name } . "' does not exist and should not be verified to be valid.\n" );
+            }
+	} elsif ( $ret == 1 ) {
+            # The tag exists.
+            #
+	    # An SCM system mistakenly issued multiple tag activities
+	    # (e.g. CVS). Do not add the tag again.
+            log_daemon_debug( $self->request(), "The tag '" . $self->request()->{ type }->{ tag }->{ name } . "' exists for product '" . $self->request()->{ product_name } . "'. Will not it again.\n" );
+	    $self->bugtracker()->integration_disconnect_database();
+	    return 0;
+	} elsif ( $ret == 2 ) {
+            # The product name does not exist
+
+            log_daemon_debug( $self->request(), "The product '" . $self->request()->{ product_name } . "' does not exist.\n" );
+
+            # Apply policy valid_product_name
+            if ( $self->request()->{ policies }->{ valid_product_name }->{ enabled } ) {
+                log_daemon_debug( $self->request(), "valid_product_name is enabled.\n" );
+                $ret_message = "Tag '" . $self->request()->{ type }->{ tag }->{ name } . 
+                    "' could not be added on product '" . $self->request()->{ product_name } . "' because no product with this name exists.\n";
+                $self->request()->add_result( 1, $ret_message );
+                log_daemon_info( $self->request(), $ret_message );
+            } else {
+                # This product name does not exist and the
+                # product_name should not be verified to be valid,
+                # hence we will not raise an error.
+                log_daemon_debug( $self->request(), "The product '" . $self->request()->{ product_name } . "' does not exist and should not be verified to be valid.\n" );
+            }
+	}
+    } elsif ( $self->request()->{ type }->{ tag }->{ operation } eq $TAG_OPERATION_DELETE ) {
+	# Delete the tag
+
+        # We should be checking if the tag exists, and failing if it
+        # doesn't. But an SCM system might have mistakenly issued
+        # multiple tag activities (e.g. CVS). Do not report an error
+        # the second time the tag is requested to be deleted again.
+        log_daemon_debug( $self->request(), "This is a tag operation '" . $TAG_OPERATION_DELETE . "'.\n" );
+
+	my $ret;
+	$ret = $self->bugtracker()->integration_delete_tag( $self->request()->{ product_name },
+							    $self->request()->{ type }->{ tag }->{ name } );
+	
+	if ( $ret == 1) {
+            # Apply policy valid_product_name
+            if ( $self->request()->{ policies }->{ valid_product_name }->{ enabled } ) {
+                log_daemon_debug( $self->request(), "valid_product_name is enabled.\n" );
+	        $ret_message = "Tag '" . $self->request()->{ type }->{ tag }->{ name } . 
+		    "' could not be deleted from product '" . $self->request()->{ product_name } . "' because no product with this name exists.\n";
+	        $self->request()->add_result( 1, $ret_message );
+                log_daemon_info( $self->request(), $ret_message );
+            } else {
+                # This product name does not exist and the
+                # product_name should not be verified to be valid,
+                # hence we will not raise an error.
+                log_daemon_debug( $self->request(), "The product '" . $self->request()->{ product_name } . "' does not exist and should not be verified to be valid.\n" );
+            }
+	}
+    } elsif ( $self->request()->{ type }->{ tag }->{ operation } eq $TAG_OPERATION_MOVE ) {
+	# Do nothing
+
+        log_daemon_debug( $self->request(), "This is a tag operation '" . $TAG_OPERATION_MOVE . "'. Will do nothing.\n" );
+    }
+
+    $self->bugtracker()->integration_disconnect_database();
+
+    return 1;
+}
+
+
+
+#
+# Processes a VDD Query. Assumes only one product name was
+# specified
+#
+sub process_activity_get_vdd {
+    my $self = shift;
+    my $vdd;
+
+    log_daemon_debug( $self->request(), "Entering process_activity_get_vdd.\n" );
+
+    $self->bugtracker()->integration_connect_database();
+    $vdd = $self->bugtracker()->integration_get_vdd( $self->request()->{ product_name },
+						     $self->request()->{ type }->{ get_vdd }->{ from_version },
+						     $self->request()->{ type }->{ get_vdd }->{ to_version },
+						     $self->request()->{ type }->{ get_vdd }->{ from_label_date },
+						     $self->request()->{ type }->{ get_vdd }->{ to_label_date } );
+    $self->bugtracker()->integration_disconnect_database();
+
+    return $vdd;
+}
+
+
+
+#
+# Processes a VDD Query. Assumes only one product name was
+# specified
+#
+sub process_activity_get_bugs {
+    my $self = shift;
+    my $mergelist;
+    my $ret_val;
+    my $ret_message;
+
+    log_daemon_debug( $self->request(), "Entering process_activity_get_bugs.\n" );
+
+    $self->bugtracker()->integration_connect_database();
+    ($mergelist, $ret_val, $ret_message) = $self->bugtracker()->integration_get_bugs( $self->request()->{ product_name },
+										      $self->request()->{ ids },
+										      $self->request()->{ must_retrieve } );
+    $self->bugtracker()->integration_disconnect_database();
+
+
+    if ($ret_val == 1) {
+	$self->request()->add_result( 1, $ret_message );
+        log_daemon_info( $self->request(), $ret_message );
+    }
+
+    return $mergelist;
+}
+
+
+
+# Adds a comment from a user to a list of bugs
+#
+# RETURNS:
+# - 0 on success
+# - 1 if an empty list of bug ids was supplied
+# - 2 The comment could not be added
+sub add_comment_to_all {
+    my $self = shift;
+    my ( $username, $comment, $bugs_list ) = ( @_ );
+    my $appended = 0;
+    my $comment_addition_retval = 0;
+    my $comment_addition_retval_string = "";
+
+    log_daemon_debug( $self->request(), "Entering add_comment_to_all.\n" );
+
+    # For each bug id, append a comment to the bug
+    foreach my $id ( @{ $bugs_list } ) {
+        log_daemon_debug( $self->request(), "User '$username' will append to bug id '$id' the comment '$comment'.\n" );
+	my ( $this_comment_addition_retval, $this_comment_addition_retval_string ) = $self->bugtracker()->integration_add_comment( $id, $username, $comment );
+        if ($this_comment_addition_retval == 1) {
+            $comment_addition_retval = $this_comment_addition_retval;
+            $comment_addition_retval_string .= $this_comment_addition_retval_string;
+        }
+	$appended = 1;
+    }
+
+    if ( $comment_addition_retval == 1 ) {
+	# Adding the comment failed in the bugtracker backend, most
+	# likely due to a bug in the bugtracker
+	$self->request()->add_result( 1, $comment_addition_retval_string );
+        log_daemon_info( $self->request(), $comment_addition_retval_string );
+	return 2;
+    } else {
+	if ( $appended ) {
+	    return 0;
+	} else {
+	    # The list of bug ids was empty.
+            my $ret_message = "An empty list of bug ids was supplied. This should have not been permitted by check_request() in the first place\n";
+	    $self->request()->add_result( 1,  );
+            log_daemon_info( $self->request(), $ret_message );
+	    return 1;
+	}
+    }
+}
+
+
+# Changes the bug resolution of a list of bugs
+#
+# RETURNS:
+# - 0 on success
+# - 1 on failure
+sub change_resolution_in_all {
+    my $self = shift;
+    my ( $username ) = ( @_ );
+
+    log_daemon_debug( $self->request(), "Entering change_resolution_in_all.\n" );
+
+    # Only change bug resolutions if it's been requested
+    if ( $self->request()->{ policies }->{ resolution_template }->{ enabled } ) {
+
+        log_daemon_debug( $self->request(), "resolution_template is enabled.\n" );
+
+	foreach my $resolution_id ( sort keys %{ $self->request()->{ resolution_ids } } ) {
+
+            log_daemon_debug( $self->request(), "User '$username' will change the resolution of bug id '$resolution_id' to status '" . $self->request()->{ resolution_ids }->{ $resolution_id }->{ status } . "' with resolution '" . $self->request()->{ resolution_ids }->{ $resolution_id }->{ resolution } . "' and data '" . $self->request()->{ resolution_ids }->{ $resolution_id }->{ resolution_data } . "'.\n" );
+
+	    my ( $retval, $retval_string ) = $self->bugtracker()->integration_change_bug_resolution( $resolution_id, $username, $self->request()->{ resolution_ids }->{ $resolution_id }->{ status }, $self->request()->{ resolution_ids }->{ $resolution_id }->{ resolution }, $self->request()->{ resolution_ids }->{ $resolution_id }->{ resolution_data } );
+	    if ( $retval != 0) {
+		$self->request()->add_result( 1, $retval_string );
+                log_daemon_info( $self->request(), $retval_string );
+		return 1;
+	    }
+	}
+    }
+
+    return 0;
+}
+
+
+
+# Get a list of email address to which mail should be sent as a result
+# of this request
+#
+# NOTE:
+# - $bugid is an optional parameter. It is not supplied when no bug
+#   ids were defined
+# - Email should always be replied to the entire From list. Thus,
+#   every time an address is set in 'From', it is also set in
+#   'Reply-to'.
+#
+# RETURNS:
+# - A hash containing as keys the list of email addresses
+sub get_mailing_list {
+    my $self = shift;
+    my ( $mailing_list_for_a_tag, $bugid ) = ( @_ );
+    my $mailing_list;
+
+    log_daemon_debug( $self->request(), "Entering get_mailing_list.\n" );
+
+    # Get the email address of the SCM user, regardless. This email
+    # will be used as one of the addresses in the 'Reply-to' header.
+    my $scm_user_email = $self->bugtracker()->integration_get_user_email( $self->request()->{ translated_username } );
+    if ($self->request()->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_scm_user } == 1) {
+        log_daemon_debug( $self->request(), "mail_scm_user is on.\n" );
+        $mailing_list->{ To }->{ $scm_user_email } = 1;
+        log_daemon_debug( $self->request(), "Discovered the SCM user email '$scm_user_email'.\n" );
+    }
+
+    # Get the email address of the bug owner
+    if ($self->request()->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_bug_owner } == 1) {
+	my $bug_owner_email;
+
+        log_daemon_debug( $self->request(), "mail_bug_owner is on.\n" );
+	$bug_owner_email = $self->bugtracker()->integration_get_user_email( $self->request()->{ translated_username } );
+        $mailing_list->{ To }->{ $bug_owner_email } = 1;
+        log_daemon_debug( $self->request(), "Discovered the bug owner email '$bug_owner_email'.\n" );
+    }
+
+    # Get the email address of the user which reported the bug
+    if ($self->request()->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_bug_reporter } == 1) {
+	my $bug_reporter_email;
+
+        log_daemon_debug( $self->request(), "mail_bug_reporter is on.\n" );
+	if ( defined($bugid) ) {
+	    $bug_reporter_email = $self->bugtracker()->integration_get_bug_reporter_email( $bugid );
+	    $mailing_list->{ To }->{ $bug_reporter_email } = 1;
+            log_daemon_debug( $self->request(), "Discovered for bug id '$bugid' the bug reporter email '$bug_reporter_email'.\n" );
+	}
+    }
+
+    # Get the email addresses of all users who monitor the bug
+    if ($self->request()->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_bug_monitors } == 1) {
+	my @bug_monitors_emails;
+	
+        log_daemon_debug( $self->request(), "mail_bug_monitors is on.\n" );
+	if ( defined($bugid) ) {
+	    @bug_monitors_emails = $self->bugtracker()->integration_get_bug_monitors_email_list( $bugid );
+	    foreach my $bug_monitor ( @bug_monitors_emails ) {
+                log_daemon_debug( $self->request(), "Discovered for bug id '$bugid' the bug monitor email '$bug_monitor'.\n" );
+		$mailing_list->{ To }->{ $bug_monitor } = 1;
+	    }
+	}
+    }
+
+    # If we are tagging a product, also notify the product's owners
+    if ($mailing_list_for_a_tag == 1){
+        log_daemon_debug( $self->request(), "We are tagging a product. Will discover the product's owners.\n" );
+	# Get the email addresses of the product owners (managers)
+	if ($self->request()->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_product_owners } == 1) {
+	    my @product_owners_emails;
+	    
+            log_daemon_debug( $self->request(), "mail_product_owners is on.\n" );
+	    @product_owners_emails = $self->bugtracker()->integration_get_managers_email_list( $self->request()->{ product_name } );
+	    
+	    foreach my $product_owner ( @product_owners_emails ) {
+		$mailing_list->{ To }->{ $product_owner } = 1;
+                log_daemon_debug( $self->request(), "Discovered the product owner email '$product_owner'.\n" );
+	    }
+	}
+    }
+
+    # Set the remaining of the recipient list
+    if ( $self->request()->{ policies }->{ mail_notification }->{ mail_settings }->{ To } ne '' ) {
+        log_daemon_debug( $self->request(), "Setting the remaining of the recipient list.\n" );
+	$mailing_list->{ To }->{ $self->request()->{ policies }->{ mail_notification }->{ mail_settings }->{ To } } = 1;
+    }
+
+
+    # Add the Sender.
+    if ( $self->request()->{ policies }->{ mail_notification }->{ mail_settings }->{ From } ne '' ) {
+        log_daemon_debug( $self->request(), "Adding the sender.\n" );
+	$mailing_list->{ From }->{ $self->request()->{ policies }->{ mail_notification }->{ mail_settings }->{ From } } = 1;
+	$mailing_list->{ 'Reply-To' }->{ $self->request()->{ policies }->{ mail_notification }->{ mail_settings }->{ From } } = 1;
+    }
+
+    # If the email should also appear to have been sent from the SCM
+    # user, add that user first in the From list. He is added at a
+    # higher priority (value 0)
+    if ( $self->request()->{ policies }->{ mail_notification }->{ mail_recipients }->{ mail_also_appears_from_scm_user } == 1) {
+        log_daemon_debug( $self->request(), "mail_also_appears_from_scm_user is on.\n" );
+	$mailing_list->{ From }->{ $scm_user_email } = 0;
+	$mailing_list->{ 'Reply-To' }->{ $scm_user_email } = 0;
+    } else {
+	# But if the SCM user was not set in From, it should also be
+	# replied to the SCM user first.
+        log_daemon_debug( $self->request(), "mail_also_appears_from_scm_user is off.\n" );
+	$mailing_list->{ 'Reply-To' }->{ $scm_user_email } = 0;
+    }
+
+    return $mailing_list;
+}
+
+
+
+# Verify that a user is among the list of owners of a bug
+#
+# PARAMETERS
+# $1 - The username that will be verified
+# $2 - A flag indicating if case sensitive verification will be
+#      applied
+# $3 - An array holding the username of the bug owners
+#
+# RETURNS:
+# - 1 or 0 if the user is among the list of owners, <the case
+# sensitive username used for the verification of the user>
+sub verify_bug_ownership {
+    my $self = shift;
+    my $who = shift;
+    my $case_sensitive_username_verification = shift;
+    my @bug_owners = ( @_ );
+
+    log_daemon_debug( $self->request(), "Entering verify_bug_ownership.\n" );
+
+    my $case_sensitive_username_verification_who;
+    if ( $case_sensitive_username_verification == 1 ) {
+        log_daemon_debug( $self->request(), "case_sensitive_username_verification is on.\n" );
+        $case_sensitive_username_verification_who = $who;
+    } else {
+        log_daemon_debug( $self->request(), "case_sensitive_username_verification is off.\n" );
+        $case_sensitive_username_verification_who = lc $who;
+    }
+
+    my $matched_owner = 0;
+    foreach my $bug_owner ( @bug_owners ) {
+        log_daemon_debug( $self->request(), "examining bug owner '$bug_owner'.\n" );
+        # Apply policy case_sensitive_username_verification
+        my $case_sensitive_username_verification_bug_owner;
+        if ( $case_sensitive_username_verification == 1 ) {
+            log_daemon_debug( $self->request(), "case_sensitive_username_verification is on.\n" );
+            $case_sensitive_username_verification_bug_owner = $bug_owner;
+        } else {
+            log_daemon_debug( $self->request(), "case_sensitive_username_verification is off.\n" );
+            $case_sensitive_username_verification_bug_owner = lc $bug_owner;
+        }
+        
+        if ( $case_sensitive_username_verification_bug_owner eq $case_sensitive_username_verification_who ) {
+            log_daemon_debug( $self->request(), "The owner '$case_sensitive_username_verification_who' is matched.\n" );
+            $matched_owner = 1;
+        }
+    }
+
+    return ( $matched_owner, $case_sensitive_username_verification_who );
+}
+
+
+
+1;

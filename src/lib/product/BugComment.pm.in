@@ -1,0 +1,122 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::BugComment;
+
+use strict;
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+    
+    return bless $self, $type;
+}
+
+
+
+sub id {
+   my $self = shift;
+   my $data = shift;
+
+   if ( $data ) {
+       $self->{ comment_id } = $data;
+   } else {
+       return $self->{ comment_id };
+   }
+}
+
+
+
+sub content {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ content } = $data;
+    } else {
+	return $self->{ content };
+    }
+}
+
+
+
+sub date {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ date } = $data;
+    } else {
+	return $self->{ date };
+    }
+}
+
+
+
+sub author_username {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ author_username } = $data;
+    } else {
+	return $self->{ author_username };
+    }
+}
+
+
+
+sub author_name {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ author_name } = $data;
+    } else {
+	return $self->{ author_name };
+    }
+}
+
+
+
+sub author_email {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ author_email } = $data;
+    } else {
+	return $self->{ author_email };
+    }
+}
+
+
+
+sub affected_files {
+    my $self = shift;
+    my $data = shift;
+    
+    if ( $data ) {
+	$self->{ affected_files } = $data;
+    } else {
+	return $self->{ affected_files };
+    }
+}
+
+
+
+1;

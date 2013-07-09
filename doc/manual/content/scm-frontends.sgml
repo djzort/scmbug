@@ -1,0 +1,407 @@
+<chapter id="scm-frontends">
+  <title>SCM Frontends</title>
+    
+
+  <section id="cvs">
+    <title>CVS</title>
+
+    <para>
+      <glossterm linkend="glossary-cvs">CVS</glossterm> is the
+      Concurrent Versions System, the dominant open-source
+      network-transparent version control system.
+    </para>
+
+    <para>
+      &devel-product-name; supports verification checks, integration
+      of log messages with the bug-tracking system, and integration of
+      labeling operations for CVS. Various deficiencies of CVS
+      introduce complications in integration. It is recommended that
+      users of CVS upgrade to <xref linkend="svn" endterm="svn-short">.
+    </para>
+
+    <para>
+      CVS does not require users to enter a log comment when
+      directories are added in a repository. &devel-product-name; does
+      not overcome this limitation, even though it is <ulink
+      url="&devel-product-bugtracker;/show_bug.cgi?id=285">possible</ulink>
+      to do so.
+    </para>
+
+    <para>
+      Another limitation of CVS is that it does not provide an
+      integration hook on '<ulink
+      url="&devel-product-bugtracker;/show_bug.cgi?id=176"><filename>cvs
+      admin -o</filename></ulink>'.
+    </para>
+
+    <para>
+      The verification hook of CVS 1.11.x does not provide the list of
+      files that will be modified. As a result, the <xref
+      linkend="verification-checks-valid-product-name"
+      endterm="verification-checks-valid-product-name-short"> policy cannot
+      be set to <filename>auto</filename> for CVS 1.11.x. This policy
+      will be <ulink
+      url="&devel-product-bugtracker;/show_bug.cgi?id=746">
+      implemented</ulink> in the future for CVS 1.12.x and, if
+      possible, for CVSNT.
+    </para>
+
+    <para>
+      The temporary log message file of CVS 1.11.x reports the
+      directory in which a change is applied. However it does not
+      report separately the repository path. As a result, the <xref
+      linkend="additional-features-mail-notification"
+      endterm="additional-features-mail-notification-short"> policy
+      reports the changeset directory only. This will be <ulink
+      url="&devel-product-bugtracker;/show_bug.cgi?id=826">
+      implemented</ulink> in the future for CVS 1.12.x and CVSNT.
+    </para>
+
+    <para>
+      A common limitation of other systems integrating CVS with
+      bug-tracking resulted from the inadequate mechanism CVS 1.11.x
+      uses to provide the list of affected files in a commit
+      trigger. For each file, the old version, new version, and the
+      filename, all separated by commas, can be passed as command-line
+      arguments to an integration trigger script. When the filenames,
+      or the directory in which the files reside, contain either
+      commas or whitespaces, a processing script using a single
+      regular expression to parse these arguments will get
+      confused. Some systems addressed this by requiring <ulink
+      url="http://www.einval.com/~steve/software/cvs-bugzilla/#loginfo">source
+      modifications</ulink> to the CVS binary, and distributed patches
+      for it. &devel-product-name; addresses this issue by employing a
+      <ulink url="&devel-product-bugtracker;/show_bug.cgi?id=286#c2">
+      stateful parser</ulink>. Using this parser, the probability of
+      files and directories with whitespaces or commas contained in
+      their names to confuse the integration glue is marginal. For
+      example, the filename shown in <xref
+      linkend="fig-complex-cvs-filename"> is accepted.
+    </para>
+
+    <figure id="fig-complex-cvs-filename">
+      <title>A complex filename accepted by the CVS glue.</title>
+      <programlisting>
+a file with spaces,NONEs, commas, digits,1.1,2.numbers close to dots.1.2,NONe.txt
+      </programlisting>
+      </figure>
+
+    <para>
+      The verification hook for CVS does not provide the list of
+      filenames that will be commited, hence it is impossible to
+      dynamically detect the product name. Automatically detected
+      product names are <ulink
+      url="http://bugzilla.mkgnu.net/show_bug.cgi?id=746">not
+      supported</ulink> for CVS.
+    </para>
+
+    <para>
+      &devel-product-name; has been verified to work against the
+      following releases of CVS:
+
+      <itemizedlist>
+	<listitem>
+	  <para>
+	    <emphasis>1.11.21</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>1.12.13</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>CVSNT 2.5.03 Build 2260</emphasis>
+	  </para>
+	</listitem>
+      </itemizedlist>
+
+      Somewhere during the 1.12.x series of CVS (e.g. 1.12.9) the
+      command line template format <ulink url=
+      "https://www.cvshome.org/docs/manual/cvs-1.12.10/cvs_18.html#SEC186">changed</ulink>. This
+      newer format is <ulink
+      url="http://bugzilla.mkgnu.net/show_bug.cgi?id=464">also</ulink>
+      supported by &devel-product-name;.
+
+    </para>
+
+  </section>
+
+
+  <section id="git">
+    <title>Git</title>
+
+    <para>
+      <glossterm linkend="glossary-git">Git</glossterm> is a
+      distributed source code management tool designed to handle
+      massive projects such as the Linux kernel with speed and
+      efficiency.
+    </para>
+
+    <para>
+      &devel-product-name; supports verification checks and
+      integration of log messages with the bug-tracking system for
+      Git. <ulink
+      url="http://bugzilla.mkgnu.net/show_bug.cgi?id=991">Integration
+      of labeling operations</ulink> is not supported yet.
+    </para>
+
+    <para>
+      The integration may <ulink
+      url="http://bugzilla.mkgnu.net/show_bug.cgi?id=1253">conservatively
+      and incorrectly</ulink> detect multiple product names being
+      defined if <xref
+      linkend="verification-checks-valid-product-name"
+      endterm="verification-checks-valid-product-name-short"> is
+      configured to be automatically detected as shown in<xref
+      linkend="fig-product-name-definition-auto">.
+    </para>
+
+    <para>
+      &devel-product-name; has been verified to work against the
+      following releases of Git:
+
+      <itemizedlist>
+	<listitem>
+	  <para>
+	    <emphasis>1.5.6</emphasis>
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </para>
+
+  </section>
+
+  <section id="svn">
+    <title>Subversion</title>
+    <titleabbrev id="svn-short">Subversion</titleabbrev>
+    <para>
+      <glossterm linkend="glossary-svn">Subversion</glossterm> is a
+      compelling replacement for CVS.
+    </para>
+    
+    <para>
+      &devel-product-name; supports verification checks, integration
+      of log messages with the bug-tracking system, and integration of
+      labeling operations for Subversion.
+    </para>
+
+    <para>
+      Subversion is not <ulink
+      url="http://subversion.tigris.org/issues/show_bug.cgi?id=1973">yet</ulink>
+      capable of using a predefined log template when the user's
+      editor is opened to enter a log comment. As a result, the log
+      template expected by &devel-product-name; must be entered by the
+      user.
+    </para>
+
+    <para>
+      &devel-product-name; has been verified to work against the
+      following releases of Subversion:
+
+      <itemizedlist>
+	<listitem>
+	  <para>
+	    <emphasis>1.0.6</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>1.1.3</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>1.2.3</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>1.3.0</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>1.4.0,1.4.5</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>1.5.1</emphasis>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+	    <emphasis>1.6.1</emphasis>
+	  </para>
+	</listitem>
+      </itemizedlist>
+     </para>
+
+  </section>
+
+
+
+  <section id="other-scm">
+    <title>Other SCM Systems</title>
+
+    <para>
+      Additional SCM frontends can be supported by
+      &devel-product-name;. Developers and system integrators of the
+      following SCM systems are <emphasis role="bold">strongly
+      encouraged</emphasis> to contribute an SCM integration frontend:
+      <itemizedlist>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-aegis">Aegis</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-arch">Arch</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-bazzar-ng">Bazaar-NG</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-bitkeeper">Bitkeeper</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-clearcase">Clearcase</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-katie">Katie</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-mercurial">Mercurial</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-monotone">Monotone</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-opencm">OpenCM</glossterm>
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            <glossterm linkend="glossary-perforce">Perforce</glossterm>
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </para>
+
+    <para>
+      Developing a frontend requires:
+      <itemizedlist>
+	<listitem>
+	  <para>
+            Committing to support this frontend in future releases of
+            &devel-product-name;.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Creating a new frontend module named
+            <filename>src/lib/product/Glue/FrontendName.pm.in</filename>. The
+            CVS frontend
+            <filename>src/lib/product/Glue/CVS.pm.in</filename> serves as a
+            good example.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Updating
+            <filename>src/lib/product/Glue/Glue.pm.in:check_configuration</filename>
+            accordingly.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Updating the configuration management files
+            <filename>configure.in</filename> and
+            <filename>Makefile.in</filename> to autogenerate, and
+            autocleanup the new frontend.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Updating the <filename>install-tools</filename> rule of
+            <filename>Makefile.in</filename> to install the new
+            frontend from source.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Creating a new directory named
+            <filename>src/glue/templates/frontendname</filename> that
+            includes template hook/trigger scripts. The CVS trigger
+            scripts in <filename>src/glue/templates/cvs</filename>
+            serve as a good example.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Updating
+            <filename>src/glue/templates/cvs/*/checkoutlist.in</filename>
+            to always extract
+            <filename>lib/scmbug/Scmbug/Glue/FrontendName.pm</filename>
+            so the CVS SCM frontend does not break.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Updating the <xref linkend="glue"
+            endterm="glue-installer-short">
+            <filename>src/scripts/install_glue.pl.in</filename> and
+            its manpage
+            <filename>doc/manpages/install_glue.sgml.1.in</filename>
+            to support the new frontend.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Updating the <xref linkend="vdd" endterm="vdd-short">
+            <filename>src/scripts/vdd_generator.pl.in</filename> and
+            its manpage
+            <filename>doc/manpages/vdd_generator.sgml.1.in</filename>
+            to support the new frontend.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+            Updating the <xref linkend="merger"
+            endterm="merger-short">
+            <filename>src/scripts/merge.pl.in</filename> and its
+            manpage <filename>doc/manpages/merge.sgml.1.in</filename>
+            to support the new frontend.
+	  </para>
+	</listitem>
+	<listitem>
+	  <para>
+           Updating the documentation in
+           <filename>doc/manual/content</filename> to reflect support
+           for the new frontend.
+	  </para>
+	</listitem>
+      </itemizedlist>
+    </para>
+
+
+  </section>
+
+</chapter>

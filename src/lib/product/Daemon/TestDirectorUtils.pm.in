@@ -1,0 +1,627 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Daemon::TestDirectorUtils;
+
+use strict;
+use Data::Dumper;
+
+use Win32::OLE;
+
+
+my $separator = ";";
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+
+    bless $self, $type;
+
+    return $self;
+}
+
+
+#
+# Stores and returns the test director connection
+#
+sub td_db_handle {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ db_handle } = $data;
+    } else {
+	return $self->{ db_handle };
+    }
+}
+
+
+
+#
+# Main workhorse
+#
+sub run_command {
+    my $self = shift;
+    my ( @arguments ) = ( @_ );
+    my $operationType = shift @arguments;
+
+    my $td_location = shift @arguments;
+    my $td_username = shift @arguments;
+    my $td_password = shift @arguments;
+    my $td_domain   = shift @arguments;
+    my $td_project  = shift @arguments;
+
+    my $bugid    = shift @arguments;
+    my $tag_name = shift @arguments;
+
+    Win32::OLE->Option(Warn => 2);
+
+    # First get a connection
+    if( $self->connect_database( $td_location, $td_username, $td_password, $td_domain, $td_project ) eq 0 ) {
+	return;
+    }
+
+    if( "$operationType" eq "get_bug_values" ) {
+	# In order to improve performance the ability to b et multiple entries at the same time
+    	my $bug_values = $self->get_generic_values( $tag_name, $bugid, "\n" );
+	print "$bug_values";
+    } elsif( "$operationType" eq "append_to_value" ) {
+	my $append_text = join( " ", @arguments );
+    	$self->append_to_value( $tag_name, $bugid, $append_text );
+    } elsif( "$operationType" eq "get_bug_value" ) {
+    	my $bug_value = $self->get_generic_value( $tag_name, $bugid );
+	print "$bug_value";
+    } elsif( "$operationType" eq "get_bug_details" ) {
+    	my $list_values = $self->get_bug_details( $bugid, $tag_name );
+	print "$list_values";
+	print "\n";
+    } elsif( "$operationType" eq "get_lists_values" ) {
+    	my $list_values = $self->get_lists_values( $tag_name );
+	print "$list_values";
+    } elsif( "$operationType" eq "get_users_email" ) {
+    	# We reuse the bugid field to pass in the users login
+    	my $email_address = $self->get_users_email( $bugid );
+	print "$email_address";
+    } elsif( "$operationType" eq "update_bug_details" ) {
+	my $validate_string = shift @arguments;
+        my $force = shift @arguments;
+	my $ret_message = $self->update_bug_details( $bugid, $tag_name, $validate_string, $force, \@arguments );
+	print "$ret_message";
+    } elsif( "$operationType" eq "bug_lock_available" ) {
+	my $ret_message = $self->bug_lock_available( $bugid );
+	print "$ret_message";
+    } elsif( "$operationType" eq "get_attachments" ) {
+	my $ret_message = $self->get_attachments( $bugid, $tag_name );
+	print "$ret_message";
+    }    
+
+    # Now disconnect
+    $self->disconnect_database();
+}
+
+
+
+# -----------------------------------------------------------------------------
+# These functions are the ones that do the work
+# -----------------------------------------------------------------------------
+
+
+
+# Connects to the bug-tracker database
+sub connect_database {
+    my $self = shift;
+    my ( $td_location, $td_username, $td_password, $td_domain, $td_project ) = ( @_ );
+
+    # Connect to the TD Object
+    my $Conn = Win32::OLE->new('TDapiole80.TDconnection');
+
+    if( !$Conn ) {
+   	my $errorstr = "Cannot start TestDirector object";
+ 	return 0;
+    }
+
+    # Connect to server 
+    $Conn->InitConnectionEx( $td_location );
+
+    # Connect to project
+    $Conn->Login( $td_username, $td_password );
+    $Conn->Connect( $td_domain, $td_project );
+
+    $self->td_db_handle( $Conn );
+
+    return 1;
+}
+
+
+
+# Disconnects from the bug-tracker database
+sub disconnect_database {
+    my $self = shift;
+
+    # Close the TD connection 
+    # Disconnect the project and release the server
+    $self->td_db_handle()->Disconnect();
+    $self->td_db_handle()->Logout();
+    $self->td_db_handle()->ReleaseConnection();
+
+    return 1;
+}
+
+
+
+# Returns the username of the user that has a lock on the last bug
+# that attempted to be updated
+#
+# RETURNS
+# - The username that had the lock
+sub last_lock_user {
+    my $self = shift;
+
+    my $lock_username = "Unknown";
+    my @err_lines = split('\n', Win32::OLE->LastError() );
+
+    foreach my $err_line ( @err_lines ) {
+
+	if( $err_line =~ "locked" ) {
+	    my @lock_err = split( " ", $err_line );
+	    my $number_of_lock_err = scalar @lock_err;
+
+	    # The last argument is the username
+	    $lock_username = $lock_err[ $number_of_lock_err - 1 ];
+	}
+    }
+
+    return $lock_username;
+}
+
+
+
+# Enters an SCM check-in comment, originating from the bug-tracking
+# username of the SCM user, against a bug
+#
+# PARAMETERS:
+# $1 - Tag for where the Comment is stored
+# $2 - Bug id
+# $3 - Comment to be entered
+#
+# RETURNS:
+# - 0 on success
+# - 1 on failure
+sub append_to_value {
+    my $self = shift;
+    my ( $tag_name, $bugid, $append_text ) = ( @_ );
+
+    # Now get the bug out of Test Director
+    my $bgf = $self->td_db_handle()->bugfactory;
+
+    if( ! $bgf ) {
+	print "Failed to append data\n";
+	return 1;
+    }
+
+    my $bug = $bgf->item( $bugid );
+    $$bug{ $tag_name } .= $append_text;
+    
+    if( Win32::OLE->LastError != Win32::OLE::HRESULT(0x0) )
+    {
+    	print "Bug " . $bugid . " locked by user: " . $self->last_lock_user();
+    }
+
+    #Post the bug
+    $bug->post();
+
+    return 0;
+}
+
+
+
+# Returns a given value based of the tag name passed in
+#
+# PARAMETERS:
+# $1 - Tag for where the value is stored
+# $2 - Bug id
+sub get_generic_value {
+    my $self = shift;
+    my ( $tag_name, $bugid ) = ( @_ );
+    my $bug_value = "";
+
+    # Get the name of the product the bug was raised on
+    my $bgf = $self->td_db_handle()->bugfactory;
+
+    if( $bgf ) {
+    	my $bug = $bgf->item( $bugid );
+    	$bug_value = $$bug{ $tag_name };
+    }
+
+    return $bug_value;
+}
+
+
+
+# Returns a given set of values (on separate lines) based of the tag names passed in
+#
+# PARAMETERS:
+# $1 - Field names for where the value is stored
+# $2 - Bug id
+sub get_generic_values {
+    my $self = shift;
+    my ( $field_names, $bugid, $results_separator ) = ( @_ );
+    my $bug_data = "";
+
+    my @fields = split( $separator, $field_names );
+
+    # Get the name of the product the bug was raised on
+    my $bgf = $self->td_db_handle()->bugfactory;
+
+    if( ! $bgf ) {
+    	return "";
+    }
+
+    my $bug = $bgf->item( $bugid );
+
+    # Get each field for the Bug
+    foreach my $bug_field ( @fields ) {
+        if( $bug_field ne "" ) {
+	    $bug_data .= $$bug{ $bug_field };
+	    $bug_data .= $results_separator;
+	}
+
+    }
+
+    return $bug_data;
+}
+
+
+
+# Returns the set of fields in the list of tags supplied for the
+# list of bug ids passed in.
+#
+# PARAMETERS:
+# $1 - List of bug ids
+# $2 - List of field tags that are required
+#
+sub get_bug_details {
+    my $self = shift;
+    my ( $bugid_list, $field_list ) = ( @_ );
+    my $bug_data = "";
+
+    my @bugs = split( $separator, $bugid_list );
+    my @fields = split( $separator, $field_list );
+
+    foreach my $bug ( @bugs ) {
+
+	if ( $bug ne "" ) {
+	    $bug_data .= $bug . $separator;
+    	
+	    # Print each field for the Bug
+	    foreach my $bug_field ( @fields ) {
+		if ( $bug_field ne "" ) {
+		    my $bug_value = $self->get_generic_value( $bug_field, $bug );
+		    $bug_value =~ s/$separator/,/g;
+		    $bug_data .= $bug_value;
+		    $bug_data .= $separator;
+		}
+	    }
+	    
+	    $bug_data .= "\n";
+	}
+    }
+
+    return $bug_data;
+}
+
+
+
+# Returns the E-mail address of a given user
+#
+# PARAMETERS:
+# $1 - user name for the E-mail address we require
+#
+sub get_users_email {
+    my $self = shift;
+    my ( $username ) = ( @_ );
+
+    my $cust = $self->td_db_handle()->customization;
+    my $custUsers = $cust->users;
+    my $custUser = $custUsers->user( $username );
+
+    if( !defined( $custUser ) ) {
+	return "Unknown";
+    }
+
+    return $custUser->email;
+}
+
+
+
+# Returns a given set of list values based of the tags passed in
+# each new list is returned on a new line
+#
+# PARAMETERS:
+# $1 - Semi colon separate list of "list values" to retrieve
+#
+sub get_lists_values {
+    my $self = shift;
+    my ( $list_names ) = ( @_ );
+
+    my $customization = $self->td_db_handle()->customization;
+    my $customization_lists = $customization->Lists;
+
+    my @lists = split( $separator, $list_names );
+    
+    my $list_values = "";
+    
+    foreach my $list ( @lists ) {
+
+    	if( $list ne "" ) {
+	    my $customization_list = $customization_lists->List( $list );
+        
+	    if( ! defined( $customization_list ) ) {
+        	next;
+	    }
+
+	    # Now get all the data and data from it's children
+	    $list_values .= $self->get_list_values( "", $customization_list->RootNode );
+	    $list_values .= "\n";
+	}
+    }
+
+    return $list_values;
+}
+
+
+
+# Returns a given set of list values based
+#
+# PARAMETERS:
+# $1 - The parents value if there is one (to support nested lists)
+# $2 - The node to read the data from
+#
+sub get_list_values {
+    my $self = shift;
+    my $parent_entry_name = shift;
+    my $theNode = shift;
+
+    my $list_value = "";
+    my $listcount = $theNode->childrencount;
+
+    my $count = 1;
+    while ( $count <= $listcount ) {
+	my $entry_name = $theNode->children( $count )->name();
+
+	$entry_name =~ s/\n//;
+	$entry_name =~ s/^\s+//;
+	$entry_name =~ s/\s+$//;
+
+    	if( $entry_name eq "" ) {
+    	    next;
+	}
+
+        my $full_entity = "";
+
+	if ( $parent_entry_name ne "" ) {
+	    $full_entity .= $parent_entry_name . " -> ";
+	}
+
+	$full_entity .= $entry_name;
+
+        $list_value .= $full_entity . $separator ;
+
+	# Check if there are any other child processes
+        if( $theNode->children( $count )->childrencount > 0 ) {
+            $list_value .= $self->get_list_values( $full_entity, $theNode->children( $count ) );
+        }
+
+	$count++;
+    }
+
+    return $list_value;
+}
+
+
+
+# Update a list of values for a given list of bugs
+#
+sub update_bug_details {
+    my $self = shift;
+    my $bug_list = shift;
+    my $tag_names = shift;
+    my $validate_string = shift;
+    my $force_overwrite = shift;
+    my $field_values_arg = shift;
+    my @field_values = @{ $field_values_arg };
+    my $returnData = "";
+
+    my @bugs = split( $separator, $bug_list );
+    my @tag_names = split( $separator, $tag_names );
+    my @overwrite_validate = split( //, $validate_string );
+
+    my $number_of_tags = scalar @tag_names;
+    my $number_of_fields = scalar @field_values;
+
+    if( $number_of_tags > $number_of_fields ) {
+    	$returnData = "Field update value missmatch. Tags = " . $number_of_tags;
+    	$returnData .= " Values = " . $number_of_fields . "\n";
+    	return $returnData;
+    }
+
+    my $bgf = $self->td_db_handle()->bugfactory;
+    
+    if( ! $bgf ) {
+    	return "Unable to get handle to Quality Center";
+    }
+
+    if( $force_overwrite ne "Y" ) {
+
+	# Make sure there are no conflicts
+	foreach my $bug_id ( @bugs ) {
+
+	    if ( $bug_id ne "" ) {
+		my $bug = $bgf->item( $bug_id );
+		
+		if( $bug->IsLocked ) {
+		    $returnData .= $bug_id . " is locked\n";
+		}
+
+		# Set each field for the Bug
+		my $tag_counter = 0;
+		while ( $tag_counter <= $number_of_tags ) {
+		    if( $tag_names[ $tag_counter ] ne "" && $overwrite_validate[ $tag_counter ] eq "Y") {
+			if( $$bug{ $tag_names[ $tag_counter ] } ne "" &&
+			    $$bug{ $tag_names[ $tag_counter ] } ne $field_values[ $tag_counter ] ) {
+			    $returnData .= $bug_id . " value currently set to \"" . $$bug{ $tag_names[ $tag_counter ] };
+			    $returnData .= "\", trying to set to \"" . $field_values[ $tag_counter ] . "\"\n";
+			}
+		    }
+		    $tag_counter++;
+		}
+	    }
+	}
+    }
+
+    # Check there are no errors so far
+    if( $returnData ne "" ) {
+    	return $returnData;
+    }
+
+    foreach my $bugid ( @bugs ) {
+
+	if ( $bugid ne "" ) {
+
+	    my $bug = $bgf->item( $bugid );
+
+	    # Set each field for the Bug
+	    my $tag_counter = 0;
+	    while ( $tag_counter <= $number_of_tags ) {
+
+		if( $tag_names[ $tag_counter ] ne "" ) {
+
+		    $$bug{ $tag_names[ $tag_counter ] } = $field_values[ $tag_counter ];
+    	    
+		    if( Win32::OLE->LastError != Win32::OLE::HRESULT(0x0) )
+		    {
+                	print "Bug " . $bugid . " locked by user: " . $self->last_lock_user();
+			last;
+		    }
+		}
+		$tag_counter++;
+	    }
+
+	    #Post the bug
+	    $bug->post();
+	}
+    }
+
+
+    return $returnData;
+}
+
+
+# Returns a given value based of the tag name passed in
+#
+# PARAMETERS:
+# $1 - Tag for where the value is stored
+# $2 - Bug id
+sub bug_lock_available {
+    my $self = shift;
+    my ( $bugid ) = ( @_ );
+    my $bug_value = "";
+
+    # Get the name of the product the bug was raised on
+    my $bgf = $self->td_db_handle()->bugfactory;
+
+    if( $bgf ) {
+    	my $bug = $bgf->item( $bugid );
+    	$bug_value = $bug->IsLocked;
+    }
+
+    if( $bug_value ) {
+    	return 0;
+    }
+
+    return 1;
+}
+
+
+
+# Returns all the attachments for a given bug
+#
+# PARAMETERS:
+# $1 - Field names for where the value is stored
+# $2 - Bug id
+sub get_attachments {
+    my $self = shift;
+    my ( $bug_list, $filter ) = ( @_ );
+    my $bug_data = "";
+
+    # Get the name of the product the bug was raised on
+    my $bgf = $self->td_db_handle()->bugfactory;
+
+    if( ! $bgf ) {
+    	return "";
+    }
+
+    my @bugs = split( $separator, $bug_list );
+
+    my $bug_attachments = "";
+
+    foreach my $bugid ( @bugs ) {
+
+	if ( $bugid ne "" ) {
+
+	    my $bug = $bgf->item( $bugid );
+	    my $attachments = $bug->Attachments;
+	
+	    my @filtered_results = ();
+	    
+	    if( $attachments ) {
+	    	my $attachment_list = $attachments->NewList("");
+	
+	    	my $attach_counter = 1;
+	    	while ( $attach_counter <= $attachment_list->Count ) {
+	    	    my $attachment = $attachment_list->Item($attach_counter);
+	    	    
+	    	    if( $filter eq "" ) {
+	    	      	push @filtered_results, $attachment->Name;
+	 	    } elsif( $attachment->Name =~ /$filter/ ) {
+	    	    	push @filtered_results, $attachment->Name;
+	    	    }
+	    
+	    	    $attach_counter++;
+	    	}
+	    }
+
+	    my $attachment_string = "";
+	    
+	    foreach my $filtered_result ( @filtered_results ) {
+	    	if( $attachment_string ne "" ) {
+	    	    $attachment_string .= $separator;
+	    	}
+		$attachment_string .= $filtered_result;
+	    }
+	    
+	    $bug_attachments .= $bugid . $separator . $attachment_string . "\n";
+	}
+    }
+
+    return $bug_attachments;
+}
+
+
+
+1;

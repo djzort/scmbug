@@ -1,0 +1,686 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Daemon::Daemon;
+
+use @DEVEL_PRODUCT_NAME@::Error;
+use @DEVEL_PRODUCT_NAME@::VDD;
+use @DEVEL_PRODUCT_NAME@::Daemon::Request;
+use @DEVEL_PRODUCT_NAME@::Daemon::Integration;
+use @DEVEL_PRODUCT_NAME@::Daemon::Bugzilla;
+use @DEVEL_PRODUCT_NAME@::Daemon::Mantis;
+use @DEVEL_PRODUCT_NAME@::Daemon::RequestTracker;
+use @DEVEL_PRODUCT_NAME@::Daemon::TestDirector;
+use @DEVEL_PRODUCT_NAME@::Daemon::Process;
+use @DEVEL_PRODUCT_NAME@::Daemon::Trapper;
+use @DEVEL_PRODUCT_NAME@::Common;
+use strict;
+use IO::Socket;
+use FileHandle;
+use Data::Dumper;
+use File::Spec qw( devnull );
+use POSIX qw(setsid);
+use POSIX ":sys_wait_h"; # for WNOHANG
+
+
+
+# Global data structure that holds all configuration and request data
+my $daemon_configuration;
+
+# Bugtracker abstraction
+my $bugtracker;
+
+# Connection Thread
+my $thread_connection;
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+
+    return bless $self, $type;
+}
+
+
+
+#
+# Reads the configuration file provided for the integration daemon
+#
+sub read_configuration {
+    my $self = shift;
+    my $daemon_configuration_file = shift;
+    my $file_content;
+
+    $file_content = file_content( $daemon_configuration_file );
+
+    # Setup minimal logging to support displaying this error case.
+    use Log::Log4perl qw(:easy);
+    Log::Log4perl::easy_init( $WARN );
+    $logger = get_logger( "Daemon" );
+    @DEVEL_PRODUCT_NAME@::Common::set_logger( $logger );
+    eval $file_content || log_fatal_error( $DAEMON_ERROR_READING_GLUE_CONFIGURATION_FILE, "The configuration file '$daemon_configuration_file' could not be interpreted correctly: $@\n" );
+
+    $daemon_configuration->{ configuration_file } = $daemon_configuration_file;
+
+    # Setup logging
+    $self->setup_logging();
+    log_daemon_warn( undef, "Read configuration file '$daemon_configuration_file'\n" );
+
+    #
+    # Check the remaining configuration
+    #
+    $self->check_configuration();
+
+    # Instantiate a bugtracker object according to the type of
+    # bug-tracking tool used
+    if ( $daemon_configuration->{ bugtracker }->{ type } eq "Bugzilla" ) {
+	$bugtracker = @DEVEL_PRODUCT_NAME@::Daemon::Bugzilla->new( $daemon_configuration->{ bugtracker } );
+	$bugtracker->installed_locally( $daemon_configuration->{ bugtracker }->{ installed_locally } );
+	$bugtracker->installation_directory( $daemon_configuration->{ bugtracker }->{ installation_directory } );
+    } elsif ( $daemon_configuration->{ bugtracker }->{ type } eq "Mantis" ) {
+	$bugtracker = @DEVEL_PRODUCT_NAME@::Daemon::Mantis->new( $daemon_configuration->{ bugtracker } );
+    } elsif ( $daemon_configuration->{ bugtracker }->{ type } eq "RequestTracker" ) {
+	$bugtracker = @DEVEL_PRODUCT_NAME@::Daemon::RequestTracker->new( $daemon_configuration->{ bugtracker } );
+	$bugtracker->installation_directory( $daemon_configuration->{ bugtracker }->{ installation_directory } );
+    } elsif ( $daemon_configuration->{ bugtracker }->{ type } eq "TestDirector" ) {
+	$bugtracker = @DEVEL_PRODUCT_NAME@::Daemon::TestDirector->new( $daemon_configuration->{ bugtracker } );
+     } else {
+	log_fatal_error( $DAEMON_ERROR_UNSUPPORTED_BUGTRACKER, "The '" . $daemon_configuration->{ bugtracker }->{ type } . "' bug-tracking system is not supported\n" );
+    }
+
+    # Initialize the bug-tracking system library, and verify that
+    # initialization finished with no errors
+    my ($init_retval, $init_message) = $bugtracker->init();
+    if ( $init_retval != 0 ) {
+	my $error_msg = $init_message;
+	$error_msg .= "Initialization of bug-tracking system '" .
+		     $daemon_configuration->{ bugtracker }->{ type } .
+		     "' version '" . $daemon_configuration->{ bugtracker }->{ version } .
+		     "' failed. This could be due to an unsupported version of this system, or misconfiguration.\n";
+	log_fatal_error( $DAEMON_ERROR_UNSUPPORTED_BUGTRACKER_VERSION, $error_msg );
+    }
+
+    # Verify that the required packages are available
+    my $package_name = "Mail::Sendmail";
+    if ( !package_exists( $package_name ) ) {
+	log_fatal_error( $COMMON_ERROR_PACKAGE_MISSING, "Package '$package_name' is missing. It is required by policy mail_on_success.\n" . package_installation_instructions( $package_name ) );
+    }
+
+    $package_name = "XML::Simple";
+    if ( !package_exists( $package_name ) ) {
+	log_fatal_error( $COMMON_ERROR_PACKAGE_MISSING, "Package '$package_name' is missing. It is required by the VDD Generator for an $ACTIVITY_GET_VDD, and the Merger for an $ACTIVITY_GET_BUGS.\n" . package_installation_instructions( $package_name ) );
+    }
+
+}
+
+
+sub check_configuration {
+    my $self = shift;
+    my $package_name;
+
+
+    #
+    # Check configuration
+    #
+    if ( !defined( $daemon_configuration->{ daemon_port } ) ) {
+	log_fatal_error( $DAEMON_ERROR_DAEMON_PORT_MISSING,
+                        "The daemon_port configuration is missing.\n" );
+    }
+
+    if ( !defined( $daemon_configuration->{ daemon_mode } ) ) {
+	log_fatal_error( $DAEMON_ERROR_DAEMON_MODE_MISSING,
+                        "The daemon_mode configuration is missing.\n" );
+    } else {
+	if ( !( $daemon_configuration->{ daemon_mode } eq "threaded" || 
+		$daemon_configuration->{ daemon_mode } eq "forked" ||
+		$daemon_configuration->{ daemon_mode } eq "auto" ) ) {
+	    log_fatal_error( $DAEMON_ERROR_INVALID_DAEMON_MODE, "Invalid daemon mode '" . $daemon_configuration->{ daemon_mode } . "'\n" );
+	}
+    }
+
+    # Check the bugtracker configuration
+    if ( !defined( $daemon_configuration->{ bugtracker } ) ) {
+	log_fatal_error( $DAEMON_ERROR_BUGTRACKER_MISSING,
+                        "The bugtracker configuration is missing.\n" );
+    } else {
+	
+	if ( !defined( $daemon_configuration->{ bugtracker }->{ type } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_BUGTRACKER_TYPE_MISSING,
+                            "The bugtracker type configuration is missing.\n" );
+	}
+	
+	if ( !defined( $daemon_configuration->{ bugtracker }->{ version } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_BUGTRACKER_VERSION_MISSING,
+                            "The bugtracker version configuration is missing.\n" );
+	} else {
+            # By default, the version variable is set but empty. The
+            # user must define it
+            if ( $daemon_configuration->{ bugtracker }->{ version } eq "" ) {
+                log_fatal_error( $DAEMON_ERROR_BUGTRACKER_VERSION_MISSING,
+                                 "The bugtracker version configuration is missing.\n" );
+            }
+        }
+	
+	if ( !defined( $daemon_configuration->{ bugtracker }->{ database_location } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_BUGTRACKER_DATABASE_LOCATION_MISSING,
+                            "The bugtracker database_location configuration is missing.\n" );
+	}
+	
+	if ( !defined( $daemon_configuration->{ bugtracker }->{ database_port } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_BUGTRACKER_DATABASE_PORT_MISSING,
+                            "The bugtracker database_port configuration is missing.\n" );
+	}
+	
+	if ( !defined( $daemon_configuration->{ bugtracker }->{ database_vendor } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_BUGTRACKER_DATABASE_VENDOR_MISSING,
+                            "The bugtracker database_vendor configuration is missing.\n" );
+	}
+	
+	if ( !defined( $daemon_configuration->{ bugtracker }->{ database_name } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_BUGTRACKER_DATABASE_NAME_MISSING,
+                             "The bugtracker database_name configuration is missing.\n" );
+	}
+	
+	if ( !defined( $daemon_configuration->{ bugtracker }->{ database_username } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_BUGTRACKER_DATABASE_USERNAME_MISSING,
+                            "The bugtracker database_username configuration is missing.\n" );
+	}
+	
+	if ( !defined( $daemon_configuration->{ bugtracker }->{ database_password } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_BUGTRACKER_DATABASE_PASSWORD_MISSING,
+                            "The bugtracker database_password configuration is missing.\n" );
+	}
+	
+	if ( !defined( $daemon_configuration->{ bugtracker }->{ installed_locally } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_BUGTRACKER_INSTALLED_LOCALLY_MISSING,
+                            "The bugtracker installed_locally configuration is missing.\n" );
+	}
+	
+	if ( !defined( $daemon_configuration->{ bugtracker }->{ installation_directory } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_BUGTRACKER_INSTALLATION_DIRECTORY_MISSING,
+                            "The bugtracker installation_directory configuration is missing.\n" );
+	}
+	
+	if ( !defined( $daemon_configuration->{ bugtracker }->{ bug_url_prefix } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_BUGTRACKER_BUG_URL_PREFIX_MISSING,
+                            "The bugtracker bug_url_prefix configuration is missing.\n" );
+	}
+    }
+
+    # Check the userlist
+    if ( !defined( $daemon_configuration->{ userlist } ) ) {
+	log_fatal_error( $DAEMON_ERROR_USERLIST_MISSING,
+                        "The userlist configuration is missing.\n" );
+    } else {
+
+	if ( !defined( $daemon_configuration->{ userlist }->{ case_sensitive_username_verification } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_USERLIST_CASE_SENSITIVE_USERNAME_VERIFICATION_MISSING,
+                            "The userlist case_insensitive_username_verification configuration is missing.\n" );
+	}
+
+	#
+	# Check the mappings
+	#
+	if ( !defined( $daemon_configuration->{ userlist }->{ mappings } ) ) {
+	    log_fatal_error( $DAEMON_ERROR_USERLIST_MAPPINGS_MISSING,
+                            "The userlist mappings configuration is missing.\n" );
+	} else  {
+
+	    if ( !defined( $daemon_configuration->{ userlist }->{ mappings }->{ enabled } ) ) {
+		log_fatal_error( $DAEMON_ERROR_USERLIST_ENABLED_MISSING,
+                                "The userlist mappings enabled configuration is missing.\n" );
+	    }
+
+
+	    #
+	    # Check mapping_ldap
+	    # 
+	    if ( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_ldap }->{ enabled } == 1) {
+		# If SCM to bug-tracking username mapping using LDAP is
+		# enabled, we will need Net::LDAP
+		$package_name = "Net::LDAP";
+		if ( !package_exists( $package_name ) ) {
+		    log_fatal_error( $COMMON_ERROR_PACKAGE_MISSING, "Package '$package_name' is missing. It is required for SCM to bug-tracking username mapping using mapping_ldap.\n" . package_installation_instructions( $package_name ) );
+		}
+		
+		if ( !defined( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_server } ) ) {
+		    log_fatal_error( $DAEMON_ERROR_USERLIST_MAPPING_LDAP_LDAP_SERVER_MISSING,
+                                    "The userlist mapping_ldap ldap_server configuration is missing.\n" );
+		}
+		
+		if ( !defined( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_port } ) ) {
+		    log_fatal_error( $DAEMON_ERROR_USERLIST_MAPPING_LDAP_LDAP_PORT_MISSING,
+                                    "The userlist mapping_ldap ldap_port configuration is missing.\n" );
+		}
+		
+		if ( !defined( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_binddn } ) ) {
+                    log_fatal_error( $DAEMON_ERROR_USERLIST_MAPPING_LDAP_LDAP_BINDDN_MISSING,
+                                    "The userlist mapping_ldap ldap_binddn configuration is missing.\n" );
+		}
+		
+		if ( !defined( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_binddn_password } ) ) {
+		    log_fatal_error( $DAEMON_ERROR_USERLIST_MAPPING_LDAP_LDAP_BINDDN_PASSWORD_MISSING,
+                                    "The userlist mapping_ldap ldap_binddn_password configuration is missing.\n" );
+		}
+		
+		if ( !defined( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_basedn } ) ) {
+		    log_fatal_error( $DAEMON_ERROR_USERLIST_MAPPING_LDAP_LDAP_BASEDN_MISSING,
+                                    "The userlist mapping_ldap ldap_basedn configuration is missing.\n" );
+		}
+		
+		if ( !defined( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_scm_username_attribute } ) ) {
+		    log_fatal_error( $DAEMON_ERROR_USERLIST_MAPPING_LDAP_LDAP_SCM_USERNAME_ATTRIBUTE_MISSING,
+                                    "The userlist mapping_ldap ldap_scm_username_attribute configuration is missing.\n" );
+		}
+		
+		if ( !defined( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_bugtracking_username_attribute } ) ) {
+		    log_fatal_error( $DAEMON_ERROR_USERLIST_MAPPING_LDAP_LDAP_BUGTRACKING_USERNAME_ATTRIBUTE_MISSING,
+                                    "The userlist mapping_ldap ldap_bugtracking_username_attribute configuration is missing.\n" );
+		}
+		
+		if ( !defined( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_ldap }->{ ldap_filter } ) ) {
+		    log_fatal_error( $DAEMON_ERROR_USERLIST_MAPPING_LDAP_LDAP_FILTER_MISSING,
+                                    "The userlist mapping_ldap ldap_filter_attribute configuration is missing.\n" );
+		}
+	    }
+	    
+	    #
+	    # Check mapping_regexes
+	    # 
+	    if ( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_regexes }->{ enabled } == 1) {
+		if ( !defined( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_regexes }->{ values } ) ) {
+		    log_fatal_error( $DAEMON_ERROR_USERLIST_MAPPING_REGEXES_VALUES_MISSING,
+                                    "The userlist mapping_regexes values configuration is missing.\n" );
+		}
+	    }
+	    
+	    #
+	    # Check mapping_values
+	    # 
+	    if ( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_values }->{ enabled } == 1) {
+		if ( !defined( $daemon_configuration->{ userlist }->{ mappings }->{ mapping_values }->{ values } ) ) {
+		    log_fatal_error( $DAEMON_ERROR_USERLIST_MAPPING_VALUES_VALUES_MISSING,
+                                    "The userlist mapping_values values configuration is missing.\n" );
+		}
+	    }
+
+	    #
+	    # If username mappings were enabled, but no mappings were
+	    # configured, this is a user configuration error.
+	    #
+	    if ( $daemon_configuration->{ userlist }->{ mappings }->{ enabled } == 1 &&
+		 $daemon_configuration->{ userlist }->{ mappings }->{ mapping_ldap }->{ enabled } == 0 &&
+		 $daemon_configuration->{ userlist }->{ mappings }->{ mapping_regexes }->{ enabled } == 0 &&
+		 $daemon_configuration->{ userlist }->{ mappings }->{ mapping_values }->{ enabled } == 0) {
+		log_fatal_error( $DAEMON_ERROR_USERLIST_ENABLED_BUT_NOT_CONFIGURED,
+                                "The userlist mappings are enabled, but no mappings are configured.\n" );
+	    }
+	
+	}
+    }
+}
+
+
+#
+# Opens some file descriptors used for error and activity logging
+#
+sub setup_logging {
+    my $self = shift;
+    
+    # Setup logging
+    Log::Log4perl::init( \$daemon_configuration->{ logging } );
+    $logger = get_logger( "Daemon" );
+    @DEVEL_PRODUCT_NAME@::Common::set_logger( $logger );
+
+    # Trap all messages sent to STDERR and log them.
+    tie *STDERR, "@DEVEL_PRODUCT_NAME@::Daemon::Trapper";
+}
+
+
+
+#
+# Returns a new and correct bugtracking object
+#
+sub get_new_bugtracker {
+    my $bugtracker;
+
+    # Instantiate a bugtracker object according to the type of
+    # bug-tracking tool used
+    if ( $daemon_configuration->{ bugtracker }->{ type } eq "Bugzilla" ) {
+	$bugtracker = @DEVEL_PRODUCT_NAME@::Daemon::Bugzilla->new( $daemon_configuration->{ bugtracker } );
+	$bugtracker->installed_locally( $daemon_configuration->{ bugtracker }->{ installed_locally } );
+	$bugtracker->installation_directory( $daemon_configuration->{ bugtracker }->{ installation_directory } );
+    } elsif ( $daemon_configuration->{ bugtracker }->{ type } eq "Mantis" ) {
+	$bugtracker = @DEVEL_PRODUCT_NAME@::Daemon::Mantis->new( $daemon_configuration->{ bugtracker } );
+    } elsif ( $daemon_configuration->{ bugtracker }->{ type } eq "RequestTracker" ) {
+	$bugtracker = @DEVEL_PRODUCT_NAME@::Daemon::RequestTracker->new( $daemon_configuration->{ bugtracker } );
+	$bugtracker->installation_directory( $daemon_configuration->{ bugtracker }->{ installation_directory } );
+    } elsif ( $daemon_configuration->{ bugtracker }->{ type } eq "TestDirector" ) {
+	$bugtracker = @DEVEL_PRODUCT_NAME@::Daemon::TestDirector->new( $daemon_configuration->{ bugtracker } );
+     } else {
+         log_fatal_error( $DAEMON_ERROR_UNSUPPORTED_BUGTRACKER, "The '" . $daemon_configuration->{ bugtracker }->{ type } . "' bug-tracking system is not supported\n" );
+    }
+
+    # Initialize the bug-tracking system library, and verify that
+    # initialization finished with no errors
+    my ($init_retval, $init_message) = $bugtracker->init();
+    if ( $init_retval != 0 ) {
+	my $error_msg = $init_message;
+	$error_msg .= "Initialization of bug-tracking system '" .
+		     $daemon_configuration->{ bugtracker }->{ type } .
+		     "' version '" . $daemon_configuration->{ bugtracker }->{ version } .
+		     "' failed. This could be due to an unsupported version of this system, or misconfiguration.\n";
+        log_fatal_error ( $DAEMON_ERROR_UNSUPPORTED_BUGTRACKER_VERSION, $error_msg );
+    }
+
+    return $bugtracker;
+}
+
+
+
+#
+# Starts the integration daemon
+#
+sub start_daemon {
+    my $self = shift;
+    my $daemon_configuration_file = shift;
+
+    # Read the configuration settings
+    $self->read_configuration( $daemon_configuration_file );
+
+    # Start the daemon as either threaded or forked
+    if( $daemon_configuration->{ daemon_mode } eq "auto" ) {
+	if ( $PRODUCT_ON_WINDOWS == 1) {
+	    $self->start_daemon_threaded();
+	} else {
+	    $self->start_daemon_forked();
+	}
+    } elsif( $daemon_configuration->{ daemon_mode } eq "threaded" ) {
+	$self->start_daemon_threaded();
+    } elsif( $daemon_configuration->{ daemon_mode } eq "forked" ) {
+	$self->start_daemon_forked();
+    }
+}
+
+
+#
+# Starts the integration daemon using a threaded approach
+#
+sub start_daemon_threaded {
+    my $self = shift;
+
+    # daemonize the program
+    &daemonize;
+
+    # Write a pid file
+    $self->write_pid_file();
+	
+    # Spawn thread handling integration requests
+    $self->spawn_connection_thread();
+}
+
+
+
+#
+# Starts the integration daemon using forking approach
+#
+sub start_daemon_forked {
+    my $self = shift;
+
+    # daemonize the program
+    &daemonize;
+
+    # Write a pid file
+    $self->write_pid_file();
+
+    # flush the buffer
+    $| = 1;
+
+    my $port = $daemon_configuration->{ daemon_port };
+    my $proto = getprotobyname('tcp');
+
+    # Prepare to start the server
+    socket (Server, PF_INET, SOCK_STREAM, $proto ) or log_fatal_error ( $DAEMON_ERROR_SOCKET_ERROR, "socket: $!\n" );
+    setsockopt(Server, SOL_SOCKET, SO_REUSEADDR,  pack("l", 1));
+    bind (Server, sockaddr_in($port, INADDR_ANY )) or log_fatal_error ( $DAEMON_ERROR_SOCKET_ERROR, "bind: $!\n" );
+
+    log_daemon_warn( undef, "Server started on port '$port' (forked mode)\n" );
+
+    # Now start listening for connections
+    listen (Server, SOMAXCONN) or log_fatal_error ( $DAEMON_ERROR_SOCKET_ERROR, "listen: $!\n" );
+
+
+    my $waitedpid = 0;
+    # Setup reaping dead processes
+    sub reaper {
+	while ( ($waitedpid = waitpid(-1, &WNOHANG)) >= 0 ) {
+	    # This is to get around odd reaping messages of "reaped 0 with
+	    # exit of -1" in the activity log.  There is definitely a
+	    # better way to do this
+	    if ($? != -1) {
+                log_daemon_debug( undef, "reaped $waitedpid" . ($? ? " with exit $?" : "") . "\n" );
+	    }
+	}
+    }
+    $SIG{CHLD} = \&reaper;
+
+    my $paddr;
+    for ( $waitedpid = 0;
+	  ($paddr = accept(Client, Server)) || $waitedpid;
+	  $waitedpid = 0, close Client) {
+
+	# safe zomby collection
+	next if $waitedpid and not $paddr;
+
+	my ( $port, $iaddr ) = sockaddr_in($paddr);
+	my $name = gethostbyaddr($iaddr, AF_INET);
+	my $ip_address = inet_ntoa($iaddr);
+
+	$self->spawn_child( $name, $ip_address, $port);
+    }
+}
+
+
+
+#
+# Writes the process id of the server in a file
+#
+sub write_pid_file {
+
+    if ( $PRODUCT_ON_WINDOWS == 0) {
+	# The pid file is used only on UNIX
+
+	if ( -e $daemon_configuration->{ daemon_pidfile } ) {
+	    # The pid file already exists. Perhaps the daemon is
+	    # already running.
+	    my $pid_file_content = file_content( $daemon_configuration->{ daemon_pidfile } );
+	    $pid_file_content =~ s/\n$//;
+
+	    log_fatal_error ( $DAEMON_ERROR_PID_FILE_EXISTS, "The daemon pid file '" . $daemon_configuration->{ pidfile } . "' already exists for process '$pid_file_content'. An integration daemon must be already running.\n" );
+	} else {
+	    open ( PID_FILE, "> " . $daemon_configuration->{ daemon_pidfile } );
+	    print PID_FILE "$$\n";
+	    close ( PID_FILE );
+	}
+    }
+}
+
+
+
+#
+# Forces the process to become a daemon
+#
+sub daemonize {
+    open STDIN, File::Spec->devnull() or log_fatal_error ( $COMMON_ERROR_CANNOT_OPEN_FILE, "Can't read '" . File::Spec->devnull() . "': $!\n" );
+    open STDOUT, '>>' . File::Spec->devnull() or log_fatal_error ( $COMMON_ERROR_CANNOT_OPEN_FILE, "Can't write to '" . File::Spec->devnull() . "': $!\n" );
+
+    defined (my $pid = fork) or log_fatal_error ( $DAEMON_ERROR_FORK_ERROR, "Can't fork: $!\n" );
+    exit if $pid;
+
+    # POSIX::setsid is not implemented on Windows and simply exits.
+    if ( $PRODUCT_ON_WINDOWS == 0 ) {
+	setsid or log_fatal_error( $DAEMON_ERROR_SESSION_ERROR, "Can't start a new session: $!\n" );
+    }
+    umask 0;
+}
+
+
+
+#
+# Spawns a child process that will handle an integration request
+#
+sub spawn_child {
+    my $self = shift;
+    my ( $connection_host_name, $connection_ip_address, $connection_port ) = ( @_ );
+    my $pid;
+    my $request;
+
+    if ($PRODUCT_ON_WINDOWS) {
+	# Handle the "cannot fork" problem in Windows
+	1 while waitpid(-1,1) > 0;
+    }
+
+    if ( !defined ($pid = fork)) {
+	log_daemon_warn( $request, "cannot fork\n" );
+	return;
+    } elsif( $pid ) {
+	# This is the parent
+	return;
+    }
+
+    # This is the child.
+    open( STDIN, "<&Client") or log_fatal_error( $COMMON_ERROR_CANNOT_OPEN_FILE, "can't dup client to stdin\n" );
+    open( STDOUT, ">&Client") or log_fatal_error( $COMMON_ERROR_CANNOT_OPEN_FILE, "can't dup client to stdout\n" );
+
+    # Capture the child-specific connection details
+    $request = @DEVEL_PRODUCT_NAME@::Daemon::Request->new();
+    $request->{ connection }->{ host_name } = $connection_host_name;
+    $request->{ connection }->{ ip_address } = $connection_ip_address;
+    $request->{ connection }->{ port } = $connection_port;
+
+    log_daemon_warn( $request, "Processing connection from $connection_host_name\n" );
+
+    # Process the connection
+    my $process = @DEVEL_PRODUCT_NAME@::Daemon::Process->new ( $daemon_configuration, $bugtracker );
+    $process->process_connection( *STDIN, *STDOUT, $request );
+
+    # Close the STDIN and STDOUT handles. This is necessary in Windows
+    # where fork actually spawns processes and these handles remain
+    # open, hence the socket never closes.
+    open STDIN, File::Spec->devnull();
+    open STDOUT, '>>' . File::Spec->devnull();
+    # Also close the socket
+    close Client;
+
+    log_daemon_warn( $request, "Connection from $connection_host_name processed\n");
+
+    exit 0;
+}
+
+
+
+#
+# Spawns a thread that will handle all integration requests
+#
+sub spawn_connection_thread {
+    eval 'use threads';
+
+    $thread_connection = threads->new( \&connection_thread );
+
+    # The daemon will exit when the connection thread exits
+    $thread_connection->join();
+}
+
+
+
+#
+# Thread that handles integration requests
+#
+sub connection_thread {
+    my $port = $daemon_configuration->{ daemon_port };
+    my $socket = new IO::Socket::INET(LocalPort => $port,
+				      Proto => 'tcp',
+				      Listen => 5,
+				      ReuseAddr => 1);
+
+    log_daemon_warn( undef, "Socket could not be created. Reason: $!" ) unless $socket;
+    log_daemon_warn( undef, "Server started on port '$port' (threaded mode)\n" );
+
+    while (my($new_socket) = $socket->accept()) {
+	$new_socket->autoflush();
+
+	spawn_connection_handler_thread( $new_socket );	
+    }
+    close($socket);
+}
+
+
+
+#
+# Spawns a child thread that will handle an integration request
+#
+sub spawn_connection_handler_thread {
+    my ( $socket ) = ( @_ );
+
+    eval 'use threads';
+
+    my $thread_connection_handler = threads->new( \&connection_handler_thread,
+						  $socket,
+						  $socket->peeraddr(),
+						  $socket->peerhost(),
+						  $socket->peerport() );
+    $thread_connection_handler->detach();
+}
+
+
+
+#
+# Thread that handles an integration request
+#
+sub connection_handler_thread {
+    my ( $socket, $connection_host_name, $connection_ip_address, $connection_port ) = ( @_ );
+
+    # Received request 
+    my $request;
+
+    # Capture the child-specific connection details
+    $request = @DEVEL_PRODUCT_NAME@::Daemon::Request->new();
+    $request->{ connection }->{ host_name } = $connection_host_name;
+    $request->{ connection }->{ ip_address } = $connection_ip_address;
+    $request->{ connection }->{ port } = $connection_port;
+
+    log_daemon_warn( $request, "Processing connection from $connection_host_name\n" );
+
+    # Process the connection
+    my $process = @DEVEL_PRODUCT_NAME@::Daemon::Process->new ( $daemon_configuration, $bugtracker );
+    $process->process_connection( $socket, $socket, $request );
+
+    # Close the socket handle. This is necessary in Windows where fork
+    # actually spawns processes and these handles remain open, hence
+    # the socket never closes.
+
+    open $socket, File::Spec->devnull();
+    open $socket, '>>' . File::Spec->devnull();
+    # Also close the socket
+    close $socket;
+
+    log_daemon_warn( $request, "Connection from $connection_host_name processed\n" );
+}
+
+
+
+1;

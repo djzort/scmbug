@@ -1,0 +1,180 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+# This package is used to collect SCMBUG "Activity" instances.
+
+package @DEVEL_PRODUCT_NAME@::Glue::CVSConsolidatedActivities;
+
+use strict;
+use POSIX qw( getppid );
+use Data::Dumper;
+use @DEVEL_PRODUCT_NAME@::Activity;
+use @DEVEL_PRODUCT_NAME@::Common;
+use @DEVEL_PRODUCT_NAME@::Error;
+use @DEVEL_PRODUCT_NAME@::Glue::SCM;
+use File::Spec::Functions;
+
+
+
+#
+# Constructor
+#
+sub new {
+    my $type = shift;
+    my $self = {};
+
+    $self->{ activities } = {};
+    $self->{ references } = 0;
+
+    return bless $self, $type;
+}
+
+
+
+#
+# Loads existing CVS activities
+#
+sub load {
+    my $self = shift;
+    my ( $cvsuser ) = ( @_ );
+    my $parentpid = "";
+    # getppid() is not yet supported by ActiveState on Windows.
+    if ( $PRODUCT_ON_WINDOWS ) {
+        $parentpid = "no_getppid_support";
+    } else {
+        $parentpid = getppid();
+    }
+    my $filename = ".@DEVEL_PRODUCT_NAME_LOWER@_consolidated_cvs_activities_" . $cvsuser . "_$parentpid";
+
+    my $path = File::Spec::Functions::rel2abs( $filename, File::Spec::Functions::tmpdir() );
+    if ( -e $path ) {
+	#
+	# A consolidated CVS activities file already exists. Load it.
+	#
+
+	# Since the activities were stored on disk with Data::Dumper,
+	# they are reported as the value of variable $VAR1. We declare
+	# a $VAR1 here to store that value.
+	my $VAR1;
+
+	my $file_content = file_content ( $path );
+	if (eval $file_content) { 
+	    return $VAR1;
+	} else { 
+	    log_fatal_error( $GLUE_ERROR_READING_CVS_CONSOLIDATED_ACTIVITIES_FILE_TO_INTERPRET, "The CVS consolidated activities file '$path' could not be interpreted correctly: $@\n" );
+	    exit 1;
+	}
+    } else {
+	#
+	# A consolidated CVS activities file does not exist. Create a
+	# new one
+	#
+    	my $activities = @DEVEL_PRODUCT_NAME@::Glue::CVSConsolidatedActivities->new();
+
+	$activities->{ path } = $path;
+
+	return $activities;    	
+    }
+}
+
+
+
+# Adds an activity to the list and increments a reference count
+#
+# PARAMETERS:
+# $1 -  activity reference to add to list
+#
+# RETURNS:
+# - the reference count
+sub add {
+	my $self = shift;
+	my $activity = shift;
+
+	$self->{ activities }->{ $activity->repository() } = $activity;
+	$self->{ references } = $self->{ references } + 1;
+
+	return $self->{ references };
+} 
+
+
+
+# Replaces an activity on the list and decrements the reference count.
+#
+# PARAMETERS:
+# $1 - activity reference that will be replaced
+#
+# RETURNS:
+# - the reference count
+sub replace {
+    my $self = shift;
+    my ( $activity ) = ( @_ );
+
+    $self->{ activities }->{ $activity->repository() } = $activity;
+    $self->{ references } = $self->{ references } - 1;
+
+    return $self->{ references };
+}
+
+
+
+# Consolidates all activities into one. In practice this means adding
+# all 'files' from all activities except the first to the first activity.
+#
+# RETURNS:
+# - an activity with consolidated files
+sub consolidate {
+    my $self = shift;
+    my $activities = $self->{ activities };
+    my $activity;
+
+    foreach my $key ( keys %{ $activities } ) {
+
+	if ( ! defined( $activity ) ) { 
+	    $activity = $activities->{ $key };
+	} else {
+	    foreach my $file_key ( keys %{ $activities->{ $key }->{ files } } ) {
+		$activity->{ files }->{ $file_key } = $activities->{ $key }->{ files }->{ $file_key };
+	    }
+	}
+    }
+
+    return $activity;
+}
+
+
+
+#
+# Destructor. Persists the object on disk and removes old files
+#
+sub DESTROY {
+    my $self = shift;
+
+    if ( $self->{ references } == 0 ) {
+	# If this is the last time a file has been read, and there are
+	# no more references to it, destroy the persistent state from
+	# disk.
+	unlink( $self->{ path } );
+	return;
+    }
+
+    open ( CONSOLIDATED_ACTIVITIES_FILE, "> " . $self->{ path } ) || log_fatal_error( $GLUE_ERROR_CREATING_CVS_CONSOLIDATED_ACTIVITIES_FILE_TO_PERSIST, "Cannot read CVS consolidated activities file '" . $self->{ path } ."' to persist the activities" );
+    # Cygwin has a problem with newlines
+    binmode( CONSOLIDATED_ACTIVITIES_FILE, ":crlf" );
+    print CONSOLIDATED_ACTIVITIES_FILE Dumper( $self ) || log_fatal_error( $GLUE_ERROR_WRITING_CVS_CONSOLIDATED_ACTIVITIES_FILE, "Cannot write CVS consolidated activities file '" . $self->{ path }. "'.\n" );
+    close CONSOLIDATED_ACTIVITIES_FILE;
+}
+
+
+
+1;

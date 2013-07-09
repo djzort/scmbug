@@ -1,0 +1,22 @@
+RUNNING THE TESTSUITE:
+----------------------
+
+This could be improved. To run the testsuite, in one window run:
+
+$ ./regen.sh
+$ ./configure
+$ make
+
+In another window (e.g. for bugzilla, against the test instance of user mkgnu):
+
+$ su 
+# make server-stop; make uninstall; make install; make server-start; (cd src/tests/product.test/config; ./prep.sh bugzilla mkgnu)
+
+Back in the first window:
+
+$ (cd src/tests; make test_cvs)
+
+or
+
+$ (cd src/tests; make test_svn)
+

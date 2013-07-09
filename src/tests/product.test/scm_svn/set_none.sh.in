@@ -1,0 +1,10 @@
+#!/bin/sh
+
+. ../lib/common.inc
+
+# Change the presence_of_bug_ids policy. Set it to none
+common_replace_multiline_sed "$REPOSITORY_ROOT/hooks/etc/@DEVEL_PRODUCT_NAME_LOWER@/glue.conf" "/presence_of_bug_ids =>/ {
+N
+s/value => '.*'/value => 'none'/
+}"
+echo PASSED

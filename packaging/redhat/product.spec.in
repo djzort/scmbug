@@ -1,0 +1,122 @@
+%define name @DEVEL_PRODUCT_NAME_LOWER@
+%define version @DEVEL_PRODUCT_PACKAGE_VERSION@
+%define release 1
+%define product_version @DEVEL_PRODUCT_RELEASE_TAG@
+
+Summary: @DEVEL_PRODUCT_DESCRIPTION_SHORT@
+Name: %{name}
+Version: %{version}
+Release: %{release}
+Source: %{product_version}.tar.gz
+License: GPL
+Group: Development/Tools
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
+BuildArch: noarch
+Vendor:  @DEVEL_PRODUCT_VENDOR@
+Packager: @DEVEL_PRODUCT_MAINTAINER@
+Provides: @DEVEL_PRODUCT_NAME_LOWER@
+Url: @DEVEL_PRODUCT_WEBPAGE@
+Autoreq: no
+
+%description
+@DEVEL_PRODUCT_DESCRIPTION_LONG@
+
+%package common
+Summary: @DEVEL_PRODUCT_PACKAGE_COMMON_DESCRIPTION_SHORT@
+Group: Development/Tools
+Requires: perl-Log-Log4perl
+Autoreq: no
+
+%description common
+@DEVEL_PRODUCT_PACKAGE_COMMON_DESCRIPTION_LONG@
+
+%package tools
+Summary: @DEVEL_PRODUCT_PACKAGE_TOOLS_DESCRIPTION_SHORT@
+Group: Development/Tools
+Requires: @DEVEL_PRODUCT_NAME_LOWER@-common = %{version}, libxslt, docbook-utils
+Autoreq: no
+
+%description tools
+@DEVEL_PRODUCT_PACKAGE_TOOLS_DESCRIPTION_LONG@
+
+%package server
+Summary: @DEVEL_PRODUCT_PACKAGE_SERVER_DESCRIPTION_SHORT@
+Group: Development/Tools
+Requires: @DEVEL_PRODUCT_NAME_LOWER@-common = %{version}, perl-XML-Simple, perl-Mail-Sendmail, perl-LDAP
+#BuildRequires: docbook-utils transfig ImageMagick
+Autoreq: no
+
+%description server
+@DEVEL_PRODUCT_PACKAGE_SERVER_DESCRIPTION_LONG@
+
+%package doc
+Summary: @DEVEL_PRODUCT_PACKAGE_DOC_DESCRIPTION_SHORT@
+Group: Development/Tools
+Autoreq: no
+
+%description doc
+@DEVEL_PRODUCT_PACKAGE_DOC_DESCRIPTION_LONG@
+
+
+%prep
+%setup -n %{product_version}
+
+%build
+%configure
+export CFLAGS="$RPM_OPT_FLAGS"
+make
+
+%install
+%makeinstall
+
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%files common
+%defattr(-,root,root)
+%doc ChangeLog* doc/AUTHORS doc/COPYING doc/TODO
+%dir %{_datadir}/%{name}
+%dir %{_datadir}/%{name}/lib
+%{_datadir}/%{name}/lib/@DEVEL_PRODUCT_NAME@/*.pm
+
+%files server
+%defattr(-,root,root)
+%doc ChangeLog* doc/AUTHORS doc/COPYING doc/TODO
+%dir %{_localstatedir}/log/%{name}
+%dir %{_sysconfdir}/%{name}
+%{_sysconfdir}/init.d/*
+%config(noreplace) %{_sysconfdir}/%{name}/*
+%{_prefix}/sbin/*
+%{_mandir}/man8/*
+%dir %{_datadir}/%{name}
+%dir %{_datadir}/%{name}/lib
+%dir %{_datadir}/%{name}/lib/@DEVEL_PRODUCT_NAME@
+%dir %{_datadir}/%{name}/lib/@DEVEL_PRODUCT_NAME@/Daemon
+%{_datadir}/%{name}/lib/@DEVEL_PRODUCT_NAME@/Daemon/*.pm
+%{_datadir}/%{name}/lib/@DEVEL_PRODUCT_NAME@/Daemon/*.pl
+
+%files tools
+%defattr(-,root,root)
+%doc ChangeLog* doc/AUTHORS doc/COPYING doc/TODO
+%{_mandir}/man1/*
+%{_prefix}/bin/*
+%dir %{_datadir}/%{name}
+%dir %{_datadir}/%{name}/glue
+%dir %{_datadir}/%{name}/glue/*
+%dir %{_datadir}/%{name}/glue/templates/*
+%{_datadir}/%{name}/glue/bin/*
+%config(noreplace) %{_datadir}/%{name}/glue/etc/*
+%{_datadir}/%{name}/glue/templates/*/*
+%dir %{_datadir}/%{name}/lib
+%dir %{_datadir}/%{name}/lib/@DEVEL_PRODUCT_NAME@
+%dir %{_datadir}/%{name}/lib/@DEVEL_PRODUCT_NAME@/Glue
+%dir %{_datadir}/%{name}/lib/@DEVEL_PRODUCT_NAME@/Tools
+%{_datadir}/%{name}/lib/@DEVEL_PRODUCT_NAME@/Tools/*.pm
+%{_datadir}/%{name}/lib/@DEVEL_PRODUCT_NAME@/Glue/*.pm
+%{_datadir}/%{name}/WebReports
+
+%files doc
+%defattr(-,root,root)
+%doc ChangeLog* doc/AUTHORS doc/COPYING doc/TODO
+%doc %{_datadir}/doc/%{name}-doc/*

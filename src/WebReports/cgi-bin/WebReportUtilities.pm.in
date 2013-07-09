@@ -1,0 +1,64 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+package WebReportUtilities;
+
+my $config_file = "@sysconfdir@/@DEVEL_PRODUCT_NAME_LOWER@/WebReports.conf";
+
+use strict;
+use CGI qw(:standard);
+use @DEVEL_PRODUCT_NAME@::Common;
+use CustomData;
+
+my $webreports_config;
+
+
+#
+# Reads the configuration file
+#
+sub new {
+    my $type = shift;
+    my $self = {};
+
+    bless $self, $type;
+
+    my $file_content = file_content( $config_file );
+    eval $file_content;
+    
+    bless $webreports_config;
+    return $self;
+}
+
+sub update {
+    my $self = shift;
+
+    # If you wanted to read values from your bug tracker in order to populate
+    # things like OSs, version, stages, dbtypes, manager then it is best
+    # to reset the values here
+    my $custom_data = CustomData->new($self);
+    $webreports_config = $custom_data->update_config_data();
+}
+
+
+#
+# Reads the configuration file provided for the glue
+#
+sub webreports_config {
+    my $self = shift;
+
+    return $webreports_config;
+}
+
+
+1;

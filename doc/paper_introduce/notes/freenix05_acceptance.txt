@@ -1,0 +1,76 @@
+From freenix05chair@usenix.org Wed Dec  8 15:14:14 2004
+Return-Path: <provos@citi.umich.edu>
+Received: from imap1.asu.edu ([unix socket]) by imap1 (Cyrus v2.1.11) with
+	LMTP; Wed, 08 Dec 2004 15:14:14 -0700
+X-Sieve: CMU Sieve 2.2
+Received: from post4.inre.asu.edu (post4.inre.asu.edu [129.219.113.219]) by
+	imap1.asu.edu (8.12.10/8.12.10/asu_cyrusV2,tcp_wrapped) with ESMTP id
+	iB8MEEYs000482 for <makrists@IMAP3.ASU.EDU>; Wed, 8 Dec 2004 15:14:14 -0700
+	(MST)
+Received: from conversion.post4.inre.asu.edu by asu.edu (PMDF V6.2-X17
+	#30769) id <0I8F00E01CFPXY@asu.edu> for makrists@IMAP3.ASU.EDU (ORCPT
+	kristis.makris@asu.edu); Wed, 08 Dec 2004 15:14:13 -0700 (MST)
+Received: from asmtp3.asu.edu (asmtp3.asu.edu [129.219.117.227]) by asu.edu
+	(PMDF V6.2-X17 #30769) with ESMTP id <0I8F00CIUCFP0C@asu.edu> for
+	makrists@IMAP3.ASU.EDU (ORCPT kristis.makris@asu.edu); Wed, 08 Dec 2004
+	15:14:13 -0700 (MST)
+Received: from citi.umich.edu [141.211.133.111] by asmtp3.asu.edu
+	asmtp(3.3d) id 28258; Wed, 08 Dec 2004 15:14:13 -0700 (MST)
+Received: by citi.umich.edu (Postfix, from userid 104123)	id D1E111BB7C;
+	Wed, 08 Dec 2004 17:14:13 -0500 (EST)
+Date: Wed, 08 Dec 2004 17:14:13 -0500
+From: Niels Provos <freenix05chair@usenix.org>
+Subject: [ham] USENIX '05 FREENIX Track
+To: Kristis Makris <kristis.makris@asu.edu>
+Message-id: <20041208221413.GJ15331@citi.citi.umich.edu>
+MIME-version: 1.0
+Content-type: text/PLAIN; charset=us-ascii
+Content-disposition: inline
+Fcc: sent-accept-reject
+User-Agent: Mutt/1.4.1i
+X-Text-Classification: ham
+X-POPFile-Link: http://127.0.0.1:7070/jump_to_message?view=4153
+X-Evolution-Source: pop://imap3.asu.edu%3amakrists@127.0.0.1:7071/
+Content-Transfer-Encoding: 8bit
+
+On behalf of the FREENIX 2005 Program Committee, it is my               
+pleasure to inform you that your submission, entitled:
+"Scmbug: Policy-based Integration of Software Configuration Management with Bug-tracking"
+has been accepted for publication in the proceedings and presentation
+in the FREENIX track at the conference.
+
+As you may recall, the conference will be held in Anaheim, CA, April
+10-15, 2005, with the FREENIX program on Wednesday through Friday,
+April 13-15.
+
+Please forgive this form letter, but I wanted to let everyone know the
+status of their papers as quickly as possible.  In the next 5-10 days,
+I will be sending you the reviewers' comments for your submission;
+please take them into account when revising your paper for the
+proceedings.  Some accepted papers have been assigned a program
+committee member who will help with specific revisions requested by
+the committee; if this is the case for your paper, more information
+will be included with the reviewers' comments.
+
+IMPORTANT DEADLINE: The final version of your paper will be due at
+USENIX (in BOTH PDF and HTML formats) on February 24th 2005.
+Formatting instructions and other information for speakers can be
+found at:
+
+        http://www.usenix.org/events/usenix05/instrux/
+
+Please check this web page soon, even if you've published at USENIX
+conferences in the past.  Some of the instructions are different from
+previous years.
+
+If you have any questions, please feel free to contact me at
+freenix05chair@usenix.org.  Questions on formatting and conference   
+registration, etc, can be directed to Jane-Ellen Long at USENIX,
+jel@usenix.org.
+
+Again, congratulations on your accepted paper, and I look forward to
+seeing you in Anaheim!
+
+Sincerely,
+Niels Provos
+FREENIX Program Chair

@@ -1,0 +1,638 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Daemon::Bugtracker;
+
+require Exporter;
+
+@ISA = qw(Exporter);
+@EXPORT = qw(
+	     $BUGTRACKER_VERSION_WRONG_FORMAT
+	     $BUGTRACKER_VERSION_NOT_SUPPORTED
+	     $BUGTRACKER_VERSION_LATEST
+	     
+	     $BUG_STATUS_INVALID_STRING
+	     $BUG_STATUS_INVALID_KEY
+	     $BUG_RESOLUTION_INVALID_KEY
+	     $BUG_PRIORITY_INVALID_STRING
+	     $BUG_SEVERITY_INVALID_STRING
+	     );
+
+use strict;
+use Data::Dumper;
+
+use @DEVEL_PRODUCT_NAME@::Common;
+
+use vars qw (
+	     $BUGTRACKER_VERSION_WRONG_FORMAT
+	     $BUGTRACKER_VERSION_NOT_SUPPORTED
+	     $BUGTRACKER_VERSION_LATEST
+	     
+	     $BUG_STATUS_INVALID_STRING
+	     $BUG_STATUS_INVALID_KEY
+	     $BUG_RESOLUTION_INVALID_KEY
+	     $BUG_PRIORITY_INVALID_STRING
+	     $BUG_SEVERITY_INVALID_STRING
+	     );
+
+
+# Tokens used to differentiate between the different states of a
+# version.
+$BUGTRACKER_VERSION_WRONG_FORMAT = "wrong_version_format";
+$BUGTRACKER_VERSION_NOT_SUPPORTED = "not_supported";
+$BUGTRACKER_VERSION_LATEST = "latest";
+
+
+# Used for bug statuses that are not part of the bug status map 
+$BUG_STATUS_INVALID_STRING = "__INVALID BUG STATUS__";
+$BUG_STATUS_INVALID_KEY = -1;
+
+# Used for status resolutions that are not part of the resolution map
+$BUG_RESOLUTION_INVALID_KEY = -1;
+
+# Used for bug priorities that are not part of the bug priority map 
+$BUG_PRIORITY_INVALID_STRING = "__INVALID BUG PRIORITY__";
+
+# Used for bug severities that are not part of the bug severity map 
+$BUG_SEVERITY_INVALID_STRING = "__INVALID BUG SEVERITY__";
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $data = shift;
+    my $self = {};
+
+    bless $self, $type;
+    $self->init_data( $data );
+
+    return $self;
+}
+
+
+
+# Carries out common initialization checks
+sub init {
+    my $self = shift;
+
+    if ( $self->is_version_in_wrong_format() == 1 ) {
+	# If this version is in the wrong format
+	return ( 1, "Version '" . $self->version() . "' is in the wrong format. The correct format is x.y.z, where x,y,z are integers.\n" );
+    }
+
+    if ( $self->is_version_supported() == 0 ) {
+	# If this version is not supported, bail
+	return ( 1, "Unsupported version '" . $self->version() . "'. This could be because this version was never tested. If you use a different version number and manage to get the integration working correctly please notify '" . '@DEVEL_PRODUCT_MAILING_LIST_USERS_EMAIL@' . "'.\n" );
+    }
+
+
+    return $self->init_specific();
+}
+
+
+
+sub init_data {
+    my $self = shift;
+    my $data = shift;
+
+    $self->version ( $data->{ version } );
+    $self->location ( $data->{ database_location } );
+    $self->port ( $data->{ database_port } );
+    $self->database ( $data->{ database_name } );
+    $self->database_vendor ( $data->{ database_vendor } );
+    $self->username ( $data->{ database_username } );
+    $self->password ( $data->{ database_password } );
+    $self->bug_url_prefix ( $data->{ bug_url_prefix } );
+}
+
+
+
+sub installed_locally {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ installed_locally } = $data;
+    } else {
+	return $self->{ installed_locally };
+    }
+}
+
+
+
+sub installation_directory {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ installation_directory } = $data;
+    } else {
+	return $self->{ installation_directory };
+    }
+}
+
+
+
+sub version {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ version } = $data;
+	$self->set_version_type();
+    } else {
+	return $self->{ version };
+    }
+}
+
+
+
+# Returns 1 if the version set for the bugtracker is supported, 0
+# otherwise
+#
+# Must be called AFTER version() has been called at least once.
+sub is_version_supported {
+    my $self = shift;
+
+    if ( defined ( $self->{ version_type } )  &&
+	 $self->{ version_type } ne $BUGTRACKER_VERSION_NOT_SUPPORTED ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+# Returns 1 if the version set for the bugtracker is in the wrong
+# format, 0 otherwise. The correct format is x.y.z, where x,y,z are
+# integers.
+#
+# Must be called AFTER version() has been called at least once.
+sub is_version_in_wrong_format {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq $BUGTRACKER_VERSION_WRONG_FORMAT ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+sub is_version_latest {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq $BUGTRACKER_VERSION_LATEST ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+sub location {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ location } = $data;
+    } else {
+	return $self->{ location };
+    }
+}
+
+
+
+sub port {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ port } = $data;
+    } else {
+	return $self->{ port };
+    }
+}
+
+
+
+sub database {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ database } = $data;
+    } else {
+	return $self->{ database };
+    }
+}
+
+
+
+sub database_vendor {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ database_vendor } = $data;
+    } else {
+	return $self->{ database_vendor };
+    }
+}
+
+
+
+sub username {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ username } = $data;
+    } else {
+	return $self->{ username };
+    }
+}
+
+
+
+sub password {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ password } = $data;
+    } else {
+	return $self->{ password };
+    }
+}
+
+
+sub bug_url_prefix {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ bug_url_prefix } = $data;
+    } else {
+	return $self->{ bug_url_prefix };
+    }
+}
+
+
+
+sub active_states_list {
+    my $self = shift;
+    my $bug_status_map = shift;
+    my $count = 0;
+    my $list = "";
+
+    foreach my $bug_status ( sort keys %{ $bug_status_map } ) {
+	if ( $bug_status_map->{ $bug_status }->{ active } == 1 ) {
+	    $count++;
+	    if ( $count > 1) {
+		$list .= " or ";
+	    }
+	    $list .= "'" . $bug_status_map->{ $bug_status }->{ name } . "'";
+
+	}
+    }
+
+    if ( $count == 0 ) {
+	$list .= $BUG_STATUS_INVALID_STRING . " state";
+    } elsif ( $count == 1 ) {
+	$list .= " state";
+    } else {
+	$list .= " states";
+    }
+
+    return $list;
+}
+
+
+# Given a resolution status, returns the key that matches the
+# resolution status taking into account a case sensitive verification
+# of the key.
+#
+# PARAMETERS
+# $1 - A bug status
+# $2 - The map of bug statuses to valid statuses and resolutions.
+# $3 - Apply case sensitive verification
+sub resolution_status_case_sensitive_key {
+    my $self = shift;
+    my ( $bug_status, $bug_status_map, $case_sensitive_verification ) = ( @_ );
+
+
+    # Find the proposed_status in the bug statusmap accounting for
+    # the case sensitive verification
+    my $proposed_status_compare_key;
+    foreach my $key ( keys %{ $bug_status_map } ) {
+        
+        my $proposed_status_compare;
+        my $key_compare;
+        if ( $case_sensitive_verification ) {
+            $proposed_status_compare = $bug_status;
+            $key_compare = $key;
+        } else {
+            $proposed_status_compare = lc $bug_status;
+            $key_compare = lc $key;
+        }
+
+        if ( $proposed_status_compare eq $key_compare ) {
+            # Even if the verification is case insensitive, pick the
+            # correct key in its correct case from the map
+            $proposed_status_compare_key = $key;
+        }
+    }
+
+    return $proposed_status_compare_key;
+}
+
+
+
+sub valid_resolution_states_list {
+    my $self = shift;
+    my ( $bug_status, $bug_status_map ) = ( @_ );
+    my $list = "";
+    my $count = 0;
+
+    foreach my $resolution_state ( @{ $bug_status_map->{ $bug_status }->{ possible_resolution_states } } ) {
+	$count++;
+	if ( $count > 1) {
+	    $list .= " or ";
+	}
+	$list .= "'" . $resolution_state . "'";
+    }
+
+    if ( $count == 0 ) {
+	$list .= '';
+    } elsif ( $count == 1 ) {
+	$list .= " state";
+    } else {
+	$list .= " states";
+    }
+
+    return $list;
+}
+
+
+
+# Returns a string that reports the list of valid resolutions in the
+# bug-tracker
+#
+# PARAMETERS:
+# $1 - The bug status string for which the valid resolutions list
+#      should be reported
+# $2 - The bug status map
+# $3 - Apply case sensitive verification
+sub valid_resolutions_list {
+    my $self = shift;
+    my ( $bug_status, $bug_status_map, $case_sensitive_verification ) = ( @_ );
+    my $list = "";
+    my $count = 0;
+
+    # Find the bug_status accounting for case sensitive verification
+    my $bug_status_compare_key = $self->resolution_status_case_sensitive_key( $bug_status, $bug_status_map, $case_sensitive_verification );
+
+    foreach my $resolution ( @{ $bug_status_map->{ $bug_status_compare_key }->{ possible_resolutions } } ) {
+	$count++;
+	if ( $count > 1) {
+	    $list .= " or ";
+	}
+	$list .= "'" . $resolution . "'";
+    }
+
+    if ( $count == 0 ) {
+	$list .= '';
+    } elsif ( $count == 1 ) {
+	$list .= " resolution";
+    } else {
+	$list .= " resolutions";
+    }
+
+    return $list;
+}
+
+
+
+# Checks if a resolution change is valid
+#
+# PARAMETERS
+# $1 - Current bug status
+# $2 - The proposed new status
+# $3 - The proposed resolution for the new status
+# $4 - The map of bug statuses to valid statuses and resolutions.
+# $5 - Apply case sensitive verification
+#
+# RETURNS:
+# - 0 if the check is valid
+# - 1 if the proposed new status is invalid
+# - 2 if the proposed new resolution is invalid
+sub resolution_change_check {
+    my $self = shift;
+    my ( $current_bug_status, $proposed_status, $proposed_resolution, $bug_status_map, $case_sensitive_verification ) = ( @_ );
+    my $status_change_is_valid = 0;
+    my $resolution_change_is_valid = 0;
+    my $retval = 0;
+
+    # Find the proposed_status accounting for case sensitive
+    # verification
+    my $proposed_status_compare_key = $self->resolution_status_case_sensitive_key( $proposed_status, $bug_status_map, $case_sensitive_verification );
+
+
+    #
+    # Verify the status change
+    #
+    foreach my $possible_resolution_state ( @{ $bug_status_map->{ $current_bug_status }->{ possible_resolution_states } } ) {
+
+        my $possible_resolution_state_compare;
+        my $proposed_status_compare;
+        if ( $case_sensitive_verification ) {
+            $possible_resolution_state_compare = $possible_resolution_state;
+            $proposed_status_compare = $bug_status_map->{ $proposed_status_compare_key }->{ name };
+        } else {
+            $possible_resolution_state_compare = lc $possible_resolution_state;
+            $proposed_status_compare = lc $bug_status_map->{ $proposed_status_compare_key }->{ name };
+        }
+
+        if ( $possible_resolution_state_compare eq $proposed_status_compare ) {
+            # The status change is valid.
+            $status_change_is_valid = 1;
+        }
+    }
+
+    #
+    # Verify the resolution
+    #
+
+    # Now, used the proposed_status from the bug status map
+    foreach my $possible_resolution ( @{ $bug_status_map->{ $proposed_status_compare_key }->{ possible_resolutions } } ) {
+        my $possible_resolution_compare;
+        my $proposed_resolution_compare;
+        if ( $case_sensitive_verification ) {
+            $possible_resolution_compare = $possible_resolution;
+            $proposed_resolution_compare = $proposed_resolution;
+        } else {
+            $possible_resolution_compare = lc $possible_resolution;
+            $proposed_resolution_compare = lc $proposed_resolution;
+        }
+
+	if ( $possible_resolution_compare eq $proposed_resolution_compare ) {
+	    # The resolution change is valid.
+	    $resolution_change_is_valid = 1;
+	}
+    }
+
+    # If the status change is valid, and either the resolution change
+    # is valid or there was no proposed resolution (because none is
+    # applicable here) the check succeeds.
+    if ( $status_change_is_valid == 1 &&
+	 ( $resolution_change_is_valid == 1 || $proposed_resolution eq "" ) ) {
+	return 0; 
+    } elsif ( $status_change_is_valid == 0) {
+	return 1;
+    } else {
+        # Support data as resolution:
+        # e.g. status 8: assigned mail@example.com
+        #
+        # status     = assigned
+        # resolution = mail@example.com
+        my $is_data = $bug_status_map->{ $proposed_status_compare_key }->{ accepts_data_as_resolution };
+        if( $is_data ) {
+            return 0;
+        }
+	return 2;
+    }
+}
+
+
+
+sub bug_status_string_tokey {
+    my $self = shift;
+    my ( $bug_status_string, $bug_status_map ) = ( @_ );
+
+    foreach my $bug_status_key ( sort keys %{ $bug_status_map } ) {
+	if ( $bug_status_map->{ $bug_status_key } ->{ name } eq $bug_status_string ) {
+	    return $bug_status_key;
+	}
+    }
+
+    return -1;
+}
+
+
+
+sub extract_affected_files {
+    my $self = shift;
+    my ($comment, $bug_id, $comment_id) = ( @_ );
+    my $is_an_integration_comment = 0;
+    my $affected_files_description;
+    my $ret_message = "";
+    my $ret_val = 0;
+    my $comment_only = "";
+
+    if ( $comment =~ m/$PRODUCT_AFFECTED_FILES_TOKEN/s ) {
+	my $changeset_list = $comment;
+	$changeset_list =~ s/(.*)$PRODUCT_AFFECTED_FILES_TOKEN//s;
+	my $comment_and_branch = $1;
+
+	if ($comment_and_branch =~ m/(.*)$PRODUCT_BRANCH_NAME_TOKEN/s ) {
+	    $comment_only = $1;
+
+	    # Remove a newline from the comment, since one was added
+	    # when the comment was created by us.
+	    $comment_only =~ s/\n$//s;
+	 
+	    my ( @changeset_line_groups ) = split( "\n", $changeset_list );
+	    foreach my $changeset_line ( @changeset_line_groups ) {
+		if ( $changeset_line =~ m/(.*)?$OLD_VERSION_TO_NEW_VERSION_TOKEN(.*)?$NEW_VERSION_TO_FILENAME_TOKEN(.*)?$PRODUCT_AFFECTED_FILES_PRODUCT_FILE_TOKEN(.*)/ ) {
+		    my $old_version = $1;
+		    my $new_version = $2;
+		    my $product_name = $3;
+		    my $file = $4;
+		    
+		    $affected_files_description->{ $file }->{ old_version } = $old_version;
+		    $affected_files_description->{ $file }->{ new_version } = $new_version;
+		} else {
+		    # This comment was not formatted the way we expected.
+		    $ret_val = 1;
+		    $ret_message .= "Detected a corrupted affected files description in bug $bug_id, comment $comment_id: '" . $comment . "'.\n";
+		}
+	    }
+	    $is_an_integration_comment = 1;
+   
+	} else {
+	    # This comment was not formatted the way we expected. The
+	    # branch was missing.
+	    $ret_val = 1;
+	    $ret_message .= "Detected a corrupted comment in bug $bug_id, comment $comment_id: '" . $comment . "'.\n";
+	}
+    }
+
+    return $is_an_integration_comment, $affected_files_description, $comment_only, $ret_val, $ret_message;
+}
+
+
+
+#
+# Takes a set of comments all combined into one long string and
+# seperates them out to individual commit sections
+#
+sub split_comment_sections {
+    my $self = shift;
+    my ($comments) = ( @_ );
+
+    # Store the tag used to tell where the changed files are
+    my @affected_files_tags = split( "\n", $PRODUCT_AFFECTED_FILES_TOKEN );
+
+    my @comment_lines = split( "\n", $comments );
+    my $number_of_comment_lines = scalar @comment_lines;
+    my $comment_lines_counter = 0;
+    my @comment_sets;
+    my $current_comment = "";
+    my $comment_progress = 0;
+
+    while ( $comment_lines_counter <= $number_of_comment_lines ) {
+
+	  # Add this line to the current comment (Putting the newline
+	  # again)
+	  $current_comment .= $comment_lines[ $comment_lines_counter ];
+	  $current_comment .= "\n";
+
+	  # Flag if an affected files section was found
+	  if ( ( $comment_lines[ $comment_lines_counter] eq $affected_files_tags[0] ) &&
+	       ( $comment_lines[ ($comment_lines_counter + 1 ) ] eq $affected_files_tags[1] ) ) {
+	      $comment_progress = 1;
+	  }
+	  
+	  # Check if the end of a section has been found and add it to
+	  # the list
+	  if ( ( ( $comment_lines[ $comment_lines_counter ] eq "") || ($comment_lines_counter == $number_of_comment_lines) ) &&
+	       ( $comment_progress == 1 ) ) {
+	      push( @comment_sets, $current_comment );
+	      $comment_progress = 0;
+	      $current_comment = "";
+	  }
+	  $comment_lines_counter++;
+      }
+
+    return @comment_sets;
+}
+
+
+
+1;

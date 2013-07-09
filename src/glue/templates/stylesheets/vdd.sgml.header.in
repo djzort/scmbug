@@ -1,0 +1,9 @@
+<!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook V4.2//EN"
+ [
+ <!ENTITY devel-product-name "@DEVEL_PRODUCT_NAME@">
+ <!ENTITY devel-product-name-lower "@DEVEL_PRODUCT_NAME_LOWER@">
+ <!ENTITY devel-product-version "@DEVEL_PRODUCT_VERSION@">
+ <!ENTITY devel-product-webpage "@DEVEL_PRODUCT_WEBPAGE@">
+ <!ENTITY devel-product-mailing-list-users-email "mailto:@DEVEL_PRODUCT_MAILING_LIST_USERS_EMAIL@">
+ ]
+>

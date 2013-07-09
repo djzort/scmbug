@@ -1,0 +1,70 @@
+#
+# This is a template web reports configuration file for @DEVEL_PRODUCT_NAME@
+#
+$webreports_config = {
+
+    # Port and location the daemon will start on
+    daemon_port => "3872",
+    daemon_location => "localhost",
+    
+    temp_dir => "@DEVEL_CONFIG_DEFAULT_TEMP_DIR@",
+
+    # Webpage display settings
+    heading_banner => "/@DEVEL_PRODUCT_NAME_LOWER@/images/dot_clear.gif",
+    bug_tracker_url => "",
+    
+    # Codestriker Topic support (Leave blank if not required)
+    # Enter the URL (e.g. http://localhost/codestriker/codestriker.pl)
+    # and the directory that holds the CodestrikerClient.pm file
+    codestriker_url => "",
+    codestriker_client_path => "",
+
+    # Supported Repository web viewers
+    # List options:
+    #  none   - Allow users to have no file to webview linkage
+    #  ViewVC - Link to View VC radio button
+    #  WebSVN - Link to WebSVN ratio button
+    # First in the list is the default (Empty list for no display)
+    repo_webview_options => [ 'WebSVN', 'ViewVC', 'None' ],
+
+    # List of repositories
+    repositories => [
+    			{
+    				name => "Code Repository",
+    				repository_url => "http://localhost/svn/coderepo/",
+    				viewvc => "http://localhost/viewvc/CodeRepo/",
+     				websvn => "http://localhost/websvn/wsvn/CodeRepo/",
+   				bugid_regex => '@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_REGEX@',
+    				bugid_split_regex => '@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_SPLIT_REGEX@',
+    				# If the first list of directories of the repository should
+    				# be listed as a multi-select (y/n)
+    				autoproject_list => 'n'
+    			}
+    		    ],
+    		    
+     # Link to the next page after the bug report this allows custom
+     # release documents to be created. This link should be a perl cgi
+     # script so that it can recieve the list of bug IDs
+     bug_report_next_page => "/@DEVEL_PRODUCT_NAME_LOWER@-cgi/bug_report_input_form.pl",
+     
+     # The following values are used by the example second page on the bug report
+     # it shows how values can be set and loaded into the report
+     report_form_data => {
+     	OSs       => [ 'Windows Server 2003', 'Windows XP', 'Linux' ],
+	versions  => [ 'N/A', '1.0', '2.0' ],
+	stages    => [ 'N/A', 'Alpha1', 'RC1', 'GA' ],
+	dbtypes   => [ 'Oracle', 'SQL', 'DB2' ],
+	managers  => [ 'John Smith', 'Jane Doe' ],
+	
+	# The following argument allows the addition of a hand crafted
+	# update page at the end of the Impact document generation
+	final_update_page => ""
+     },
+     
+     # Set the default E-mail parameters
+     email_config => {
+         smtp => 'smtp.domain.com',
+         email_from => 'admin@domain.com',
+         email_domain => '@domain.com'
+     }
+};

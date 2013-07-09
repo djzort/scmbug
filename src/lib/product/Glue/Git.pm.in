@@ -1,0 +1,416 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Glue::Git;
+
+@ISA = qw ( @DEVEL_PRODUCT_NAME@::Glue::SCM );
+
+use strict;
+use Data::Dumper;
+use Env qw( USER USERNAME GIT_DIR );
+use @DEVEL_PRODUCT_NAME@::Activity;
+use @DEVEL_PRODUCT_NAME@::Error;
+use @DEVEL_PRODUCT_NAME@::Glue::SCM;
+use @DEVEL_PRODUCT_NAME@::Common;
+
+
+
+my $GIT_ADD_TOKEN = "A";
+my $GIT_DELETE_TOKEN = "D";
+my $GIT_MODIFY_TOKEN = "M";
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $data = shift;
+    my $self = @DEVEL_PRODUCT_NAME@::Glue::SCM->new( $data );
+
+    bless $self, $type;
+
+    # REVISE:
+    # Identify the username of the Git user
+    if ( defined ( $USER ) ) {
+	$self->user( $USER );
+    } else {
+	$self->user( $USERNAME );
+    }
+
+    return $self;
+}
+
+
+
+sub detect_version {
+    my $self = shift;
+    my $command = "@DEVEL_CONFIG_SCM_BINARY_GIT@ --version";
+    my $command_output = execute_command($command);
+
+    my $version = $command_output;
+    $version =~ s/.*?(\d+\.\d+\.\d+).*/$1/s;
+
+    $logger->info( "Detected Git version $version\n" );
+    $self->version( $version );
+}
+
+
+# Initializes some internal configuration parameters
+sub init_internal {
+    my $self = shift;
+
+    $self->required_tool("@DEVEL_CONFIG_SCM_BINARY_GIT@");
+}
+
+
+sub set_version_type {
+    my $self = shift;
+    my $version = $self->version();
+
+    if ($version =~ m/(\d+)\.(\d+)\.(\d+)/ ) {
+	my $major = $1;
+	my $minor = $2;
+	my $patch = $3;
+	if ( $major == 1 ) {
+	    if ( $minor == 5 ) {
+		$self->version_type( $SCM_VERSION_LATEST );
+	    } else {
+		$self->version_type( $SCM_VERSION_NOT_SUPPORTED );
+	    }
+	} else {
+	    $self->version_type( $SCM_VERSION_NOT_SUPPORTED );
+	}
+    } else {
+	$self->version_type( $SCM_VERSION_WRONG_FORMAT );
+    }
+}
+
+
+
+#
+# Prepares the internal data structures to handle a verification
+# activity using data received from Git
+#
+sub prepare_activity_verify() {
+    my $self = shift;
+    my $log_message_file = shift;
+    my $line;
+
+    $logger->info("Preparing an activity_verify\n");
+    # These are the arguments produced by Git
+    # There is only 1 and it is in the format: <log_file_name>
+    open ( LOG_MESSAGE_FILE, "< $log_message_file" );
+    # Cygwin has a problem with newlines
+    binmode( LOG_MESSAGE_FILE, ":crlf" );
+    my $message = "";
+    while ( $line = <LOG_MESSAGE_FILE> ) {
+	$message .= $line;
+    }
+    $self->activity()->original_log_message( $message );
+    close ( LOG_MESSAGE_FILE );
+
+    $self->prepare_repository();
+
+    #
+    # Detect the list of affected files so we can automatically detect
+    # the product name
+    #
+    $logger->info( "Calling '@DEVEL_CONFIG_SCM_BINARY_GIT_STATUS@' to discover the list of files that will be committed\n" );
+    open ( GIT_STATUS, "@DEVEL_CONFIG_SCM_BINARY_GIT_STATUS@ |" ) || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_GIT_STATUS, "Cannot execute '@DEVEL_CONFIG_SCM_BINARY_GIT_STATUS@': $!\n");
+    # Cygwin has a problem with newlines
+    binmode( GIT_STATUS, ":crlf" );
+
+    my $found_changes_to_be_committed = 0;
+    while ( $line = <GIT_STATUS> ) {
+        $line =~ s/\n//; # Remove newline
+        $logger->debug( "line is '$line'\n" );
+        if ( $line =~ m/\# Changes to be committed:/ ) {
+            $logger->debug( "Found the beginning of changes to be committed.\n" );
+            $found_changes_to_be_committed = 1;
+            next;
+        } elsif ( $line =~ m/\# Changed but not updated:/ ) {
+            # We should stop
+            last;
+        } elsif ( $line =~ m/\# Untracked files:/ ) {
+            # We should stop
+            last;
+        }
+
+        if ( $found_changes_to_be_committed == 1) {
+            if ( $line =~ m/.*:\s+(.*)/ ) {
+                # This is one of the affected files
+                my $file_name = $1;
+
+                $logger->debug( "Detected affected file '$file_name'.\n" );
+                $self->activity()->{ files }->{ $file_name } = {};
+            }
+        }
+    }
+    close ( GIT_STATUS );
+
+
+
+    #
+    # Automatically detect the product name
+    #
+    $self->activity()->prepare_product_name();
+
+    $logger->debug( Dumper( $self->activity() ) );
+}
+
+
+
+#
+# Prepares the internal data structures to handle a commit activity
+# using data received from Git
+#
+sub prepare_activity_commit {
+    my $self = shift;
+    my $line;
+
+    $logger->info("Preparing an activity_commit\n");
+    $self->prepare_repository();
+
+    $logger->info( "Calling '@DEVEL_CONFIG_SCM_BINARY_GIT_REV_PARSE@ HEAD' to discover the commit_hash\n" );
+    open ( GIT_REV_PARSE, "@DEVEL_CONFIG_SCM_BINARY_GIT_REV_PARSE@ HEAD |" ) || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_GIT_REV_PARSE, "Cannot execute '@DEVEL_CONFIG_SCM_BINARY_GIT_REV_PARSE@': $!\n" );
+    # Cygwin has a problem with newlines
+    binmode( GIT_REV_PARSE, ":crlf" );
+
+    # First line is the hash
+    my $commit_hash;
+    $line = <GIT_REV_PARSE>;
+    $line =~ s/\n$//g;
+    $commit_hash = $line;
+    $logger->debug( "@DEVEL_CONFIG_SCM_BINARY_GIT_REV_PARSE@ found HEAD '$commit_hash'\n" );
+    close ( GIT_REV_PARSE );
+
+
+    #
+    # Read log message
+    #
+    $logger->info( "Calling '@DEVEL_CONFIG_SCM_BINARY_GIT_LOG@' to discover the log message\n" );
+    open ( GIT_LOG, "@DEVEL_CONFIG_SCM_BINARY_GIT_LOG@ --no-walk $commit_hash |" ) || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_GIT_LOG, "Cannot execute '@DEVEL_CONFIG_SCM_BINARY_GIT_LOG@': $!\n");
+    # Cygwin has a problem with newlines
+    binmode( GIT_LOG, ":crlf" );
+    
+    # The log message format is:
+    # commit 30059117e85edf16d3b7c3afa761f771f71b6c18
+    # Author: Kristis Makris <mkgnu@mkgnu.net>
+    # Date:   Thu Sep 4 16:03:41 2008 -0700
+    #
+    #    bug 18: This is an autogenerated log comment from the testsuite.
+    #    Implemented automatic status resolution as a new policy
+    #    status 18: RESOLVED DUPLICATE 19
+    
+    # Ignore the commit hash
+    $line = <GIT_LOG>;
+    
+    # Retrieve the SCM user
+    $line = <GIT_LOG>;
+    $line =~ s/\n$//g;
+    $line =~ s/.*: //g;
+    $self->activity()->user( $line );
+    
+    # Skip the date and the blank line
+    $line = <GIT_LOG>;
+    $line = <GIT_LOG>;
+    
+    my $original_log_message;
+    # Rest of the lines are the log message
+    while ( $line = <GIT_LOG> ) {
+        # Remove the first four spaces from the log
+        $line =~ s/^    //g;
+        $original_log_message .= $line;
+    }
+    $self->activity()->original_log_message( $original_log_message );
+    close ( GIT_LOG );
+
+    # This will show the list of affected files, but given two known
+    # revisions. e.g. HEAD^ HEAD (is using HEAD accurate ? What if
+    # another commit is underway ?)
+    #   git-diff --name-status rev^ rev
+    #
+    # This will show the list of affected files for a particular commit_hash
+    #   git-whatchanged <commit_hash> -n 1
+    #
+    # This will show for each file in the list of affected files the history of the file
+    #   git-whatchanged <commit_hash>
+    #
+    # This will show only the last 2 commits
+    #   git-whatchanged <filename> -n 2
+    #
+    # And this will show only the last 2 commits of a file given a
+    # particular commit_hash as the basis
+    #   git-whatchanged <commit_hash> -n 2 <filename>
+    $logger->info( "Calling '@DEVEL_CONFIG_SCM_BINARY_GIT_WHATCHANGED@' to discover the list of affected files\n" );
+    open ( GIT_WHATCHANGED, "@DEVEL_CONFIG_SCM_BINARY_GIT_WHATCHANGED@ -n 1 $commit_hash |" ) || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_GIT_WHATCHANGED, "Cannot execute '@DEVEL_CONFIG_SCM_BINARY_GIT_WHATCHANGED@': $!\n");
+    # Cygwin has a problem with newlines
+    binmode( GIT_WHATCHANGED, ":crlf" );
+
+    while ( $line = <GIT_WHATCHANGED> ) {
+        if ( $line =~ m/^:/ ) {
+            # This is a line that describes an affected file
+
+            $line =~ s/\n//; # Remove the newline
+            if ( $line =~ m/.*\.\.\.\s+(\w+)\s+(.*)/ ) {
+                my $file_state = $1;
+                my $file_name = $2;
+
+                $logger->debug( "Discovered the affected file '$file_name'.\n" );
+                $self->activity()->{ files }->{ $file_name }->{ new_version } = $commit_hash;
+
+                if ( $file_state eq $GIT_ADD_TOKEN ) {
+                    $self->activity()->{ files }->{ $file_name }->{ file_state } = $SCM_FILE_STATE_ADDED;
+                } elsif ( $file_state eq $GIT_DELETE_TOKEN ) {
+                    $self->activity()->{ files }->{ $file_name }->{ file_state } = $SCM_FILE_STATE_DELETED;
+                } elsif ( $file_state eq $GIT_MODIFY_TOKEN ) {
+                    $self->activity()->{ files }->{ $file_name }->{ file_state } = $SCM_FILE_STATE_MODIFIED;
+                } else {
+		    log_fatal_error( $GLUE_ERROR_INVALID_GIT_WHATCHANGED_TOKEN, "Invalid token '$file_state' from command 'git-whatchanged'\n");
+                }
+            } else {
+                next;
+            }
+        }
+
+    }
+    close ( GIT_WHATCHANGED );
+
+    # Now that we have collected the list of affected files, we must
+    # also retrieve for each file the old_version (old commit_hash).
+    foreach my $file_name ( sort keys %{ $self->activity()->{ files } } ) {
+        $logger->info( "Calling '@DEVEL_CONFIG_SCM_BINARY_GIT_WHATCHANGED@' for file '$file_name' to discover the previous version commit_hash.\n" );
+        open ( GIT_WHATCHANGED, "@DEVEL_CONFIG_SCM_BINARY_GIT_WHATCHANGED@ $commit_hash -n 2 $file_name |" ) || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_GIT_WHATCHANGED, "Cannot execute '@DEVEL_CONFIG_SCM_BINARY_GIT_WHATCHANGED@': $!\n");
+        binmode( GIT_WHATCHANGED, ":crlf" );
+
+        $self->activity()->{ files }->{ $file_name }->{ old_version } = "NONE";
+        my $found_first_commit_hash = 0;
+        while ( $line = <GIT_WHATCHANGED> ) {
+            if ( $line =~ m/^commit\s+(.*)/ ) {
+                if ( $found_first_commit_hash == 0 ) {
+                    $found_first_commit_hash = 1;
+                    next;
+                } else {
+                    # This is the second time we found a "commit"
+                    # line. The commit hash of this line is the older
+                    # version.
+                    my $matched_commit_hash = $1;
+
+                    $self->activity()->{ files }->{ $file_name }->{ old_version } = $matched_commit_hash;
+                }
+            }
+        }
+
+
+        close ( GIT_WHATCHANGED );
+    }
+
+    #
+    # Automatically detect the product name
+    #
+    $self->activity()->prepare_product_name();
+
+    $logger->debug( Dumper( $self->activity() ) );
+}
+
+
+
+#
+# Prepares the internal data structures to handle a tagging activity
+# using data received from Git
+#
+sub prepare_activity_tag {
+    my $self = shift;
+    my ( @arguments ) = ( @_ );
+    my $line;
+
+    print "activity tag arguments are: '" . Dumper ( @arguments ) . "'\n";
+
+    open ( GIT_REV_PARSE, "@DEVEL_CONFIG_SCM_BINARY_GIT_REV_PARSE@ HEAD |" ) || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_GIT_REV_PARSE, "Cannot execute 'git-rev-parse': $!\n" );
+    # Cygwin has a problem with newlines
+    binmode( GIT_REV_PARSE, ":crlf" );
+
+    # First line is the hash
+    $line = <GIT_REV_PARSE>;
+    $line =~ s/\n$//g;
+
+    $logger->debug( "git-rev-parse found HEAD '$line'\n" );
+
+    $self->activity()->user( '_which_user_' );
+    $self->activity()->original_log_message( '_which_original_log_message_' );
+
+    # Must build the list of affected files
+
+    # Must retrieve the tag name and the tag operation name
+    # $self->activity()->{ type }->{ tag }->{ name } = $label_name;
+    # $self->activity()->{ type }->{ tag }->{ operation } = $TAG_OPERATION_ADD;
+
+    close ( GIT_REV_PARSE );
+}
+
+
+
+#
+# Used to detect the branch name.
+#
+sub prepare_branch_name {
+    my $self = shift;
+    my $line;
+
+    open ( GIT_BRANCH, "@DEVEL_CONFIG_SCM_BINARY_GIT_BRANCH@ |" ) || log_fatal_error( $GLUE_ERROR_CANNOT_EXECUTE_GIT_BRANCH, "Cannot execute '@DEVEL_CONFIG_SCM_BINARY_GIT_BRANCH@': $!\n" );
+    # Cygwin has a problem with newlines
+    binmode( GIT_BRANCH, ":crlf" );
+
+    # The list of branches showing the active branch goes like this:
+    # 
+    # b_test_branch
+    # experimental
+    # * master
+
+    # Read all the lines
+    $self->activity()->branch_name( $BRANCH_NAME_INDETERMINATE );
+    while ( $line = <GIT_BRANCH> ) {
+        # Detect if this is the line that has a * in it
+        if ( $line =~ m/\* (.*)/ ) {
+            my $branch_name = $1;
+            $self->activity()->branch_name( $branch_name );
+            last;
+        }
+    }
+
+    close ( GIT_BRANCH );
+}
+
+
+
+#
+# Used to detect the repository.
+#
+sub prepare_repository {
+    my $self = shift;
+
+    my $repository = '';
+    if ( defined ( $GIT_DIR ) ) {
+        $repository = $GIT_DIR;
+        # Remove the /.git postfix
+        $repository =~ s/\/\.git//g;
+        $self->activity()->repository( $repository );
+    }
+    $logger->debug( "GIT_DIR is '$repository'\n");
+}
+
+
+
+1;

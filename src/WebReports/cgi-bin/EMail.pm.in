@@ -1,0 +1,180 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+package EMail;
+
+use strict;
+use MIME::Base64;
+use Mail::Sendmail;
+
+my $email_config;
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+
+    $email_config = shift;
+
+    bless $self, $type;
+
+    return $self;
+}
+
+# Gets a users E-mail address based on the username
+sub get_users_email_address {
+    my $self = shift;
+    my $username = shift;
+    
+    # Make sure the user name is not already an E-mail address
+    if( $username =~ /\@/ ) {
+        return $username;
+    }
+    my $email_address = $username . $email_config->{ email_domain };
+    
+    return $email_address;
+}
+
+sub mail_send_mail {
+    my $self = shift;
+    my ($subject, $message, $mailing_address, $from_address) = ( @_ );
+
+    # Start with the default as the from address
+    my $from_user_address = $email_config->{ email_from };
+   
+    if( defined( $from_address ) && ($from_address ne "") ) {
+        $from_user_address = $from_address;
+    }
+
+    my %mail = ( To      => "$mailing_address",
+                 From    => "$from_user_address",
+	         Subject => "$subject",
+                 Message => "$message"
+               );
+
+    $mail{Smtp} = $email_config->{ smtp };
+
+    my $error_msg = "";
+
+    if (! sendmail %mail)
+    {
+        $error_msg  = "Error sending mail: $Mail::Sendmail::error \n";
+        $error_msg .= "\$Mail::Sendmail::log says:\n";
+	$error_msg .=  $Mail::Sendmail::log;
+	$error_msg .= "\n";
+    }
+
+    return $error_msg;
+}
+
+sub mail_send_html {
+    my $self = shift;
+    my ($subject, $message, $mailing_address, $from_address) = ( @_ );
+
+    # Start with the default as the from address
+    my $from_user_address = $email_config->{ email_from };
+    
+    if( defined( $from_address ) && ($from_address ne "") ) {
+        $from_user_address = $from_address;
+    }
+
+    my %mail = ( To      => "$mailing_address",
+                 From    => "$from_user_address",
+	         Subject => "$subject",
+                 Message => "$message",
+         	 'content-type' => 'text/html; charset="iso-8859-1"'
+               );
+
+    $mail{Smtp} = $email_config->{ smtp };
+
+    my $error_msg = "";
+
+    if (! sendmail %mail)
+    {
+        $error_msg  = "Error sending mail: $Mail::Sendmail::error \n";
+        $error_msg .= "\$Mail::Sendmail::log says:\n";
+	$error_msg .=  $Mail::Sendmail::log;
+	$error_msg .= "\n";
+    }
+
+    return $error_msg;
+}
+
+sub mail_send_html_with_attachment {
+    my $self = shift;
+    my ($subject, $message, $mailing_address, $file_name, $from_address) = ( @_ );
+
+    # Start with the default as the from address
+    my $from_user_address = $email_config->{ email_from };
+    
+    if( defined( $from_address ) && ($from_address ne "") ) {
+        $from_user_address = $from_address;
+    }
+
+    # Get just the filename
+    my $just_file_name = $file_name;
+    my @filenameparts = split( "/", $file_name );
+    if( $#filenameparts > 0 ) {
+    	$just_file_name = $filenameparts[$#filenameparts];
+    }
+    
+
+    my %mail = ( To      => "$mailing_address",
+                 From    => "$from_user_address",
+	         Subject => "$subject"
+               );
+
+    $mail{Smtp} = $email_config->{ smtp };
+
+
+    my $boundary = "====" . time() . "====";
+    $mail{'content-type'} = "multipart/mixed; boundary=\"$boundary\"";
+
+    open (F, $file_name) or return "Email: Cannot read $file_name: $!";
+    binmode F; undef $/;
+    my $file_content = encode_base64(<F>);
+    close F;
+
+    $boundary = '--'.$boundary;
+    $mail{body} = $boundary;
+    $mail{body} .= "\n";
+    $mail{body} .= "Content-Type: text/html; charset=\"iso-8859-1\"\n";
+    $mail{body} .= "\n";
+    $mail{body} .= $message;
+    $mail{body} .= "\n";
+    $mail{body} .= $boundary;
+    $mail{body} .= "\n";
+    $mail{body} .= "Content-Type: application/octet-stream; name=\"$just_file_name\"\n";
+    $mail{body} .= "Content-Transfer-Encoding: base64\n";
+    $mail{body} .= "Content-Disposition: attachment; filename=\"$just_file_name\"\n";
+    $mail{body} .= "\n";
+    $mail{body} .= $file_content;
+    $mail{body} .= "\n";
+    $mail{body} .= $boundary."--\n";
+
+    my $error_msg = "";
+
+    if (! sendmail %mail)
+    {
+        $error_msg  = "Error sending mail: $Mail::Sendmail::error \n";
+        $error_msg .= "\$Mail::Sendmail::log says:\n";
+	$error_msg .=  $Mail::Sendmail::log;
+	$error_msg .= "\n";
+    }
+
+    return $error_msg;
+}
+
+1;

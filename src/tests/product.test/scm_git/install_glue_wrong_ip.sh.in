@@ -1,0 +1,15 @@
+#!/bin/sh
+
+. ../lib/common.inc
+
+
+# Press Enter 3 times, as needed by the installation script to proceed.
+OUTPUT=`echo "
+
+
+
+" | @DEVEL_PRODUCT_NAME_LOWER@_install_glue.pl --scm=Git --product=$TESTSUITE_BUGTRACKER_PRODUCT --repository=$REPOSITORY_CHECKOUT --bug=$TESTSUITE_BUG_GLUE_INSTALL --binary-paths=$SCM_BIN_PATH,$SCM_GENERAL_BIN_PATH,$SCM_BIN_PATH_INVALID --daemon=$TESTSUITE_INTEGRATION_DAEMON_WRONG_IP 2>&1 | grep -i 'Unable to connect to integration daemon' | wc -l | @AWK@ '{ print $1 }'`
+
+if [ "$OUTPUT" = "1" ]; then
+    echo PASSED
+fi

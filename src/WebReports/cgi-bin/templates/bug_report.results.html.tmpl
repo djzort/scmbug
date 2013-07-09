@@ -1,0 +1,156 @@
+[% SET title = 'Changes Between Revisions ' _ revision_start _ ' and ' _ revision_end %]
+[% INCLUDE templates/header.html.tmpl %]
+
+<H2>[% title %]</H2>
+
+<BLOCKQUOTE>
+<table border=0 id=table1>
+<tr>
+  <td width=250>Start Revision Number:</td>
+  <td>[% revision_start %]</td>
+</tr>
+<tr>
+  <td>End Revision Number:</td>
+  <td>[% revision_end %]</td>
+</tr>
+<tr>
+  <td>Repository Path:</td>
+  <td>
+  [% SET rep_display = '' %]
+  [% IF dir_list.size > 0 %]
+        [% FOREACH dir IN dir_list %]
+            [% SET rep_display = rep_display _ svn_root _ dir _ svn_path _ '<BR>' %]
+      	[% END %]
+  [% ELSE %]
+        [% SET rep_display = svn_root _ svn_path %]
+  [% END %]
+      [% rep_display %]
+  </td>
+</tr>
+</table>
+</BLOCKQUOTE>
+<hr>
+
+
+[% IF results.size > 0 %]
+    <form action="[% bug_report_next_page %]" method=post>
+
+    [% SET email_data = '' %]
+
+    <BLOCKQUOTE><TABLE border=0 width=100% cellpadding=4>
+    
+    [%# Print the header #%]
+    <tr><td width=70>ID</td>
+    <TD>Reviews</TD>
+    <TD>Status</TD><TD>Assignee</TD><TD>Summary</TD></TR>
+    <TR><TD COLSPAN=100><HR></TD></TR>
+
+    [% SET num_active_bugs = 0 %]
+    [% SET num_closed_bugs = 0 %]
+    
+    [% FOREACH bug_details IN results %]
+	[% SET active_start = '' %]
+	[% SET active_end = '' %]
+	[% IF bug_details.active == 1 %]
+	    [% SET active_start = '<FONT color=red>' %]
+	    [% SET active_end = '</FONT>' %]
+	    [% SET num_active_bugs = num_active_bugs + 1 %]
+	[% ELSE %]
+	    [% SET num_closed_bugs = num_closed_bugs + 1 %]
+	[% END %]
+
+        <TR><TD>
+
+	[%# Check to see if there is a next page that will need bug information #%]
+	[% IF bug_report_next_page %]
+ 	    [% SET check_state = 'checked' %]
+ 	    [% IF bug_details.active == 1 %]
+ 	    	[% SET check_state = 'disabled' %]
+ 	    [% END %]
+
+	    <input type=checkbox name=bug[% num_active_bugs + num_closed_bugs %]
+	    value="[% bug_details.bugid %]" [% check_state %]>
+	[% END %]
+        
+        [% active_start %]
+        
+	[% IF bug_tracker_url %]
+	    <A HREF="[% bug_tracker_url %][% bug_details.bugid %]">[% bug_details.bugid %]</A>
+	[% ELSE %]
+	    [% bug_details.bugid %]
+	[% END %]
+
+        [% active_end %]</TD>
+
+	<TD ALIGN=center>
+	[% SET totic_states = '' %]
+	[% FOREACH topic IN bug_details.topic_list %]
+	    [% IF topic.topic_state_id == 0 %]
+	    	<A HREF="[% topic.topic_url %]"><IMG src="/scmbug/images/rev-cross.png" title="Open Review" border=0></A>
+    		[% SET totic_states = totic_states _ 'Open,' %]
+	    [% ELSE %]
+		<A HREF="[% topic.topic_url %]"><IMG src="/scmbug/images/rev-tick.png" title="Closed Review" border=0></A>
+    		[% SET totic_states = totic_states _ 'Closed,' %]
+	    [% END %]
+	[% END %]
+	<input type=hidden name="reviewed[% bug_details.bugid %]" value="[% totic_states %]">
+	</TD>
+
+	<TD>[% active_start %][% bug_details.status %][% active_end %]</TD>
+	<TD>[% active_start %][% bug_details.owners.join('<BR>') %][% active_end %]</TD>
+	<TD>[% active_start %][% bug_details.summary | html_entity %][% active_end %]</TD>
+        </TR>
+        
+        <input type=hidden name="summary[% bug_details.bugid %]" value="[% bug_details.summary %]">
+
+        
+        [%# Store the list of bugs for E-mail #%]
+        [% IF bug_details.active == 1 %]
+	    [% SET email_data = email_data _ '<input type=hidden name=bug' _ bug_details.bugid %]
+	    [% SET email_data = email_data _ ' value="' _ bug_details.owners.join(';') _ '">' %]
+	    [% SET email_data = email_data _ '<input type=hidden name=summary' _ bug_details.bugid %]
+	    [% SET email_data = email_data _ ' value="' _ bug_details.summary _ '">' %]
+	[% END %]
+    [% END %]
+
+    <TR><TD COLSPAN=100><HR></TD></TR>
+    </TABLE></BLOCKQUOTE>
+    
+    <CENTER><BLOCKQUOTE><B>
+    [% IF num_closed_bugs > 0 %]
+    	<FONT size=+1>The Number of Closed Faults is [% num_closed_bugs %]</FONT><BR>
+    [% END %]
+
+    [% IF num_active_bugs > 0 %]
+      	<FONT color=red size=+1>The Number of Open Faults is [% num_active_bugs %]</FONT>
+    [% END %]
+
+    </B></CENTER></BLOCKQUOTE><CENTER>
+
+    [% IF bug_report_next_page %]
+        [% IF num_closed_bugs > 0 %]
+            <input type=hidden name=revision_start size=0 value="[% revision_start %]">
+            <input type=hidden name=revision_end size=0 value="[% revision_end %]">
+            <input type=hidden name=repository size=0 value="[% rep_display %]">
+    	    <input type=submit value="Next">
+    	[% END %]
+    	</FORM>
+    [% END %]
+
+    [%# If the E-mail users support is available then enable the button #%]
+    [% IF email_data %]
+	<form action="/scmbug-cgi/email_users.pl" method=post>
+	<input type=hidden name=displayform value="true">
+	[% email_data %]
+	<input type=submit value="E-mail Open Assignees"></form>
+    [% END %]
+    </CENTER>
+
+[% ELSE %]
+    <BLOCKQUOTE><CENTER><FONT color=red>
+    No flagged changes found between revisions "[% revision_start %]" and "[% revision_end %]"
+    </FONT></CENTER></BLOCKQUOTE>
+[% END %]
+
+
+[% INCLUDE templates/footer.html.tmpl %]

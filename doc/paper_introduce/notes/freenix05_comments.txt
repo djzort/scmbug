@@ -1,0 +1,116 @@
+From freenix05chair@usenix.org Wed Dec 15 23:46:58 2004
+Return-Path: <provos@citi.umich.edu>
+Received: from imap1.asu.edu ([unix socket]) by imap1 (Cyrus v2.1.11) with
+	LMTP; Wed, 15 Dec 2004 23:46:58 -0700
+X-Sieve: CMU Sieve 2.2
+Received: from post4.inre.asu.edu (post4.inre.asu.edu [129.219.113.219]) by
+	imap1.asu.edu (8.12.10/8.12.10/asu_cyrusV2,tcp_wrapped) with ESMTP id
+	iBG6kwYs023782 for <makrists@IMAP3.ASU.EDU>; Wed, 15 Dec 2004 23:46:58
+	-0700 (MST)
+Received: from conversion.post4.inre.asu.edu by asu.edu (PMDF V6.2-X17
+	#30769) id <0I8S00801YUAKO@asu.edu> for makrists@IMAP3.ASU.EDU (ORCPT
+	kristis.makris@asu.edu); Wed, 15 Dec 2004 23:46:58 -0700 (MST)
+Received: from asmtp3.asu.edu (asmtp3.asu.edu [129.219.117.227]) by asu.edu
+	(PMDF V6.2-X17 #30769) with ESMTP id <0I8S006AQYUAYO@asu.edu> for
+	makrists@IMAP3.ASU.EDU (ORCPT kristis.makris@asu.edu); Wed, 15 Dec 2004
+	23:46:58 -0700 (MST)
+Received: from citi.umich.edu [141.211.133.111] by asmtp3.asu.edu
+	asmtp(3.3d) id 6054; Wed, 15 Dec 2004 23:46:57 -0700 (MST)
+Received: by citi.umich.edu (Postfix, from userid 104123)	id 2D9011BBA8;
+	Thu, 16 Dec 2004 01:46:58 -0500 (EST)
+Date: Thu, 16 Dec 2004 01:46:58 -0500
+From: Niels Provos <freenix05chair@usenix.org>
+Subject: [ham] USENIX '05 FREENIX Track
+To: Kristis Makris <kristis.makris@asu.edu>
+Message-id: <20041216064658.GF1547@citi.citi.umich.edu>
+MIME-version: 1.0
+Content-type: text/PLAIN; charset=us-ascii
+Content-disposition: inline
+Fcc: sent-comments
+User-Agent: Mutt/1.4.1i
+X-Text-Classification: ham
+X-POPFile-Link: http://127.0.0.1:7070/jump_to_message?view=4460
+X-Evolution-Source: pop://imap3.asu.edu%3amakrists@127.0.0.1:7071/
+Content-Transfer-Encoding: 8bit
+
+Dear author,
+
+The following comments were made by the program committee during
+review of your paper; please try to incorporate the issues they raise
+into the final paper.
+
+If your paper has been assigned a shepherd, the shepherd will help you
+to improve the final version of your paper.  Please, heed any advice
+provided by your shepherd.  Your shepherd's approval is required for the
+camera-ready copy of your paper.
+
+Please see 
+
+  http://www.usenix.org/events/usenix05/instrux/
+
+for instructions on how to prepare your camera-ready of your paper
+
+Please read them carefully. You will be required to submit
+camera-ready copy, as well as electronic versions in Postscript and
+HTML, by 24 February 2005.. If you have any questions about formatting
+your paper, please contact the USENIX Publications Director. Her
+address is included in the "Guidelines".
+
+Sincerely,
+Niels Provos
+FREENIX Program Chair
+
+Title:   Scmbug: Policy-based Integration of Software Configuration Management with Bug-tracking
+Authors: Kristis Makris
+Email:   kristis.makris@asu.edu
+
+More descriptive and longer captions for the figures would be helpful. 
+Also, for Figures 3 to 5, the text seems to indicate that these are really
+just part of one log file. It would be nice to make that clearer in the
+figures.
+
+The benefit of a minimum log message size is not clear to me.  It sounds
+like it may rather annoy than educate.  It might be better to just print a
+warning than to prohibit the commit.
+
+A paragraph or two on how your system effects productivity might be
+interesting.  Do the extra validation make life more difficult for the
+developers?  Can you measure long term benefits from some the checks that
+you enforce?
+
+=======================================================================
+
+The main contribution is the implementation of a Perl-based tool that
+combines software configuration management and bug-tracking systems.
+
+The paper is well written, and the problems associated with the design of
+such a tool are thoroughly discussed. The related work section points out
+that while a slightly different approach is taken, there is no real
+innovation. Still, this is very useful software.
+
+The implementation appears to be mature.
+
+
+
+=======================================================================
+
+Bug tracking keyed with SW configuration tool is discussed.  
+Paper is well written and a topical subject, especially in the open source
+community.  Would like to see more about successes and failures that have
+been encountered using this tool
+
+=======================================================================
+
+It's a highly relevant subject area, and adds new functionality that
+could be extremely useful to many open source projects.  The paper is
+well structured, discussing implementation details, practical experience
+of the use of the tool, and future design work required to integrate
+with SCM tools having different properties.  The tool has been used in
+practice and the paper includes observations of how successful it was.
+There's discussion of important practical aspects such as security when
+you have public commits to an SCM system.
+
+
+
+=======================================================================
+

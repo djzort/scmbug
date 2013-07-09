@@ -1,0 +1,573 @@
+#!/usr/bin/perl -w 
+# Program to generate Bug Report information
+
+use lib "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/lib";
+
+use strict;
+use CGI qw(:standard);
+use XML::Simple;
+use @DEVEL_PRODUCT_NAME@::ActivityUtilities;
+use WebReportUtilities;
+use Template;
+
+
+# Make sure text isn't buffered
+$|=1;
+
+my $web_utils = WebReportUtilities->new();
+my $webreports_config = $web_utils->webreports_config();
+
+
+sub main {
+    my $svn_revision_start = param("svn_revision_start");
+    my $svn_revision_end   = param("svn_revision_end");
+
+    my $svn_root = param("svn_root");
+    my $svn_path = param("svn_path");
+
+    # Make sure the repository URL ends in a forward slash
+    if( defined($svn_root) && !($svn_root =~ /\//) ) {
+        $svn_root .= "/";
+    }
+
+    my $manual_bugs = param("manual_bugs");
+
+    if( defined($manual_bugs) && $manual_bugs eq "Y" ) {
+        $manual_bugs = "Y";
+    } else {
+        $manual_bugs = "N";
+    }
+
+    my @dirList = ();
+    if( defined param("dirList") ) {
+        @dirList = param("dirList");
+    }
+
+    if( !defined($svn_root) || $svn_root eq "" ) {
+        display_form( $manual_bugs );
+    } else {
+        run_report($manual_bugs, $svn_revision_start, $svn_revision_end, $svn_root, $svn_path, \@dirList);
+    }
+}
+
+
+#
+# Returns the repository settings for the given repository
+#
+sub get_repo_details {
+    my $required_repo = shift;
+
+    foreach my $repository ( @{ $webreports_config->{repositories}} ) {
+    	if( $repository->{repository_url} eq $required_repo ) {
+    	    return $repository;
+    	}
+    }
+}
+
+
+#
+# Displays the entry form
+#
+sub display_form {
+    my $manual_bugs = shift;
+
+    print header;
+    print "<html><head><title>Reports</title>";
+    print "<SCRIPT LANGUAGE=\"JavaScript\" SRC=\"/@DEVEL_PRODUCT_NAME_LOWER@/WebReports.js\">\n</SCRIPT></head>\n";
+
+    print "<body  onLoad=\"svnRootSelected( document.getElementById('svnRoot') )\">";
+    if( defined($webreports_config->{heading_banner}) && $webreports_config->{heading_banner} ne "" ) {
+        print "<IMG src=\"" . $webreports_config->{heading_banner} . "\">";
+    }
+
+    print "<H2>Bug Report</H2>";
+    print "<BLOCKQUOTE>";
+    
+    if( $manual_bugs eq "Y" ) {
+        print "This report will retrieve all of the bug details for the listed bugs. ";
+        print "To automatically detect a list of bugs use the form located ";
+        print "<a href=/@DEVEL_PRODUCT_NAME_LOWER@-cgi/bug_report.pl?run_report=N&manual_bugs=N>here</a>";
+    } else {
+        print "This report will retrieve all of the bugs that have been used to change ";
+        print "code between the two specified revisions (inclusive). ";
+        print "To manually enter a list of bugs use the form located ";
+        print "<a href=/@DEVEL_PRODUCT_NAME_LOWER@-cgi/bug_report.pl?run_report=N&manual_bugs=Y>here</a>";
+    }
+    print "</BLOCKQUOTE><p>\n";
+    
+    print "<form name=theForm action=/@DEVEL_PRODUCT_NAME_LOWER@-cgi/bug_report.pl>";
+
+    print "    <table border=0 id=table1>";
+    print "        <tr>";
+    print "	        <td width=267>Start Revision Number:</td>";
+    print "		<td><input type=text name=svn_revision_start size=20></td>";
+    print "        </tr>";
+    print "	   <tr>";
+    print "		<td width=267>End Revision Number: </td>";
+    print "		<td><input type=text name=svn_revision_end size=20></td>";
+    print "	    </tr>";
+    print "	    <tr>";
+    print "		<td width=267>Repository Path</td>";
+    print "		<td>\n";
+    
+    print "    <select size=1 name=\"svn_root\" id=\"svnRoot\" onChange=\"svnRootSelected(this)\">";
+    
+    my $subdirDisplay = "";
+    foreach my $repository ( @{ $webreports_config->{repositories}} ) {
+        print "    <option id=\"" . $repository->{name} . "\" name=\"" . $repository->{name} . "\" value=\"" . $repository->{repository_url} . "\">";
+	print $repository->{name} . "</option>\n";
+	
+	# Check if we need to be able to list the selected items
+	if( $repository->{autoproject_list} eq "y" ) {
+	    $subdirDisplay .= "<select multiple name=dirList id=\"" . $repository->{name} . "_dirList\">";
+	    foreach my $subdir ( @{ get_sub_directories($repository->{repository_url}) } ) {
+		$subdirDisplay .= "<option value=\"" . $subdir . "\">" . $subdir . "</option>";
+	    }
+	    $subdirDisplay .= "</select>";
+	}
+    }
+    print "			</select> &nbsp;";
+    print $subdirDisplay . " <input type=text name=svn_path id=\"svnPath\" size=46 value=\"trunk\"></td>";
+    print "		</tr>";
+    print "		<tr>";
+    print "			<td width=267>&nbsp;</td>";
+    print "			<td>&nbsp;</td>";
+    print "		</tr>";
+    
+    if( $manual_bugs eq "Y" ) {
+	print "<tr><td width=267><b>Bug List</b><input type=hidden name=manual_bugs value=\"Y\"></td></tr>";
+	my $i = 1;
+	while ( $i < 5 ) {
+	    print "<tr>\n";
+	    print "<td colspan=10>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\n";
+	    print "<input type=text name=bug" . $i . "a size=6>&nbsp;&nbsp;&nbsp;&nbsp;\n";
+	    print "<input type=text name=bug" . $i . "b size=6>&nbsp;&nbsp;&nbsp;&nbsp;\n";
+	    print "<input type=text name=bug" . $i . "c size=6>&nbsp;&nbsp;&nbsp;&nbsp;\n";
+	    print "<input type=text name=bug" . $i . "d size=6>&nbsp;&nbsp;&nbsp;&nbsp;\n";
+	    print "<input type=text name=bug" . $i . "e size=6>&nbsp;&nbsp;&nbsp;&nbsp;\n";
+	    print "<input type=text name=bug" . $i . "f size=6>&nbsp;&nbsp;&nbsp;&nbsp;\n";
+	    print "<input type=text name=bug" . $i . "g size=6></td>";
+	    print "</tr>\n";
+	    $i++;
+	}
+    }
+
+    print "	</table>";
+    print "	<p align=center><input type=submit value=\"Submit\">&nbsp;&nbsp;&nbsp; <input type=reset value=\"Reset\"></p>";
+    print "</form>";
+    print "</p>";
+    print "</body></html>";
+}
+
+#
+# Runs the report
+#
+sub run_report {
+    my $manual_bugs = shift;
+    my $svn_revision_start = shift;
+    my $svn_revision_end = shift;
+    my $svn_root = shift;
+    my $svn_path = shift;
+    my $dir_list = shift;
+    my @dirList = @{ $dir_list };
+
+    $web_utils->standard_header("Changes Between Revisions " . $svn_revision_start . " and " . $svn_revision_end);
+    
+    my $rep_display = $svn_root . $svn_path;
+    if( (scalar @dirList) > 0 ) {
+        $rep_display = "";
+        my $isFirst = "true";
+        foreach my $dir ( @dirList ) {
+            if( $isFirst ne "true" ) {
+                $rep_display .= "<BR>";
+            }
+            $rep_display .= $svn_root . $dir . "/" . $svn_path;
+            $isFirst = "false";
+        }
+    }
+    
+    print blockquote(table({-border=>0},
+    		Tr(
+    		[
+    			td({-width=>250}, 'Start Revision Number:').td("$svn_revision_start"),
+    			td('End Revision Number:').td("$svn_revision_end"),
+    			td('Repository Path:').td("$rep_display"),    
+    		 ] ) ) );
+    
+    print hr();
+
+    my $request_ok = check_request_arguments( $svn_revision_start, $svn_revision_end );
+
+    if ( $request_ok != 0 ) {
+        my $repository = get_repo_details($svn_root);
+        my $buglist = "";
+
+        if( $manual_bugs ne "Y" ) {
+            # Get all of the comments
+            my @allComments = ();
+            if( (scalar @dirList) > 0 ) {
+		foreach my $dir ( @dirList ) {
+		    my $dirComments = get_commit_comments( $svn_root . $dir . "/" . $svn_path,
+		    					   $svn_revision_start,
+							   $svn_revision_end );
+		    
+		    foreach my $line ( @{ $dirComments } ) {
+		    	push @allComments, $line;
+		    }
+		}
+	    } else {
+		my $theComments = get_commit_comments( $svn_root . $svn_path,
+		    				       $svn_revision_start,
+						       $svn_revision_end );	
+		@allComments = @{ $theComments };
+	    }
+        
+	    my $bugids_list = get_bugid_list( $repository->{bugid_regex},
+					      $repository->{bugid_split_regex},
+					      \@allComments );
+
+	    $buglist = join( ',', @{ $bugids_list} );
+	} else {
+	    # Get all the manually specified bugs
+	    my @param_list = param;
+	
+	    foreach my $abug ( @param_list ) {
+	   	if( $abug =~ /^bug/ ) {
+	   	    my $thebug = param($abug);
+	   	    if( $thebug ne "" ) {
+	  	        $buglist .= $thebug;
+	  	        $buglist .= ",";
+	  	    }
+	  	}
+	    }
+	}
+
+
+	my $activityUtils = @DEVEL_PRODUCT_NAME@::ActivityUtilities->new( $webreports_config->{daemon_location},
+							    $webreports_config->{daemon_port} );
+	my $results = $activityUtils->get_details_for_bug( $buglist );
+
+	print_html_output( $svn_revision_start, $svn_revision_end, $results, $webreports_config->{bug_tracker_url}, $rep_display );
+    }
+
+    print end_html();
+}
+
+
+#####################
+sub check_request_arguments
+{
+    my ( $revision_start, $revision_end ) = ( @_ );
+
+    my $request_ok = 1;
+
+    if (!$revision_start) {
+        $request_ok = 0;
+    }
+    if (!$revision_end) {
+        $request_ok = 0;
+    }
+
+    if ( $request_ok != 1 ) {
+        print "<BLOCKQUOTE><FONT COLOR=red SIZE=+1><B>ERROR: Required fields missing or invalid:";
+	print "<UL>";
+
+        if (!$revision_start) {
+            print li("Start Revision Number");
+        }
+        if (!$revision_end) {
+            print li("End Revision Number");
+        }
+
+	print "</UL>";
+        print "</B></FONT></BLOCKQUOTE>";
+    }
+
+    return $request_ok;
+}
+
+
+#####################
+#
+# Get the comments entered when a file is commited to subversion
+#
+sub get_commit_comments {
+    my ( $svn_repository, $svn_revision_start, $svn_revision_end ) = ( @_ );
+    my $line;
+    my @logOutput = ();
+
+    # Query SubVersion to get the files changed under this revision
+    open( SVNLOG_OUTPUT, "svn.exe log -r $svn_revision_start:$svn_revision_end $svn_repository |" );
+    # Cygwin has a problem with newlines
+    binmode( SVNLOG_OUTPUT, ":crlf" );
+
+    # Read each line returned to store details on each file changed
+    while ( $line = <SVNLOG_OUTPUT> ) {
+	push @logOutput, $line;
+    }
+
+    close ( SVNLOG_OUTPUT );
+
+    return \@logOutput;
+}
+
+#####################
+#
+# Get the directories under a given path of the repository
+#
+sub get_sub_directories {
+    my ( $svn_repository ) = ( @_ );
+    my $line;
+    my @logOutput = ();
+
+    # Query SubVersion to get the files changed under this revision
+    open( SVNLOG_OUTPUT, "svn.exe list --non-interactive $svn_repository |" );
+    # Cygwin has a problem with newlines
+    binmode( SVNLOG_OUTPUT, ":crlf" );
+
+    # Read each line returned to store details on each file changed
+    while ( $line = <SVNLOG_OUTPUT> ) {
+    	if( $line =~ /\// ) {
+    	    my @justDir = split( '/', $line);
+	    push @logOutput, $justDir[0];
+	}
+    }
+
+    close ( SVNLOG_OUTPUT );
+
+    return \@logOutput;
+}
+
+
+#
+# Extracts the list of bugs from the commit comments
+#
+sub get_bugid_list {
+    my $bugid_regex = shift;
+    my $bugid_split_regex = shift;
+    my $all_comments = shift;
+
+    my @bugid_list = ();
+
+    # Read each line returned to store details on each file changed
+    foreach my $logLine ( @{ $all_comments } ) {
+
+	if ( $logLine =~ m/$bugid_regex/s ) {
+	    # If there is a match for finding bug ids, retrieve the
+	    # bug ids.
+	    my ( @bugids_list ) = split ( /$bugid_split_regex/ , $1 );
+	  
+	    foreach my $id ( @bugids_list ) {
+		# Only accept numbers as bug ids
+		if ( $id =~ m/\d+?/ ) {
+	            my $is_new_bugid = 1;
+		    foreach my $existingBugid ( @bugid_list )  {
+			if( "$id" eq "$existingBugid" ) {
+			    $is_new_bugid = 0;
+			}
+		    }
+	            if( $is_new_bugid != 0 ) {
+		        push @bugid_list, $id;
+		    }
+		}
+	    }
+	}
+    }
+
+    return \@bugid_list;
+}
+
+#
+# Displays the output in HTML table form
+#
+sub print_html_output
+{
+    my ( $revision_start, $revision_end, $results_list, $bug_tracker_url, $rep_display ) = ( @_ );
+
+    my @results = @{ $results_list };
+
+    if( (scalar @results) == 0 ) {
+        print "<BLOCKQUOTE><CENTER><FONT color=red>\n";
+        print "No flagged changes found between revisions " . $revision_start . " and " .  $revision_end;
+        print "</FONT></CENTER></BLOCKQUOTE>\n";
+        return;
+    }
+
+    if ( defined($webreports_config->{ bug_report_next_page }) && 
+ 	 ($webreports_config->{ bug_report_next_page } ne "") ) {
+        print "<form action=\"" . $webreports_config->{ bug_report_next_page } . "\" method=post>";
+    }
+
+    my $html_email_data = "";
+
+    my $html_data = "<BLOCKQUOTE><TABLE border=0 width=100% cellpadding=4>\n";
+    
+    # Print the header
+    $html_data .= "<TR><TD>ID</TD>";
+    
+    if( ($webreports_config->{ codestriker_url } ne "") && ($webreports_config->{ codestriker_client_path } ne "") ) {
+        $html_data .= "<TD>Reviews</TD>";
+    }
+    
+    $html_data .= "<TD>Status</TD><TD>Assignee</TD><TD>Summary</TD></TR>\n";
+    $html_data .= "<TR><TD COLSPAN=100><HR></TD></TR>\n";
+
+    my $num_active_bugs = 0;
+    my $num_closed_bugs = 0;
+    foreach my $bug_details ( @results ) {
+        my $active_start = "";
+        my $active_end = "";
+    	if( $bug_details->{ active } == 1 ) {
+	    $active_start = "<FONT color=red>";
+	    $active_end = "</FONT>";
+	    $num_active_bugs++;
+	} else {
+	    $num_closed_bugs++;
+	}
+
+        my $html_owners = join( '<BR>', @{ $bug_details->{ owners }} );
+
+	my $html_bugid = $bug_details->{ bugid };
+	if( defined($bug_tracker_url) && ($bug_tracker_url ne "") ) {
+	    $html_bugid = "<A HREF=\"" . $bug_tracker_url . $bug_details->{ bugid } . "\">";
+	    $html_bugid .= $bug_details->{ bugid } . "</A>";
+	}
+
+	# Check to see if there is a next page that will need bug information
+	my $tickbox = "";
+ 	if ( defined($webreports_config->{ bug_report_next_page }) && 
+ 	     ($webreports_config->{ bug_report_next_page } ne "") ) {
+ 	    my $check_state = "checked";
+
+	    if( $bug_details->{ active } == 1 ) {
+		$check_state = "disabled";
+	    }
+	    
+	    my $id = $num_active_bugs + $num_closed_bugs;
+	    $tickbox .= "<input type=checkbox name=bug" . $id;
+	    $tickbox .= " value=" . $bug_details->{ bugid } . " " . $check_state . ">&nbsp;";
+	}
+
+        $html_data .= "<TR>";
+        $html_data .= "<TD>" . $tickbox . $active_start . $html_bugid . $active_end . "</TD>";
+        
+        if( ($webreports_config->{ codestriker_url } ne "") && ($webreports_config->{ codestriker_client_path } ne "") ) {
+	    $html_data .= "<TD>";
+	    my @topic_list = get_review_data($bug_details->{ bugid });
+
+	    foreach my $topic ( @topic_list ) {
+	    	$html_data .= "<A HREF=\"" . $topic->{ topic_url } . "\">";
+   	
+	    	if( $topic->{ topic_state_id } eq "0" ) {
+	            $html_data .= "<IMG src=\"/@DEVEL_PRODUCT_NAME_LOWER@/images/rev-cross.png\" border=0>";
+	    	} else {
+	            $html_data .= "<IMG src=\"/@DEVEL_PRODUCT_NAME_LOWER@/images/rev-tick.png\" border=0>";
+	    	}
+	    	
+	    	$html_data .= "</A>";
+	    }
+	    
+	    $html_data .= "</TD>";
+	}
+        
+	$html_data .= "<TD>" . $active_start . $bug_details->{ status } . $active_end . "</TD>";
+	$html_data .= "<TD>" . $active_start . $html_owners . $active_end . "</TD>";
+	$html_data .= "<TD>" . $active_start . $web_utils->get_html_format($bug_details->{ summary }) . $active_end . "</TD>";
+        $html_data .= "</TR>\n";
+        
+        # Store the list of bugs for E-mail
+	if( $bug_details->{ active } == 1 ) {
+	    $html_email_data .= "<input type=hidden name=bug" . $bug_details->{ bugid };
+	    $html_email_data .= " value=\"" . join( ';', @{ $bug_details->{ owners }} ) . "\">\n";
+	}
+    }
+
+    $html_data .= "<TR><TD COLSPAN=100><HR></TD></TR>\n";
+    $html_data .= "</TABLE></BLOCKQUOTE>\n";
+    
+    print $html_data;
+    
+    print "\n<CENTER><BLOCKQUOTE><B>\n";
+    if( $num_closed_bugs > 0 ) {
+    	print "<FONT size=+1>The Number of Closed Faults is " . $num_closed_bugs;
+    	print "\n</FONT><BR>";
+    }
+
+    if( $num_active_bugs > 0 ) {
+    	print "<FONT color=red size=+1>The Number of Open Faults is " . $num_active_bugs;
+    	print "\n</FONT>";
+    }
+    print "\n</B></CENTER></BLOCKQUOTE><CENTER>";
+
+    if ( defined($webreports_config->{ bug_report_next_page }) && 
+    	 ($webreports_config->{ bug_report_next_page } ne "") ) {
+    	if( $num_closed_bugs > 0 ) {
+            print "<input type=hidden name=revision_start size=0 value=\"" . $revision_start . "\">";
+            print "<input type=hidden name=revision_end size=0 value=\"" . $revision_end . "\">";
+            print "<input type=hidden name=repository size=0 value=\"" . $rep_display . "\">";
+    	    print "<input type=submit value=\"Next\">";
+    	}
+    	print "</FORM>\n";
+    }
+
+    # If the E-mail users support is available then enable the button    
+    if ( $html_email_data ne "" ) {
+        print "<form action=\"/@DEVEL_PRODUCT_NAME_LOWER@-cgi/email_users.pl\">";
+	print "<input type=hidden name=displayform value=\"true\">";
+	print $html_email_data;
+    	print "<input type=submit value=\"E-mail Open Assignees\">";
+	print "</form>";
+    }
+    print "</CENTER>";
+}
+
+#
+# Get a link to any Codestriker Review Topics
+#
+sub get_review_data()
+{
+    my $bugid = shift;
+
+    my @topic_list = ();
+
+    if( ($webreports_config->{ codestriker_url } eq "") || ($webreports_config->{ codestriker_client_path } eq "") ) {
+    	return @topic_list;
+    }
+
+    my $lib_val = "use lib \"" . $webreports_config->{ codestriker_client_path } . "\"";
+    eval $lib_val;
+    eval "use CodestrikerClient";
+
+    my $client = CodestrikerClient->new($webreports_config->{ codestriker_url });
+    my $xml_data = $client->get_topics_xml($bugid, "", "", "", "");
+
+    # Extract the required data from the XML
+    my $xml = new XML::Simple( NoAttr=>1,keyattr=>[] );
+    my $raw = $xml->XMLin( $xml_data );
+
+    my @allTopics = ();
+
+    if (ref($raw->{ topic }) eq "ARRAY") {
+	@allTopics = @{ $raw->{ topic } };
+    } elsif (defined($raw->{ topic })) {
+    	push @allTopics, $raw->{ topic };
+    }
+
+    foreach my $topic ( @allTopics ) {
+    	    my $topicinfo;
+    	    $topicinfo->{ topic_url } = $webreports_config->{ codestriker_url };
+    	    $topicinfo->{ topic_url } .= "?topic=" . $topic->{ topicid } . "&action=view";
+    	    $topicinfo->{ topicid } = $topic->{ topicid };
+    	    $topicinfo->{ topic_state_id } = $topic->{ topic_state_id };
+    	    push @topic_list, $topicinfo;
+    }
+
+    return \@topic_list;
+}
+
+###########################################
+##  Main Invoke Code
+###########################################
+
+main();
+exit;

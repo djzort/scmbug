@@ -1,0 +1,4 @@
+@echo off
+REM This script starts the @DEVEL_PRODUCT_NAME@ daemon.
+echo Starting SCM to bug-tracking integration daemon: @DEVEL_PRODUCT_NAME_LOWER@_daemon
+"@sbindir@/@DEVEL_PRODUCT_NAME_LOWER@_daemon.pl" "@sysconfdir@/@DEVEL_PRODUCT_NAME_LOWER@/daemon.conf"

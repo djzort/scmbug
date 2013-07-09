@@ -1,0 +1,261 @@
+#!/usr/bin/perl -w 
+# Program to generate the email users form
+
+use lib "@datadir@/@DEVEL_PRODUCT_NAME_LOWER@/lib";
+
+use strict;
+use CGI qw(:standard);
+use WebReportUtilities;
+use EMail;
+use @DEVEL_PRODUCT_NAME@::ActivityUtilities;
+
+
+# Make sure text isn't buffered
+$|=1;
+
+my $web_utils = WebReportUtilities->new();
+$web_utils->update();
+my $webreports_config = $web_utils->webreports_config();
+
+
+sub main {
+    my $displayform = param("displayform");
+
+    if( defined($displayform) && ($displayform eq "true") ) {
+        main_form();
+    } else {
+        main_run();
+    }
+}
+
+
+#
+# Main function to display the Email Form
+#
+sub main_form {
+    # Get all of the Bugs and their assignees
+    my $bug_assignees;
+    my @bug_summaries = ();
+
+    foreach my $bugTag ( param ) {
+        if( $bugTag =~ /^bug/ ) {
+            foreach my $assignee (split(';', param($bugTag)) ) {
+            	my @bug_list = ();
+            	if( defined($bug_assignees->{ $assignee }) ) {
+            	    @bug_list = @{$bug_assignees->{ $assignee }};
+            	}
+                my $bugid = $bugTag;
+                $bugid =~ s/bug//;
+            	push @bug_list, $bugid;
+            	$bug_assignees->{ $assignee } = \@bug_list;
+            }
+        }
+    }
+
+    print_email_form( $bug_assignees );
+}
+
+#
+# Displays the Email form
+#
+sub print_email_form {
+    my ( $bug_list ) = ( @_ );
+
+    my $email_if = EMail->new($webreports_config->{ email_config });
+
+    $web_utils->standard_header("E-mail Open Assignees");
+
+    print "<form action=/@DEVEL_PRODUCT_NAME_LOWER@-cgi/email_users.pl>";
+
+    print "<BLOCKQUOTE>";
+    print "<TABLE BOARDER=0>\n";
+    print "<TR><TD COLSPAN=5>\n";
+    print h3("Users To E-mail");
+    print "</TD></TR>\n";
+
+    print "<TR><TD><B><I>E-mail Address</I></B></TD><TD><B><I>Fault List</I></B></TD></TR>";
+    
+    foreach my $assignee ( sort keys %{ $bug_list } ) {
+        # Use the email address as the tag
+        my $email = $email_if->get_users_email_address($assignee);
+
+	print "<TR><TD><input type=text name=\"" . $assignee . "\" value=\"" . $email . "\" size=30></TD>";
+	print "<TD><input type=text name=bugs_" . $assignee . " value=\"";
+	print join(',', @{$bug_list->{ $assignee }}) . "\" size=60></TD></TR>\n";
+    
+    }
+
+    print "<TR><TD>&nbsp;</TD></TR>";
+    print "<TR><TD COLSPAN=5>\n";
+    print h3("Details");
+    print "</TD></TR>";
+    
+    print "<TR><TD>From E-mail Address</TD><TD><input type=text name=from_email size=60></TD></TR>";
+    print "<TR><TD>CC E-mail Address</TD><TD><input type=text name=cc_email size=60></TD></TR>";
+    print "<TR><TD>E-mail Subject</TD><TD><input type=text name=subject value=\"";
+    print "Faults to close for Impact Document";
+    print "\" size=60></TD></TR>";
+    print "<TR><TD>E-mail comments</TD><TD>";
+    print "<textarea type=text name=comments rows=7 cols=48>";
+    print "You are recieving this E-mail because you have an open fault (listed below) that ";
+    print "is intended to be included in an Impact Document.  If the work under this fault is ";
+    print "complete please can you close the fault(s) ASAP.";
+    print "</textarea></TD></TR>";
+    print "<TR><TD></TD><TD><input type=checkbox name=summaries value=\"true\" CHECKED>";
+    print "Include fault summaries in E-mail</TD></TR>";
+    print "</TABLE></BLOCKQUOTE>\n";
+
+    print "<P><CENTER><input type=submit value=\"Send E-mails\"></CENTER>";
+
+    print "</form>";
+    print end_html();
+}
+
+
+#
+# Main function to send Emails
+#
+sub main_run {
+    # Get all of the Bugs and their assignees
+    my $bug_assignees;
+    my $file = 'templates/email_users.results.html.tmpl';
+
+    my $from_email = param("from_email");
+    my $cc_email   = param("cc_email");
+    my $subject    = param("subject");
+    my $comments   = param("comments");
+
+    my $entire_bug_list = "";
+    my $bug_summaries;
+
+    foreach my $assigneeTag ( param ) {
+        if( $assigneeTag =~ /^bugs_/ ) {
+            my $assignee = $assigneeTag;
+            $assignee =~ s/bugs_//;
+            
+            if(param($assignee) ne "" ) {
+            	if( defined($bug_assignees->{ param($assignee) }) && 
+            	    ($bug_assignees->{ param($assignee) } ne "")) {
+            	    $bug_assignees->{ param($assignee) } .= ",";
+            	}
+            
+            	$bug_assignees->{ param($assignee) } .= param($assigneeTag);
+            	$entire_bug_list .= param($assigneeTag) . ",";
+            }
+        } elsif( $assigneeTag =~ /^summary/ ) {
+            my $bugid = $assigneeTag;
+            $bugid =~ s/summary//;
+            $bug_summaries->{ $bugid } = param($assigneeTag);
+        }
+    }
+
+    my $send_status = send_emails( $bug_assignees, $from_email, $cc_email, $subject, $comments, $bug_summaries );
+
+
+    my $vars = {
+    	heading_banner => $webreports_config->{heading_banner},
+	send_status    => $send_status
+    };
+
+    my $template = Template->new();
+ 
+    print header;
+  
+    $template->process($file, $vars)
+    || die "Template process failed: ", $template->error(), "\n";
+
+    return;
+
+}
+
+#
+# Sends the E-mails
+#
+sub send_emails {
+    my ( $bug_assignees, $from_email, $cc_email, $subject, $comments, $bug_summaries ) = ( @_ );
+
+    my $email_if = EMail->new($webreports_config->{ email_config });
+
+    if( !defined($from_email) || ($from_email eq "") ) {
+    	$from_email = $webreports_config->{ email_config }->{ email_from };
+    }
+
+    my @send_status = ();
+
+    foreach my $assignee ( keys %{ $bug_assignees } ) {
+	my $email_contents = "\n" . $comments;
+	$email_contents .= "\n\n";
+	
+	my @bugs = sort split(',', unique_bug_list($bug_assignees->{ $assignee }));
+	foreach my $abug ( @bugs ) {
+	    $email_contents .= "  " . $abug . "     ";
+	    
+	    if( defined($bug_summaries) && 
+	        defined($bug_summaries->{ $abug }) &&
+	        ($bug_summaries->{ $abug } ne "")) {
+	        $email_contents .= $bug_summaries->{ $abug };
+	    }
+	    
+	    $email_contents .= "\n";
+	}
+
+	my $target_emails = $assignee;
+	if( defined($cc_email) && ($cc_email ne "")) {
+	    $target_emails .= "," . $cc_email;
+	}
+
+	my $errMsg = $email_if->mail_send_mail( $subject, $email_contents, $target_emails, $from_email );
+	
+	if($errMsg ne "") {
+	    print "<FONT color=red><PRE>" . $errMsg . "</PRE></FONT>";
+	}
+    }
+
+    print "<P>Send E-mail complete.</P>";
+
+    print end_html();
+}
+
+#
+# Retrieves the summaries for the bugs
+#
+sub get_bug_summaries()
+{
+    my ( $buglist ) = ( @_ );
+    
+    my $activityUtils = @DEVEL_PRODUCT_NAME@::ActivityUtilities->new( $webreports_config->{daemon_location},
+                                                                      $webreports_config->{daemon_port} );
+    my $results = $activityUtils->get_details_for_bug( unique_bug_list($buglist) );
+
+    my $bug_summaries;
+    foreach my $bug_details ( @{ $results } ) {
+        $bug_summaries->{ $bug_details->{ bugid } } = $bug_details->{ summary };
+    }
+    return $bug_summaries;
+}
+
+#
+# Takes a bug list and removed duplicates
+#
+sub unique_bug_list()
+{
+    my ( $buglist ) = ( @_ );
+
+    my @uniq = ();
+    my %seen = ();
+    foreach my $item ( sort split(',', $buglist) ) {
+        push(@uniq, $item) unless $seen{$item}++;
+    }
+
+    return join( ',', @uniq );
+}
+
+
+
+###########################################
+##  Main Invoke Code
+###########################################
+
+main();
+
+exit;

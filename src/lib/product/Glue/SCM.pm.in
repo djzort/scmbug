@@ -1,0 +1,560 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Glue::SCM;
+
+require Exporter;
+
+@ISA = qw(Exporter);
+@EXPORT = qw(
+	     $SCM_VERSION_WRONG_FORMAT
+	     $SCM_VERSION_NOT_SUPPORTED
+	     $SCM_VERSION_LATEST
+
+	     $BRANCH_NAME_INDETERMINATE
+
+             $SCM_FILE_STATE_ADDED
+             $SCM_FILE_STATE_DELETED
+             $SCM_FILE_STATE_MODIFIED
+             $SCM_FILE_STATE_PROPERTY_MODIFIED
+             $SCM_FILE_STATE_MODIFIED_AND_PROPERTY_MODIFIED
+	     );
+
+
+use strict;
+use Data::Dumper;
+use @DEVEL_PRODUCT_NAME@::Activity;
+use @DEVEL_PRODUCT_NAME@::Error;
+
+
+use @DEVEL_PRODUCT_NAME@::Common qw (
+                                     $logger
+
+                                    array_ref_is_in_set
+                                    log_fatal_error
+                                    check_tools
+
+                                    $ACTIVITY_COMMIT
+                                    $ACTIVITY_VERIFY
+                                    $ACTIVITY_TAG
+                                    );
+use vars qw (
+            $ACTIVITY_COMMIT
+            $ACTIVITY_VERIFY
+            $ACTIVITY_TAG
+
+            $SCM_VERSION_WRONG_FORMAT
+            $SCM_VERSION_NOT_SUPPORTED
+            $SCM_VERSION_LATEST
+
+            $BRANCH_NAME_INDETERMINATE
+
+             $SCM_FILE_STATE_ADDED
+             $SCM_FILE_STATE_DELETED
+             $SCM_FILE_STATE_MODIFIED
+             $SCM_FILE_STATE_PROPERTY_MODIFIED
+             $SCM_FILE_STATE_MODIFIED_AND_PROPERTY_MODIFIED
+            );
+
+
+
+# Tokens used to differentiate between the different states of a
+# version.
+$SCM_VERSION_WRONG_FORMAT = "wrong_version_format";
+$SCM_VERSION_NOT_SUPPORTED = "not_supported";
+$SCM_VERSION_LATEST = "latest";
+
+# Description used to distinguish commits whose origination branch
+# cannot be determined
+$BRANCH_NAME_INDETERMINATE = "Cannot_be_determined";
+
+# Descriptions used to distinguish between the different types of
+# modifications to an affected file.
+$SCM_FILE_STATE_ADDED = "Added";
+$SCM_FILE_STATE_DELETED = "Deleted";
+$SCM_FILE_STATE_MODIFIED = "Modified";
+$SCM_FILE_STATE_PROPERTY_MODIFIED = "PropertyModified";
+$SCM_FILE_STATE_MODIFIED_AND_PROPERTY_MODIFIED = "ModifiedAndPropertyModified";
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $data = shift;
+    my $self = {};
+
+    bless $self, $type;
+
+    if ( !defined( $data->{ binary_paths } ) ) {
+	log_fatal_error( $GLUE_ERROR_BINARY_PATHS_MISSING,
+                        "Configuration variable binary_paths is missing.\n" );
+    } else {
+	$self->binary_paths( $data->{ binary_paths } );
+    }
+
+    return $self;
+}
+
+
+
+sub init {
+    my $self = shift;
+    my $data = shift;
+
+    $self->init_internal();
+    check_tools( $self->required_tools(), $self->binary_paths() );
+    $self->detect_version();
+
+    #
+    # Ensure this is a version of the SCM system we can work with
+    #
+    if ( $self->is_version_in_wrong_format() == 1 ) {
+	# If this version is in the wrong format
+	log_fatal_error( $GLUE_ERROR_VERSION_IN_WRONG_FORMAT, "Version '" . $self->version() . "' is in the wrong format. The correct format is x.y.z, where x,y,z are integers. This is probably a case where the version number could not be parsed from the SCM system correctly.\n" );
+    }
+
+    if ( $self->is_version_supported() == 0 ) {
+	# If this version is not supported, bail
+	log_fatal_error( $GLUE_ERROR_UNSUPPORTED_VERSION, "Unsupported version '" . $self->version() . "'. This could be because this version was never tested. If you use a different version number and manage to get the integration working correctly please notify '" . '@DEVEL_PRODUCT_MAILING_LIST_USERS_EMAIL@' . "'.\n" );
+    }
+}
+
+
+
+sub required_tool {
+    my $self = shift;
+    my $tool = shift;
+
+    if ( !defined( $self->{ required_tools }->{ $tool } ) ) {
+	$self->{ required_tools }->{ $tool } = 1;
+    }
+	
+    return $self->{ required_tools }->{ $tool };
+}
+
+sub required_tools {
+    my $self = shift;
+
+    if ( defined( $self->{ required_tools } ) ) {
+	return $self->{ required_tools };
+    } else {
+	return {};
+    }
+}
+
+
+sub version {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ version } = $data;
+	$self->set_version_type();
+    } else {
+	return $self->{ version };
+    }
+}
+
+
+
+sub version_type {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ version_type } = $data;
+    } else {
+	return $self->{ version_type };
+    }
+}
+
+
+
+# Returns 1 if the version set for the SCM system is supported, 0
+# otherwise
+#
+# Must be called AFTER version() has been called at least once.
+sub is_version_supported {
+    my $self = shift;
+
+    if ( defined ( $self->{ version_type } )  &&
+	 $self->{ version_type } ne $SCM_VERSION_NOT_SUPPORTED ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+# Returns 1 if the version set for the SCM system is in the wrong
+# format, 0 otherwise. The correct format is x.y.z, where x,y,z are
+# integers.
+#
+# Must be called AFTER version() has been called at least once.
+sub is_version_in_wrong_format {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq $SCM_VERSION_WRONG_FORMAT ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+sub is_version_latest {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq $SCM_VERSION_LATEST ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+sub activity {
+   my $self = shift;
+
+   if ( !defined( $self->{ activity } ) ) {
+       $self->{ activity } = @DEVEL_PRODUCT_NAME@::Activity->new();
+   }
+
+   return $self->{ activity };
+}
+
+
+
+# The input is a comma(,)-separated list of paths, and is later
+# converted into an array of paths.
+sub binary_paths {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ binary_paths } = $data;
+    } else {
+	return $self->{ binary_paths };
+    }
+
+}
+
+
+
+sub user {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->activity()->user( $data );
+    } else {
+	return $self->activity()->user();
+    }
+}
+
+
+#
+# Prepares a glueing activity for submission to the integration daemon
+#
+sub prepare_activity {
+    my $self = shift;
+    my $policies = shift;
+    my $activity_name = shift;
+    my ( @remaining_arguments ) = ( @_ );
+    my $error = 0;
+
+    $self->activity()->name( $activity_name );
+
+    if ( $self->activity()->name() eq $ACTIVITY_COMMIT ) {
+        $logger->warn( "Preparing for a COMMIT\n" );
+	$self->prepare_activity_commit( @remaining_arguments );
+    } elsif ( $self->activity()->name() eq $ACTIVITY_VERIFY ) {
+        $logger->warn( "Preparing for VERIFICATION\n" );
+	$self->prepare_activity_verify( @remaining_arguments );
+    } elsif ( $self->activity()->name() eq $ACTIVITY_TAG ) {
+        $logger->warn( "Preparing for TAGGING\n" );
+	$self->prepare_activity_tag( @remaining_arguments );
+    } else {
+	log_fatal_error( $GLUE_ERROR_INVALID_ACTIVITY, "'" . $self->activity()->name() . "' is an invalid integration activity.\n" );
+    }
+
+    $self->prepare_final_log_message( $policies );
+}
+
+
+
+#
+# Prepares the final log message that will be transmitted to the
+# daemon
+#
+sub prepare_final_log_message {
+    my ( $self, $policies ) = ( @_ );
+    my $log_bugid_regex = $policies->{ log_template }->{ log_bugid_regex };
+    my $log_bugid_split_regex = $policies->{ log_template }->{ log_bugid_split_regex };
+    my $log_body_regex = $policies->{ log_template }->{ log_body_regex };
+    my $resolution_bugid_regex = $policies->{ resolution_template }->{ resolution_bugid_regex };
+    my $resolution_bugid_split_regex = $policies->{ resolution_template }->{ resolution_bugid_split_regex };
+    my $resolution_status_regex = $policies->{ resolution_template }->{ resolution_status_regex };
+    my $resolution_status_resolution_regex = $policies->{ resolution_template }->{ resolution_status_resolution_regex };
+    my $resolution_status_resolution_data_regex = $policies->{ resolution_template }->{ resolution_status_resolution_data_regex };
+    my $message = "";
+    my $bug_ids_are_required = 0;
+
+    $logger->debug( "The original log message was '" . $self->activity()->original_log_message() . "'\n" );
+    # First, determine if bug ids are required
+    $logger->debug( "presence_of_bug_ids is '" . $policies->{ presence_of_bug_ids }->{ value } . "'.\n");
+    if ( $policies->{ presence_of_bug_ids }->{ value } eq 'required' ) {
+	$bug_ids_are_required = 1;
+    }
+
+    if ( $self->activity()->name() eq $ACTIVITY_COMMIT ||
+	 $self->activity()->name() eq $ACTIVITY_VERIFY ) {
+	my $log_message_without_resolution = "";
+        $logger->info( "Searching for resolution bug ids\n");
+        #
+	# First, search for the resolution bug ids.
+	#
+	my $resolution_bug_ids_found = 0;
+	my ( @individual_original_log_message_lines ) = split ( "\n", $self->activity()->original_log_message() );
+
+	if ( $policies->{ resolution_template }->{ enabled } ) {
+	    
+	    foreach my $line ( @individual_original_log_message_lines ) {
+
+		if ( $line =~ m/$resolution_bugid_regex/s ) {
+		    # If there is a match for finding bug ids, retrieve
+		    # the bug ids.
+		    my $bugids = $1;
+		
+		    # Accept a list of bug ids separated by
+		    # whitespaces or commas
+		    my ( @bugids_list ) = split ( /$resolution_bugid_split_regex/, $bugids );
+		    
+		    my $resolution_bugids_found = 0;
+		    foreach my $id ( @bugids_list ) {
+
+			if ( $id =~ m/\d+?/ ) {
+
+                            $logger->debug( "Found a status description for bug $id\n");
+			    # Make sure that no bug id is entered twice.
+			    if ( defined ( $self->activity()->resolution_ids()->{ $id } ) ) {
+				log_fatal_error( $GLUE_ERROR_DUPLICATE_BUG_ID, "Id $id was entered twice. Perhaps you made a type-o ?\n" );
+			    } else {
+				if ( $line =~ m/$resolution_status_regex/s ) {
+				    # Find the resolution status
+				    my $status = $1;
+				    
+				    if ( $line =~ m/$resolution_status_resolution_regex/s ) {
+					my $resolution = $1;
+					
+					if ( $line =~ m/$resolution_status_resolution_data_regex/s ) {
+					    my $resolution_data = $1;
+					    
+					    my $converted_status = $self->resolution_status_convert ( $policies->{ resolution_template }->{ resolution_status_convert }, $status );
+					    my $converted_resolution = $self->resolution_status_convert ( $policies->{ resolution_template }->{ resolution_status_convert }, $resolution );
+					    my $converted_resolution_data = $self->resolution_status_convert ( $policies->{ resolution_template }->{ resolution_status_convert }, $resolution_data );
+
+                                            $logger->debug( "Found status: '$converted_status'\n");
+                                            $logger->debug( "Found resolution: '$converted_resolution'\n");
+                                            $logger->debug( "Found resolution_data: '$converted_resolution_data'\n");
+					    $self->activity()->resolution_id( $id, $converted_status, $converted_resolution, $converted_resolution_data );
+					} else {
+					    # Perhaps this resolution status
+					    # was not also supplying
+					    # resolution status resolution
+					    # data. For example it was:
+					    # 
+					    # status 547: resolved fixed
+					    #
+					    # which is valid. Instead of
+					    # something that needed to be more
+					    # expressive like:
+					    #
+					    # status 548: resolved duplicate 547
+					    my $converted_status = $self->resolution_status_convert ( $policies->{ resolution_template }->{ resolution_status_convert }, $status );
+					    my $converted_resolution = $self->resolution_status_convert ( $policies->{ resolution_template }->{ resolution_status_convert }, $resolution );
+
+                                            $logger->debug( "Found status: '$converted_status'\n");
+                                            $logger->debug( "Found resolution: '$converted_resolution'\n");
+                                            $logger->debug( "No resolution data were supplied\n");
+					    $self->activity()->resolution_id( $id, $converted_status, $converted_resolution );
+					}
+					
+				    } else {
+					# Perhaps this resolution status
+					# was not also supplying a
+					# resolution status
+					# resolution. For example it was:
+					# 
+					# status 547: reopened
+					#
+					# which is valid. Instead of
+					# something more common like
+					#
+					# status 547: resolved fixed
+					my $converted_status = $self->resolution_status_convert ( $policies->{ resolution_template }->{ resolution_status_convert }, $status );
+                                        $logger->debug( "Found status: '$converted_status'. This status was not supplying a resolution.\n");
+                                        $logger->debug( "No resolution was supplied\n");
+                                        $logger->debug( "No resolution data were supplied\n");
+					$self->activity()->resolution_id( $id, $converted_status );
+				    }
+				} else {
+				    # There was no resolution status at
+				    # all. This is certainly wrong. The
+				    # user should have supplied one
+				    log_fatal_error( $GLUE_ERROR_NO_RESOLUTION_STATUS, "Unable to find a status that matches the resolution_status_regex '$resolution_status_regex' in the bug resolution request line '$line'.\n" );
+				}
+			    }
+			} elsif ( $id eq '' ) {
+			    # This is probably a case of a single bug id that
+			    # was split. e.g.
+			    # Bug #1: log message
+			    #
+			    # which results in a split on '#' and produces two
+			    # ids. Can ignore this.
+			    next;
+			} else {
+			    log_fatal_error( $GLUE_ERROR_IDS_INVALID, "The list of ids supplied for the bug resolution request line '$line' was in an invalid format. Only numerical ids are accepted.\n" );
+			}
+			# The list of resolution ids has been supplied for
+			# this bug resolution request line.
+			$resolution_bugids_found = 1;
+		    }
+		    
+		    # Verify that a list of resolution ids was found for
+		    # this bug resolution request
+		    if ( !$resolution_bugids_found ) {
+			log_fatal_error( $GLUE_ERROR_NO_RESOLUTION_IDS, "No list of bug resolution ids was found that matches the resolution_bugid_regex '$resolution_bugid_regex' and resolution_bugid_split_regex '$resolution_bugid_split_regex' in the bug resolution request line '$line'.\n" );
+		    }
+		    
+		} else {
+		    $log_message_without_resolution .= $line . "\n";
+		}
+	    }
+	} else {
+	    $log_message_without_resolution .= $self->activity()->original_log_message();
+	}
+
+
+	#
+	# Second, search for the log bug ids.
+	#
+        $logger->info( "Searching for log bug ids\n");
+	my $log_bugids_found = 0;
+	if ( $log_message_without_resolution =~ m/$log_bugid_regex/s ) {
+	    # If there is a match for finding bug ids, retrieve the
+	    # bug ids.
+	    my $bugids = $1;
+
+	    # Accept a list of bug ids separated by
+	    # whitespaces or commas
+	    my ( @bugids_list ) = split ( /$log_bugid_split_regex/ , $bugids );
+	    
+	    foreach my $id ( @bugids_list) {
+		# Only accept numbers as bug ids
+		if ( $id =~ m/\d+?/ ) {
+		    # Make sure that no bug id is entered twice.
+		    if (array_ref_is_in_set($id, $self->activity()->ids() ) ) {
+			log_fatal_error( $GLUE_ERROR_DUPLICATE_BUG_ID, "Id $id was entered twice. Perhaps you made a type-o ?\n" );
+		    } else {
+			push @{ $self->activity()->ids() }, $id;
+		    }
+		} elsif ( $id eq '' ) {
+		    # This is probably a case of a single bug id that
+		    # was split. e.g.
+		    # Bug #1: log message
+		    #
+		    # which results in a split on '#' and produces two
+		    # ids. Can ignore this.
+		    next;
+		} else {
+		    log_fatal_error( $GLUE_ERROR_IDS_INVALID, "The list of ids supplied was in an invalid format. Only numerical ids are accepted. The log message was '$log_message_without_resolution'.\n" );
+		}
+		# the list of ids has been supplied.
+		$log_bugids_found = 1;
+	    }
+	}
+        $logger->debug( "The log message with the resolution removed is '$log_message_without_resolution'\n");
+
+	#
+	# Then, search for the log comment
+	#
+	my $log_body_found = 0;
+	if ( $log_message_without_resolution =~ m/$log_body_regex/s ) {
+	    $message = $1;
+	    $log_body_found = 1;
+	} elsif ( $bug_ids_are_required == 0) {
+	    $message = $log_message_without_resolution;
+	    $log_body_found = 1;
+	}
+
+	# Verify that a list of bug ids was found
+	if ( !$log_bugids_found ) {
+	    if ( $bug_ids_are_required ) {
+		log_fatal_error( $GLUE_ERROR_NO_IDS, "No list of bug ids was found that matches the log_bugid_regex '$log_bugid_regex' and log_bugid_split_regex '$log_bugid_split_regex' in the log message '$log_message_without_resolution'.\n" );
+	    }
+	}
+
+	# Verify that a log comment was found
+	if ( !$log_body_found ) {
+	    log_fatal_error( $GLUE_ERROR_NO_NOTE, "No valid log message was found that matches the log_body_regex '$log_body_regex'.\n" );
+	}
+
+	# Set the new, modified log message
+        $logger->debug( "The new modified log message is '$message'\n");
+	$self->activity()->log_message( $message );
+
+	return $log_bugids_found;
+
+    } else {
+
+	# Set the new, modified log message
+	$self->activity()->log_message( $message );
+
+	# Bug ids found check does not apply.
+	return -1;
+    }
+
+}
+
+
+
+sub resolution_status_convert {
+    my ($self, $resolution_status_convert_policy, $convert_string ) = ( @_ );
+
+    my $should_convert = $resolution_status_convert_policy->{ enabled };
+    my $convert_from = $resolution_status_convert_policy->{ resolution_status_convert_from };
+    my $convert_to = $resolution_status_convert_policy->{ resolution_status_convert_to };
+
+    if ( $should_convert == 1 ) {
+	my $converted_string = $convert_string;
+
+        $logger->debug( "Converting in the resolution status '$convert_from' to '$convert_to'\n");
+	$converted_string =~ s/$convert_from/$convert_to/g;
+        $logger->debug( "Converted '$convert_string ' to '$converted_string'\n");
+
+	return $converted_string;
+    } else {
+	return $convert_string;
+    }
+}
+
+
+
+1;

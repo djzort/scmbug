@@ -1,0 +1,339 @@
+#
+# This is a template configuration file for the @DEVEL_PRODUCT_NAME@ glue.
+#
+$glue_configuration = { 
+
+    #
+    # Flags whether the glue is active
+    #
+    enabled => 1,
+
+    # Describes how logging will be reported, using Log::Log4perl
+    logging => '
+# If you want to additionally store all logging in a file, change
+# the line below to:
+#log4perl.category.Glue             = DEBUG, AppWarn, AppRest, Logfile
+log4perl.category.Glue             = WARN, AppWarn, AppRest
+
+# Filter to match level WARN
+log4perl.filter.MatchWarn  = Log::Log4perl::Filter::LevelMatch
+log4perl.filter.MatchWarn.LevelToMatch  = WARN
+log4perl.filter.MatchWarn.AcceptOnMatch = true
+
+# Filter to match everything but WARN
+log4perl.filter.MatchRest  = Log::Log4perl::Filter::LevelMatch
+log4perl.filter.MatchRest.LevelToMatch  = WARN
+log4perl.filter.MatchRest.AcceptOnMatch = false
+
+# Simple layout for WARN messages
+log4perl.appender.AppWarn = Log::Log4perl::Appender::Screen
+log4perl.appender.AppWarn.layout   = Log::Log4perl::Layout::PatternLayout
+log4perl.appender.AppWarn.layout.ConversionPattern = @DEVEL_PRODUCT_NAME@ notice: %m
+log4perl.appender.AppWarn.Filter   = MatchWarn
+
+# Elaborate layout for the rest
+log4perl.appender.AppRest = Log::Log4perl::Appender::Screen
+log4perl.appender.AppRest.layout   = Log::Log4perl::Layout::PatternLayout
+log4perl.appender.AppRest.layout.ConversionPattern = @DEVEL_PRODUCT_NAME@ %p> %F{1}:%L:%M - %m
+log4perl.appender.AppRest.Filter   = MatchRest
+
+# Log all glue activity to a file
+log4perl.appender.Logfile          = Log::Log4perl::Appender::File
+log4perl.appender.Logfile.filename = @DEVEL_CONFIG_DEFAULT_TEMP_DIR@/@DEVEL_PRODUCT_NAME_LOWER@_glue.log
+log4perl.appender.Logfile.layout   = Log::Log4perl::Layout::PatternLayout
+log4perl.appender.Logfile.layout.ConversionPattern = %d @DEVEL_PRODUCT_NAME@ %p> %F{1}:%L:%M - %m
+',
+
+    #
+    # Describes the SCM system integrated with bug-tracking
+    #
+    scm => {
+	name => 'replace_with_scm_tool_name',
+
+	# Comma(,)-separated list of paths to any binaries the SCM
+	# tool may need to use
+	binary_paths => 'replace_with_paths_to_scm_binaries',
+
+	# This applies only to Subversion. It is recommended that tags
+	# are stored in the 'tags' directory, and branches in the
+	# 'branches' directory.
+	label_directories => [
+			      'tags',
+			      'branches'
+			      ],
+
+	# This applies only to Subversion. It is recommended that the
+	# main trunk work is stored in the 'trunk' directory.
+	main_trunk_directories => [
+				   'trunk'
+				   ],
+
+	# This applies only to CVS. When a commit affects more than
+	# one directory, multiple duplicate log comments are inserted,
+	# one-per-directory. Enabling this option would consolidate
+	# the commits to all use the first log message.
+	consolidate_cvs_messages => 0
+    },
+
+    #
+    # Describes the daemon that will process the integration requests
+    #
+    daemon => {
+	location => 'replace_with_location_ip_address',
+	port => @DEVEL_CONFIG_PORT_NUMBER@,
+	},
+
+	
+    #
+    # List of policies the glue can enforce
+    #
+    policies => {
+
+	# Log template.
+	#
+	# Regular expressions that describe how the bug id and log
+	# comment will be identified must be defined.
+	#
+	# This policy is ALWAYS enabled
+	log_template => {
+	    # The log_bugid_regex is a regular expression that must
+	    # set the unnamed variable $1 to the bug number, or list
+	    # of bug numbers. It is checked for a match as: m/$regex/s
+	    log_bugid_regex => '@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_REGEX@',
+            # The log_bugid_split_regex is a regular expression
+            # describing how a list of bug ids will be split in
+            # individual bug numbers. It is split as: /$regex/
+            log_bugid_split_regex => '@DEVEL_CONFIG_LOG_TEMPLATE_BUGID_SPLIT_REGEX@',
+	    # The log_body_regex is a regular expression that must set
+	    # the unnamed variable $1 to the log comment. It is
+	    # checked for a match as: m/$regex/s
+	    log_body_regex => '@DEVEL_CONFIG_LOG_TEMPLATE_BODY_REGEX@'
+	    },
+
+	# Resolution template.
+	#
+	# Regular expressions that describe how a resolution status
+	# for a list of bug ids can be identified
+	resolution_template => {
+	    enabled => 1,
+	    # The resolution_bugid_regex is a regular expression that
+	    # must set the unnamed variable $1 to the bug number, or
+	    # list of bug numbers. It is checked for a match as:
+	    # m/$regex/s
+	    resolution_bugid_regex => '@DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_REGEX@',
+            # The resolution_bugid_split_regex is a regular expression
+            # describing how a list of bug ids will be split in
+            # individual bug numbers. It is split as: /$regex/
+	    resolution_bugid_split_regex => '@DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_SPLIT_REGEX@',
+	    # The resolution_status_regex is a regular expression that
+	    # must set the unnamed variable $1 to the requested
+	    # status. It is checked for a match as: m/$regex/s
+	    #
+	    # For example, if one issued in the log message the
+	    # resolution command:
+	    #
+	    # @DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_PREFIX@547@DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_POSTFIX@ reopened
+	    #
+	    # Then the resolution_status_regex is expected to match
+	    # "reopened"
+	    resolution_status_regex => '@DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_REGEX@',
+	    # The resolution_status_resolution_regex is a regular
+	    # expression that must set the unnamed variable $1 to the
+	    # requested resolution. It is checked for a match as:
+	    # m/$regex/s
+	    #
+	    # For example, if one issued in the log message the
+	    # resolution command:
+	    #
+	    # @DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_PREFIX@547@DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_POSTFIX@ resolved fixed
+	    #
+	    # Then the resolution_status_resolution_regex is expected
+	    # to match "fixed"
+	    resolution_status_resolution_regex => '@DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_REGEX@',
+	    # The resolution_status_resolution_data_regex is a regular
+	    # expression that must set the unnamed variable $1 to the
+	    # additional data supplied by the resolution status. It is
+	    # checked for a match as:
+	    # m/$regex/s
+	    #
+	    # For example, if one issued in the log message the
+	    # resolution command:
+	    #
+	    # @DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_PREFIX@548@DEVEL_CONFIG_RESOLUTION_TEMPLATE_BUGID_TOKEN_POSTFIX@ resolved duplicate 547
+	    #
+	    # Then the resolution_status_resolution_data_regex is
+	    # expected to match "547"
+	    resolution_status_resolution_data_regex => '@DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_RESOLUTION_DATA_REGEX@',
+            # Apply a case sensitive resolution and resolution status verification
+            resolution_status_case_sensitive_verification => 0,
+	    # The resolution_status_* information can have all of the
+	    # following characters converted according to a regular
+	    # expression. This is useful in addressing the limitation
+	    # of some bug-trackers that report a resolution-related
+	    # information with a token that contains spaces. For
+	    # example:
+	    #
+	    # "unable to reproduce" in Mantis.
+	    resolution_status_convert => {
+		enabled => 1,
+		# Regular expressions that will be applied to convert
+		# the characters of all resolution_status_*
+		# information. It is applied for substitution as:
+		#
+		# s/$convert_from/$convert_to/g
+		resolution_status_convert_from => '@DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_FROM_REGEX@',
+		resolution_status_convert_to => '@DEVEL_CONFIG_RESOLUTION_TEMPLATE_STATUS_CONVERT_TO_REGEX@'
+		},
+	    # The bugs whose resolution status will be changed must be
+	    # filed against a valid product name.
+	    resolution_valid_product_name => 1,
+	    # The SCM user must be the user to which the bugs whose
+	    # resolution status will be changed are assigned
+	    resolution_valid_bug_owner => 1,
+	    },
+
+	#
+	# Presence of bug ids. There are 3 options:
+	#
+	# - 'required'. A bug id must be specified during each
+	#   activity. Activities without a bug id will not be permitted.
+	#
+	# - 'optional'. If a bug id is supplied, the activity will be
+	#   integrated. If not the activity will be permitted to go
+	#   through in the SCM system, but without bug-tracking
+	#   integration.
+	#
+	# - 'none'. Never integrate activities regardless. This is
+	#   different than flagging the glue inactive. The remaining
+	#   policies are still enforced were applicable.
+	#   (e.g. policy minimum_log_message_size).
+	#
+	# This policy is ALWAYS enabled
+	presence_of_bug_ids =>  {
+	    value => 'required'
+	    },
+
+	# The SCM user issuing an activity must be the user to which
+	# the bug is assigned
+	valid_bug_owner => {
+	    enabled => 1
+	    },
+
+	# All integration activity must originate from a specific SCM
+	# user. If the SCM system does not provide the SCM user
+	# information (e.g Subversion running an svnserve daemon with
+	# anonymous access), assume the activity originated from a
+	# specific SCM user
+	anonymous_scm_username => {
+	    enabled => 0,
+	    value => 'anonymous_scm_user'
+	    },
+
+	# The bug against which an activity is issued must be in an
+	# open state
+	open_bug_state => {
+	    enabled => 1
+	    },
+
+	# Minimum number of characters log message.
+	minimum_log_message_size => {
+	    enabled => 1,
+	    size => 50
+	    },
+
+	# Format of label names (tag or branch names) defined as
+	# regular expressions.
+	label_name => {
+	    enabled => 1,
+	    names => [
+		      # Convention for official releases.
+		      # For example:
+		      # @DEVEL_PRODUCT_NAME_CAPS@_RELEASE_0-2-7
+		      '^.+?_RELEASE_[0-9]+-[0-9]+-[0-9]+$',
+
+		      # Convention for development builds.
+		      # For example:
+		      # @DEVEL_PRODUCT_NAME_CAPS@_BUILD_28_added_a_policies_mechanism
+		      '^.+?_BUILD_[0-9]+_.+$',
+
+		      # Convention for branches.
+		      # For example:
+		      # b_experimenting_with_policies_on_glue_side
+		      '^b_.+$',
+
+		      # Convention for private developer tags. Uses
+		      # the developer's initials (either 2 or 3).
+		      # For example:
+		      # p_kpm_prior_to_bug353_stabilization_fixes
+		      '^p_[a-zA-Z][a-zA-Z]?[a-zA-Z]_.+$'
+		      ]
+		  },
+
+	# The bug against which an activity is issued must be filed
+	# against a valid product name.
+	valid_product_name => {
+	    enabled => 1
+	    },
+
+	# Product name definition.
+	#
+	# The product name is autodefined based on regular
+	# expressions. The first expression defines how each commited
+	# filename will be matched. The second defines how it will be
+	# transformed, and uses the unnamed variables (e.g. $1 $2)
+	# that were described by the first expression. The mapping is
+	# checked for a match as:
+        # m/$match_regex/
+        # and is applied as: s/$match_regex/$replace_regex/
+        #
+        # NOTE: The regular expression '(.*)' is special and means
+        #       replace with exactly this value. It is meant to be used
+        #       with SCM systems that do not provide the list of
+        #       affected files during verification (e.g. CVS 1.11.x)
+        #
+	# This policy is ALWAYS enabled
+	product_name_definition => {
+	    values => { '(.*)' => 'replace_with_product_name' }
+	    },
+
+	#
+	# Send email notifications after integration activity
+	#
+	mail_notification => {
+            # Send an email after a successful activity (both
+            # verifying and labeling)
+	    mail_on_success => 0,
+	    # Send an email after a failed commit activity that the
+	    # SCM system may overshadow and not report
+	    # (e.g. Subversion does not report error messages of its
+	    # @DEVEL_CONFIG_SVNHOOK_POSTCOMMIT@ hook.) .
+	    mail_on_failure => 0,
+	    mail_settings => {
+		# Must be a valid email address. Can remain empty if
+		# other users should be notified.
+		To => 'replace_with_commit_mailing_list_email@exampledomain.com',
+		# Must be a valid email address. Can remain empty if
+		# mail_also_appears_from_scm_user is enabled.
+		From => '@DEVEL_PRODUCT_NAME@ <replace_with_mailing_list_owner_email@exampledomain.com>',
+		# Defaults to localhost if left empty
+		Smtp => 'replace_with_mail_server.exampledomain.com'
+	    },
+	    # Sending email when a tag is moved or deleted in CVS can
+	    # be annoying, since multiple emails are sent per
+	    # directory (but not when a tag is added). mail_on_label
+	    # can disable that behavior.
+	    mail_on_label => 1,
+	    mail_recipients => {
+		# Make the email also appear to have been sent by the
+		# SCM user.
+		mail_also_appears_from_scm_user => 1,
+		# List of users that will be notified
+		mail_scm_user => 1,
+		mail_bug_owner => 1,
+		mail_bug_reporter => 1,
+		mail_bug_monitors => 1,
+		mail_product_owners => 1
+		}
+	}
+    }
+};

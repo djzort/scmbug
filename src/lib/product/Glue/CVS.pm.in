@@ -1,0 +1,741 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::Glue::CVS;
+
+@ISA = qw ( @DEVEL_PRODUCT_NAME@::Glue::SCM );
+
+use strict;
+use Data::Dumper;
+use Env qw( USER CVS_USER USERNAME );
+use @DEVEL_PRODUCT_NAME@::Activity;
+use @DEVEL_PRODUCT_NAME@::Error;
+use @DEVEL_PRODUCT_NAME@::Glue::CVSConsolidatedActivities;
+use @DEVEL_PRODUCT_NAME@::Glue::SCM;
+use @DEVEL_PRODUCT_NAME@::Common;
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $data = shift;
+    my $self = @DEVEL_PRODUCT_NAME@::Glue::SCM->new( $data );
+
+    bless $self, $type;
+
+    # Somewhere after CVS 1.11.1p1 and 1.11.3, CVS_USER was introduced
+    # which is always what we want to use instead of USER
+    if ( defined ( $CVS_USER ) ) {
+	$self->user( $CVS_USER );
+    } else {
+	if ( defined ( $USER ) ) {
+	    $self->user( $USER );
+	} else {
+	    # On Windows XP with CVSNT 2.5.03, there are no CVS_USER
+	    # or USER variables. There is a USERNAME variable.
+	    $self->user( $USERNAME );
+	}
+    }
+
+    if ( !defined( $data->{ consolidate_cvs_messages } ) ) {
+        log_fatal_error( $GLUE_ERROR_CONSOLIDATE_CVS_MESSAGES_MISSING,
+                        "Configuration variable consolidate_cvs_messages is missing.\n" );
+    } else {
+	$self->consolidate_cvs_messages( $data->{ consolidate_cvs_messages } );
+    }
+
+    return $self;
+}
+
+
+
+sub consolidate_cvs_messages {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ consolidate_cvs_messages } = $data;
+    } else {
+	return $self->{ consolidate_cvs_messages };
+    }
+}
+
+
+
+sub detect_version {
+    my $self = shift;
+    my $command = "@DEVEL_CONFIG_SCM_BINARY_CVS@ --version";
+    my $command_output = execute_command($command);
+
+    my $version = $command_output;
+    $version =~ s/.*?(\d+\.\d+\.\d+).*/$1/s;
+
+    $logger->info( "Detected CVS version $version\n" );
+    $self->version( $version );
+}
+
+
+# Initializes some internal configuration parameters
+sub init_internal {
+    my $self = shift;
+
+    $self->required_tool("@DEVEL_CONFIG_SCM_BINARY_CVS@");
+}
+
+
+sub set_version_type {
+    my $self = shift;
+    my $version = $self->version();
+
+    if ($version =~ m/(\d+)\.(\d+)\.(\d+)/ ) {
+	my $major = $1;
+	my $minor = $2;
+	my $patch = $3;
+	if ( $major == 1 ) {
+	    if ( $minor <= 11 ) {
+		$self->version_type( "up_to_1_11" );
+	    } elsif ( $minor == 12 ) {
+		$self->version_type( $SCM_VERSION_LATEST );
+	    } else {
+		$self->version_type( $SCM_VERSION_NOT_SUPPORTED );
+	    }
+	} elsif ( $major == 2 ) {
+
+	    if ( $minor == 5 ) {
+		# This is CVSNT 2.5.x
+		$self->version_type( "latest_cvsnt" );
+	    } else {
+		$self->version_type( $SCM_VERSION_NOT_SUPPORTED );
+	    }
+	} else {
+	    $self->version_type( $SCM_VERSION_NOT_SUPPORTED );
+	}
+    } else {
+	$self->version_type( $SCM_VERSION_WRONG_FORMAT );
+    }
+}
+
+
+
+sub is_version_up_to_1_11 {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq "up_to_1_11" ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+sub is_version_latest_cvsnt {
+    my $self = shift;
+
+    if ( $self->{ version_type } eq "latest_cvsnt" ) {
+	return 1;
+    } else {
+	return 0;
+    }
+}
+
+
+
+sub prepare_product_name_for_cvs {
+    my $self = shift;
+
+    # If this is CVS 1.11.x, it is impossible to automatically
+    # prepare the product name when verifying because the list of
+    # affected files is not provided at this stage.
+    #
+    # NOTE that we simply haven't implemented automatically
+    # preparing product names for CVSNT, while it may be possible
+    # to do so.
+    $logger->debug( "Will consider the special case of '(.*)' for the product name.\n" );
+    my $found_value = 0;
+    foreach my $match_regex ( keys %{ $self->activity()->product_name_values() } ) {
+        if ( $match_regex eq "(.*)" ) {
+            $found_value = 1;
+            my $replace_regex = $self->activity()->product_name_values()->{ $match_regex };
+            
+            $self->activity()->product_name( $replace_regex );
+        }
+    }
+    
+    if ( $found_value == 0 ) {
+        $self->activity()->prepare_product_name();
+    }
+}
+
+
+#
+# Prepares the internal data structures to handle a verification
+# activity using data received from CVS
+#
+sub prepare_activity_verify() {
+    my $self = shift;
+    my $log_message_file = shift;
+    my ( $directory, @files_array ) = ( @_ );
+    my $line;
+
+    if ( !defined ( $log_message_file ) ) {
+        log_fatal_error( $GLUE_ERROR_CVS_ARGUMENT_LOG_MESSAGE_FILE_MISSING, "CVS log message file argument was not provided\n" );
+    }
+
+    # If any files were supplied, track those
+    foreach my $filename ( @files_array ) {
+        # We are not tracking their version numbers during the
+        # verification activity. We don't need them.
+        $logger->debug( "filename: '$filename'.\n" );
+        $logger->debug( "directory: '$directory'.\n" );
+	if ( $directory ne "" ) {
+	    $filename = $directory . "/" . $filename;
+	}
+        $self->activity()->{ files }->{ $filename }->{ old_version } = -1;
+        $self->activity()->{ files }->{ $filename }->{ new_version } = -1;
+    }
+
+    # It is impossible to determine the branch name from CVS at this
+    # stage
+    $self->activity()->branch_name( $BRANCH_NAME_INDETERMINATE );
+
+    #
+    # Automatically detect the product name
+    #
+    $self->activity()->prepare_product_name();
+
+    # These are the arguments produced by CVS
+    # There is only 1 and it is in the format: <log_file_name>
+    $logger->info( "Reading the CVS log message from file '$log_message_file'.\n" );
+    open ( LOG_MESSAGE_FILE, "< $log_message_file" );
+    # Cygwin has a problem with newlines
+    binmode( LOG_MESSAGE_FILE, ":crlf" );
+    my $message = "";
+    while ( $line = <LOG_MESSAGE_FILE> ) {
+	$message .= $line;
+    }
+    $self->activity()->original_log_message( $message );
+    close ( LOG_MESSAGE_FILE );
+}
+
+
+
+
+#
+# Prepares the internal data structures to handle a commit activity
+# using data received from CVS
+#
+sub prepare_activity_commit {
+    my $self = shift;
+    my ( @remaining_arguments ) = ( @_ );
+    my $consolidated_activities;
+
+    if ( scalar ( @remaining_arguments ) == 0 ) {
+        log_fatal_error( $GLUE_ERROR_CVS_ARGUMENT_COMMIT_MISSING, "CVS commit arguments were not provided\n" );
+    }
+
+    # On commit cycle persist activities and exit
+    $consolidated_activities = Scmbug::Glue::CVSConsolidatedActivities->load( $self->activity()->user() );
+    if ( $remaining_arguments[0] eq "consolidate_cvs_messages" ) {
+        $logger->info( "This commit activity was issued by the @DEVEL_CONFIG_CVSHOOK_COMMITINFO@ hook.\n" );
+
+	# If CVS messages should be consolidated into one log message
+	if( $self->consolidate_cvs_messages() == 1) {
+            $logger->info( "CVS messages should be consolidated. Will save this log message and exit.\n" );
+	    $self->activity()->repository( $remaining_arguments[1] );
+	    $consolidated_activities->add( $self->activity() );
+	    exit 0;
+	} else {
+            $logger->info( "CVS messages should not be consolidated. Will just exit.\n" );
+            exit 0;
+        }
+    }
+
+    # If no branch name is found in the log message, then the commit
+    # is against the main (HEAD) trunk.
+    $self->activity()->branch_name( 'HEAD' );
+    if ( $self->is_version_latest() ) {
+	$self->prepare_activity_commit_latest( @remaining_arguments );
+    } elsif ( $self->is_version_latest_cvsnt()  ) {
+	$self->prepare_activity_commit_latest_cvsnt( @remaining_arguments );
+    } else {
+	$self->prepare_activity_commit_up_to_1_11( 0, @remaining_arguments );
+    }
+
+    #
+    # Automatically detect the product name
+    #
+    $self->activity()->prepare_product_name();
+
+    # If CVS messages should be consolidated into one log message
+    if( $self->consolidate_cvs_messages() == 1) {
+        $logger->info( "CVS messages should be consolidated. Will replace pseudo activities with actuals.\n" );
+        # Replace commit 'pseudo' activities with actuals
+        my $references_count = $consolidated_activities->replace( $self->activity() );
+
+        if ($references_count == 0) {
+            $logger->info( "The reference count is $references_count. Will consolidate the activities.\n" );
+
+	    # Consolidate activities into one activity
+	    $self->activity( $consolidated_activities->consolidate() );
+	} else {
+            $logger->info( "The reference count is $references_count. Will exit.\n" );
+            exit 0;
+        }
+    }
+
+}
+
+
+
+#
+# CVS 1.12.x finally addressed the parsing issue of filenames. It made
+# parsing easier, but we still have to implement yet another way of
+# parsing CVS arguments
+#
+sub prepare_activity_commit_latest {
+    my $self = shift;
+    my ( $directory, @remaining_arguments ) = ( @_ );
+    my $arguments_size;
+
+    # Read the supplied log message
+    $self->read_original_log_message_from_stdin();
+
+    $arguments_size = scalar @remaining_arguments;
+    while ($arguments_size > 0) {
+	my $old_version = shift @remaining_arguments;
+	my $new_version = shift @remaining_arguments;
+	my $filename = shift @remaining_arguments;
+
+        $logger->debug( "old_version: '$old_version'.\n" );
+        $logger->debug( "new_version: '$new_version'.\n" );
+        $logger->debug( "filename: '$filename'.\n" );
+        $logger->debug( "directory: '$directory'.\n" );
+
+	if ( $directory ne "" ) {
+	    $filename = $directory . "/" . $filename;
+	}
+
+	$self->activity()->{ files }->{ $filename }->{ old_version } = $old_version;
+	$self->activity()->{ files }->{ $filename }->{ new_version } = $new_version;
+	$arguments_size = scalar @remaining_arguments;
+    }
+}
+
+
+
+#
+# CVSNT 2.5.03 Build 2260 screwed up the way arguments are
+# supplied. We have to implement yet another way of parsing CVSNT
+# arguments.
+#
+# In the case of %p {Vvs}, if the directory is empty, it will end up
+# picking up the following as a filename:
+#
+# 1.7,1.8,/thefile.txt
+#
+# That's because it will produce the arguments:
+# '1.7,1.8, 1.7,1.8,thefile.txt'
+#   or
+# 'NONE,1.1,test_directory NONE,1.1,some_other_file.txt'
+#
+# instead of
+#
+# ' 1.7,1.8,thefile.txt'
+#   or
+# 'test_directory NONE,1.1,some_other_file.txt';
+#
+# which is what 1.11.x does. So much for backwards compatibility. It
+# always reports the directory name too as a versioned modified file.
+#
+# Also, when a file with spaces is encountered, e.g.:
+#
+# 'file with space.txt'
+#
+# CVSNT will report the arguments:
+#
+#
+# 'NONE,1.1, NONE,1.1,file\\ with\\ space.txt'
+#
+#
+# The escaped '\'s and the escaped ' 's should be removed, so the
+# affected files list is reported correctly. This is done as an
+# additional step after all files are collected
+sub prepare_activity_commit_latest_cvsnt {
+    my $self = shift;
+    my ( @remaining_arguments ) = ( @_ );
+    my $arguments_size;
+
+    $arguments_size = scalar @remaining_arguments;
+    
+    if ($arguments_size == 0) {
+	# A new directory is added. No need to do additional parsing.
+        $logger->warn( "CVS does not capture addition of directories with verification or log comment triggers. This activity will not be integrated with bug tracking.\n" );
+    } else {
+	$self->prepare_activity_commit_up_to_1_11( 1, @remaining_arguments);
+
+        $logger->debug( "Going over all files to unescape '\\'s and '\\ 's \n" );
+
+	# Now, go over all files and unescape '\'s and '\ 's.
+	foreach my $filename ( keys %{ $self->activity()->{ files } } ) {
+	    my $unescaped_filename = $filename;
+	    
+	    # Remove escaped spaces
+	    $unescaped_filename =~ s/\\ / /g;
+	    
+	    # Remove escaped backslashes
+	    $unescaped_filename =~ s/\\\\/\\/g;
+
+            $logger->debug( "Converted filename '$filename' to '$unescaped_filename'\n" );
+	    
+	    if ($unescaped_filename ne $filename) {
+		# The unescaped filename is different. Must rewrite
+		# this entry.
+                $logger->debug( "Rewriting the entry for the unescaped filename.\n" );
+
+		# Create a new entry
+		$self->activity()->{ files }->{ $unescaped_filename }->{ old_version } = $self->activity->{ files }->{ $filename }->{ old_version };
+		$self->activity()->{ files }->{ $unescaped_filename }->{ new_version } = $self->activity->{ files }->{ $filename }->{ new_version };
+		
+		# Delete the old one
+		delete $self->activity()->{ files }->{ $filename };
+	    }
+	}
+    }
+}
+
+
+
+# Prepares the internal data structures to handle a commit activity
+# using data received from CVS 1.11.x. The main problem addressed in
+# this function is CVS's inability to provide parameters in a format
+# that is parseable without getting confused by directories or
+# filenames that contait commas or whitespaces. This implementation
+# permits the highest possible degree of tolerance against
+# combinations of such files/directories with unusual names. It
+# assumes that the arguments provided through CVS's loginfo trigger
+# file are in the format {Vvs}, since this gives us at least two
+# version tokens (e.g. "1.2,1.3") in between the directory name and
+# the first filename
+sub prepare_activity_commit_up_to_1_11 {
+    my $self = shift;
+    my ( $is_cvsnt, $cvs_arguments ) = ( @_ );
+
+    # Read the supplied log message
+    $self->read_original_log_message_from_stdin();
+
+    my $tokens = $cvs_arguments;
+
+    my $entries;
+    my $directory = "";
+    my $old_version = "";
+    my $new_version = "" ;
+    my $filename = "";
+    my $stop = 0;
+    my $counter = 0;
+    while ( $stop == 0) {
+	# Match a directoryname oldversion,newversion,filename [
+	# oldversion,newversion,filename ...] pattern. That is one
+	# directory name, and then multiple occurences of an
+	# oldversion,newversion,filename pattern
+	if ( $counter == 0 &&
+	     $tokens =~ /
+	     ^(.*?) # Directory name
+	     \      # Followed by a space
+	     (?=    # must be followed by
+	      (NONE|\d+\.\d+([\d\.]*)) # a version number
+	      ,     # and a comma
+	      (NONE|\d+\.\d+([\d\.]*)) # with another version number
+	      ,     # and another comma
+	      )
+	     (.*)$   # and this is the rest of the pattern
+	     /x
+	     ) {
+	    # Match the directory name. It may contain spaces or commas,
+	    # and ends with a whitespace. But it cannot contain a sequence
+	    # like " 1.1,1.2" or " NONE,1.2" or " 1.2,NONE"
+	    my $first = $1;
+	    my $rest = $6;
+	    my $directory_token = $first;
+	    if ( $is_cvsnt ) {
+		# If this is the directory provided by CVSNT, it must
+		# be parsed in a different way
+		if ( $directory_token =~ m/(.*?),(.*?),(.*)/ ) {
+		    my $directory_token_old_version = $1;
+		    my $directory_token_new_version = $2;
+		    my $directory_token_filename = $3;
+		    $directory = $directory_token_filename;
+		} else {
+		    log_fatal_error( $GLUE_ERROR_INVALID_CVSNT_COMMIT_ARGUMENTS_FORMAT, "The format of the commit files produced by CVSNT for activity_commit is invalid. The argument '$directory_token' could not be adequately validated.\n" );
+		}
+	    } else {
+		$directory = $directory_token;
+	    }
+            $logger->debug( "directory: '$directory'.\n" );
+	    $tokens = $rest;
+	    $counter = 1;
+	} elsif ( $counter == 1 &&
+		  $tokens =~ /^(NONE|\d+\.\d+([\d\.]*)),(.*)$/ ) {
+	    # Match the old_version. It is followed by a comma and 
+	    # could be the string "NONE"
+	    my $first = $1;
+	    my $rest = $3;
+	    $old_version = $first;
+	    $tokens = $rest;
+	    $counter = 2;
+            $logger->debug( "old_version: '$old_version'.\n" );
+	} elsif ( $counter == 2  &&
+		  $tokens =~ /^(NONE|\d+\.\d+([\d\.]*)),(.*)$/ ) {
+	    # Match the new_version. It is followed by a comma
+	    # and could be the string "NONE"
+	    my $first = $1;
+	    my $rest = $3;
+	    $new_version = $first;
+	    $tokens = $rest;
+	    $counter = 3;
+            $logger->debug( "new_version: '$new_version'.\n" );
+	} elsif ( $counter == 3
+		  && $tokens =~ /
+		  ^(.*?)  # Filename
+		  (?=     # must be followed by 
+		   (      # either
+			  \    # a space
+			  (
+			   (NONE|\d+\.\d+([\d\.]*)) # a version number
+			   ,     # and a comma
+			   (NONE|\d+\.\d+([\d\.]*)) # with another version number
+			   ,     # and another comma
+			   (.*)$   # and a lot of other stuff
+			   )
+			  ) # this is the rest of the pattern (this is what rest is set to) 
+		   |     # or 
+		   $     # an end of tokens separator
+		   )
+		  /x
+		  ) {
+	    # Match the filename. It may contain whitespace, or
+	    # commas, may be followed by a whitespace. But it cannot
+	    # end in a sequence like ",1.1,1.2" or ",NONE,1.2" or
+	    # ",1.3,NONE"
+	    my $first = $1;
+	    my $rest = $3;
+	    $filename = $first;
+	    $tokens = $rest;
+	    $counter = 1;
+	    $entries->{ $filename }->{ old } = $old_version;
+	    $entries->{ $filename }->{ new } = $new_version;
+            $logger->debug( "filename: '$filename'.\n" );
+	} else {
+	    # The arguments provided by CVS were invalid. This could
+	    # be a case where a new directory was just added
+
+	    # When directories are added in CVS, the following
+	    # four arguments are provided:
+	    # <directory_name> "-" "New" "directory"
+	    # e.g. "src/testdirA - New directory"
+	    if ( $tokens =~ /- New directory/ ) {
+		# Since CVS does not capture addition of directories
+		# with a verify or log comment trigger we cannot
+		# possibly integrate directory addition messages in a
+		# bug tracking system. Bail out now, and pretend
+		# everything went well.
+                $logger->warn( "CVS does not capture addition of directories with verification or log comment triggers. This activity will not be integrated with bug tracking.\n" );
+		# Exit with a 0 value. This activity is accepted.
+		exit 0;
+	    } else {
+		# Or something really bad happened in the way CVS
+		# provided its arguments
+		log_fatal_error( $GLUE_ERROR_INVALID_CVS_COMMIT_ARGUMENTS_FORMAT, "The format of the commit files produced by CVS for activity_commit is invalid. This could be the case if the filenames contain a combination of commas, numbers and dots. It is strongly recommended that you rename such files. The arguments list '$cvs_arguments' could not be adequately validated.\n" );
+	    }
+	}
+	
+	# Stop when we run out of tokens.
+	if ( $tokens eq "" ) {
+	    $stop = 1;
+	}
+    }
+    
+    foreach my $entry ( sort keys %$entries ) {
+	# If the directory entry was not empty, then this file is
+	# not at the root directory. Prepend a "/" in the
+	# filename.
+	my $filename = $entry;
+	
+	if ( $directory ne "" ) {
+	    $filename = $directory . "/" . $filename;
+	}
+	
+	$self->activity()->{ files }->{ $filename }->{ old_version } = $entries->{ $entry }->{ old };
+	$self->activity()->{ files }->{ $filename }->{ new_version } = $entries->{ $entry }->{ new } ;
+    }
+
+}
+
+
+
+#
+# Prepares the internal data structures to handle a tagging activity
+# using data received from CVS
+#
+sub prepare_activity_tag {
+    my $self = shift;
+    my ( @arguments ) = ( @_ );
+
+    if ( scalar ( @arguments ) == 0 ) {
+        log_fatal_error( $GLUE_ERROR_CVS_ARGUMENT_TAG_MISSING, "CVS tag arguments were not provided\n" );
+    }
+
+    # It is impossible to determine the branch name from CVS at this
+    # stage
+    $self->activity()->branch_name( $BRANCH_NAME_INDETERMINATE );
+
+    # These are the arguments produced by CVS 1.11.x
+    #
+    # They are in the format: <tagname> <operation>
+    # <repository_path> <file_revision_pair>
+    # [<file_revision_pair>...].
+    # 
+    # The operations CVS provides are add, mov, and del. CVS
+    # provides mov when the tag moving option -F is used, del
+    # when the tag deletion option -d is used, and add when a
+    # new tag is added. If the script exits with a non-zero
+    # exit status, the tag (or rtag) operation will not
+    # proceed.
+    #
+    # The file_revision_pair is a space-separated pair of
+    # filenames and revision numbers, and there is a pair for
+    # each file to be tagged.
+    my @file_revision_pairs_array = @arguments;
+    shift @file_revision_pairs_array;
+    shift @file_revision_pairs_array;
+    shift @file_revision_pairs_array;
+    
+    my $counter = 0;
+    my $last_file_name;
+    my $file_revision_pairs_hash;
+    foreach my $entry ( @file_revision_pairs_array ) {
+	
+	if ($counter == 0) {
+	    # this is a file. Save its name
+	    $last_file_name = $entry;
+	    $counter = 1;
+	} else {
+	    # This is the revision of the last file. Save it
+	    # in the hash.
+	    $file_revision_pairs_hash->{ $last_file_name } = $entry;
+	    $counter = 0;
+            $logger->debug( "filename: '$last_file_name', revision: '$entry'.\n" );
+	}
+    }
+    
+    
+    # Now that we built-up the file revision pairs, we can proceed
+    my ( $tag_name, $tag_operation, $repository_path, $file_revision_pairs ) = ( $arguments[0], $arguments[1], $arguments[2], $file_revision_pairs_hash );
+
+    $logger->debug( "tag_name: '$tag_name'.\n" );
+    $logger->debug( "tag_operation: '$tag_operation'.\n" );
+    $logger->debug( "repository_path: '$repository_path'.\n" );
+
+    # Set the repository
+    $self->activity()->repository( $repository_path );
+
+    #
+    # Prepare for a tagging activity in the configuration data
+    # structure
+    #
+    $self->activity()->{ type }->{ tag }->{ name } = $tag_name;
+    $self->activity()->{ type }->{ tag }->{ repository_path } = $repository_path;
+    # Translate the CVS tag operation name, into a protocol tag operation name
+    if ( $tag_operation eq "add" ) {
+	$self->activity()->{ type }->{ tag }->{ operation } = $TAG_OPERATION_ADD;
+    } elsif ( $tag_operation eq "del" ) {
+	$self->activity()->{ type }->{ tag }->{ operation } = $TAG_OPERATION_DELETE;
+    } elsif ( $tag_operation eq "mov" ) {
+	$self->activity()->{ type }->{ tag }->{ operation } = $TAG_OPERATION_MOVE;
+    } else {
+	log_fatal_error( $GLUE_ERROR_INVALID_CVS_TAG_OPERATION_NAME, "Tag operation $tag_operation is an invalid CVS tag operation.\n" );
+    }
+
+    # Add the affected file, revision pairs
+    foreach my $file ( keys %$file_revision_pairs ) {
+	$self->activity()->{ files }->{ $file } = $file_revision_pairs->{ $file };
+    }
+
+    #
+    # Automatically detect the product name
+    #
+    $self->activity()->prepare_product_name();
+}
+
+
+
+#
+# Reads the original log message from STDIN. Detects the branch name
+# in which the changeset is committed. Also detects the repository.
+#
+sub read_original_log_message_from_stdin {
+    my $self = shift;
+    my ( @activity_log_lines) = readline(*STDIN);
+    chomp @activity_log_lines;
+    my $original_log_message = "";
+    my $in_log_message = 0;
+    my $found_repository = 0;
+
+    foreach my $line ( @activity_log_lines ) {
+    	if ( $in_log_message == 0 ) {
+	    if ( $line =~ m/Tag: (.*)/ ) {
+		# Detect the branch name
+		my $branch = $1;
+                $logger->debug( "Detected branch name '$branch'.\n" );
+		$self->activity()->branch_name( $branch );
+	    } elsif ( $line =~ m/^Update of (.*)/ ) {
+		# Detect the repository
+		my $repository = $1;
+		# CVS does not really report the repository
+		# directory. It reports the directory in which a
+		# changeset is committed. There's nothing we can do
+		# about that.
+		$self->activity()->repository( $repository );
+		$found_repository = 1;
+                $logger->debug( "Detected repository '$repository'.\n" );
+	    } elsif ( $line =~ m/^Log Message:/ ) {
+		$in_log_message = 1;
+	    }
+	} else {
+	    # Detect the log message
+	    $original_log_message .= $line . "\n";
+	}
+    }
+    $self->activity()->original_log_message( $original_log_message );
+
+    if ( $found_repository == 0 ) {
+	log_fatal_error( $GLUE_ERROR_CANNOT_AUTODETECT_REPOSITORY, "Unable to autodetect the repository.\n");
+    }
+}
+
+
+
+#
+# Used to detect the branch name. But in CVS this is done earlier in
+# read_original_log_message_from_stdin
+#
+sub prepare_branch_name {
+    my $self = shift;
+}
+
+
+
+1;

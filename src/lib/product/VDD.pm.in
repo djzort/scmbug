@@ -1,0 +1,277 @@
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+package @DEVEL_PRODUCT_NAME@::VDD;
+
+use strict;
+use @DEVEL_PRODUCT_NAME@::Bug;
+
+
+
+# Constructor
+sub new {
+    my $type = shift;
+    my $self = {};
+    return bless $self, $type;
+}
+
+
+
+# Adds a comment description of one bug
+sub add_bug_comment {
+   my $self = shift;
+   my ( $bug_type, $bugid, $summary, $status, $resolution, $severity, $priority, $commentid, $content, $date, $author_username, $author_name, $author_email ) = ( @_ );
+
+   $self->bug( $bug_type, $bugid )->summary( $summary );
+   $self->bug( $bug_type, $bugid )->status( $status );
+   $self->bug( $bug_type, $bugid )->resolution( $resolution );
+   $self->bug( $bug_type, $bugid )->severity( $severity );
+   $self->bug( $bug_type, $bugid )->priority( $priority );
+   $self->bug( $bug_type, $bugid )->comment( $commentid )->content( $content );
+   $self->bug( $bug_type, $bugid )->comment( $commentid )->date( $date );
+   $self->bug( $bug_type, $bugid )->comment( $commentid )->author_username( $author_username );
+   $self->bug( $bug_type, $bugid )->comment( $commentid )->author_name( $author_name );
+   $self->bug( $bug_type, $bugid )->comment( $commentid )->author_email( $author_email );
+}
+
+
+
+sub bug {
+   my $self = shift;
+   my ( $bug_type, $bugid ) = ( @_ );
+
+   if ( $bug_type eq 'all' ) {
+
+       if ( !defined( $self->{ vdd }->{ all_bugs }->{ $bugid } ) ) {
+	   $self->{ vdd }->{ all_bugs }->{ $bugid }->{ data } = @DEVEL_PRODUCT_NAME@::Bug->new();
+	   $self->{ vdd }->{ all_bugs }->{ $bugid }->{ data }->id( $bugid );
+       }
+       return $self->{ vdd }->{ all_bugs }->{ $bugid }->{ data };
+
+   } elsif ( $bug_type eq 'new' ) {
+
+       if ( !defined( $self->{ vdd }->{ new_bugs }->{ $bugid } ) ) {
+	   $self->{ vdd }->{ new_bugs }->{ $bugid }->{ data } = @DEVEL_PRODUCT_NAME@::Bug->new();
+	   $self->{ vdd }->{ new_bugs }->{ $bugid }->{ data }->id( $bugid );
+       }
+       return $self->{ vdd }->{ new_bugs }->{ $bugid }->{ data };
+
+   } elsif ( $bug_type eq 'inprogress' ) {
+
+       if ( !defined( $self->{ vdd }->{ inprogress_bugs }->{ $bugid } ) ) {
+	   $self->{ vdd }->{ inprogress_bugs }->{ $bugid }->{ data } = @DEVEL_PRODUCT_NAME@::Bug->new();
+	   $self->{ vdd }->{ inprogress_bugs }->{ $bugid }->{ data }->id( $bugid );
+       }
+       return $self->{ vdd }->{ inprogress_bugs }->{ $bugid }->{ data };
+
+   } elsif ( $bug_type eq 'closed' ) {
+
+       if ( !defined( $self->{ vdd }->{ closed_bugs }->{ $bugid } ) ) {
+	   $self->{ vdd }->{ closed_bugs }->{ $bugid }->{ data } = @DEVEL_PRODUCT_NAME@::Bug->new();
+	   $self->{ vdd }->{ closed_bugs }->{ $bugid }->{ data }->id( $bugid );
+       }
+       return $self->{ vdd }->{ closed_bugs }->{ $bugid }->{ data };
+
+   } elsif ( $bug_type eq 'closed_untouched' ) {
+
+       if ( !defined( $self->{ vdd }->{ closed_untouched_bugs }->{ $bugid } ) ) {
+	   $self->{ vdd }->{ closed_untouched_bugs }->{ $bugid }->{ data } = @DEVEL_PRODUCT_NAME@::Bug->new();
+	   $self->{ vdd }->{ closed_untouched_bugs }->{ $bugid }->{ data }->id( $bugid );
+       }
+       return $self->{ vdd }->{ closed_untouched_bugs }->{ $bugid }->{ data };
+
+   }
+}
+
+
+
+sub all_bugs {
+    my $self = shift;
+
+    if ( defined ( $self->{ vdd }->{ all_bugs } ) ) {
+	return $self->{ vdd }->{ all_bugs };
+    } else {
+	return {};
+    }
+}
+
+
+
+sub new_bugs {
+    my $self = shift;
+
+    if ( defined ( $self->{ vdd }->{ new_bugs } ) ) {
+	return $self->{ vdd }->{ new_bugs };
+    } else {
+	return {};
+    }
+}
+
+
+
+sub inprogress_bugs {
+    my $self = shift;
+
+    if ( defined ( $self->{ vdd }->{ inprogress_bugs } ) ) {
+	return $self->{ vdd }->{ inprogress_bugs };
+    } else {
+	return {};
+    }
+}
+
+
+
+sub closed_bugs {
+    my $self = shift;
+
+    if ( defined ( $self->{ vdd }->{ closed_bugs } ) ) {
+	return $self->{ vdd }->{ closed_bugs };
+    } else {
+	return {};
+    }
+}
+
+
+
+sub closed_untouched_bugs {
+    my $self = shift;
+
+    if ( defined ( $self->{ vdd }->{ closed_untouched_bugs } ) ) {
+	return $self->{ vdd }->{ closed_untouched_bugs };
+    } else {
+	return {};
+    }
+}
+
+
+
+sub from_version {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ vdd }->{ from_version } = $data;
+    } else {
+	return $self->{ vdd }->{ from_version };
+    }
+}
+
+
+
+sub to_version {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ vdd }->{ to_version } = $data;
+    } else {
+	return $self->{ vdd }->{ to_version };
+    }
+}
+
+
+
+sub from_label_date {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ vdd }->{ from_label_date } = $data;
+    } else {
+	return $self->{ vdd }->{ from_label_date };
+    }
+}
+
+
+
+sub to_label_date {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ vdd }->{ to_label_date } = $data;
+    } else {
+	return $self->{ vdd }->{ to_label_date };
+    }
+}
+
+
+
+sub product_name {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ vdd }->{ product_name } = $data;
+    } else {
+	return $self->{ vdd }->{ product_name };
+    }
+}
+
+
+
+sub bug_url_prefix {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ vdd }->{ bug_url_prefix } = $data;
+    } else {
+	return $self->{ vdd }->{ bug_url_prefix };
+    }
+}
+
+
+
+sub username {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ vdd }->{ username } = $data;
+    } else {
+	return $self->{ vdd }->{ username };
+    }
+}
+
+
+
+sub translated_username {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ vdd }->{ translated_username } = $data;
+    } else {
+	return $self->{ vdd }->{ translated_username };
+    }
+}
+
+
+
+sub production_date {
+    my $self = shift;
+    my $data = shift;
+
+    if ( $data ) {
+	$self->{ vdd }->{ production_date } = $data;
+    } else {
+	return $self->{ vdd }->{ production_date };
+    }
+}
+
+
+
+1;
